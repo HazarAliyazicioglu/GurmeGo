@@ -61,5 +61,19 @@ turu: `architecture.md §3`'teki monorepo iskeleti.
 
 Kullanıcı isteği: kapsam güncellemeleri tamamlandıktan sonra projeyi Codex'e **tekrar** yıktır. Hâlâ
 NO-GO ise, her bir sorun için 3-5 çözüm üret ve kaydet. Ayrıca kullanıcı yerine geçip ürünle ilgili
-eksik/geliştirilebilir noktaları ayrıca değerlendir. Sonuçlar için bkz. bu bölümün altı ve/veya
-`docs/RISK-MITIGATION.md` (varsa).
+eksik/geliştirilebilir noktaları ayrıca değerlendir.
+
+**Verdikt: hâlâ NO-GO**, ama round 1'e göre belirgin ilerleme var. Codex'in özeti: *"Uygulama ve bakım
+riski ciddi ölçüde düştü, fakat çekirdek kullanıcı değeri ile tekrarlanabilir dağıtım hâlâ kanıtlanmadı;
+mevcut tasarım 'tek yer' vaadini fiilen yerine getirmiyor."*
+
+Round 1'in 6 eleştirisinden: 1 tanesi (semantic search) tam çözüldü, 3 tanesi (kapasite, UGC cold-start,
+butik tanımı) kısmen çözüldü, 2 tanesi (rekabet, dağıtım) çözülmedi. Ayrıca yeni ve en temel bir sorun
+ortaya çıktı: ürünün "Instagram → Maps → fiyat akışını tek yere toplama" iddiası gerçekte doğru değil —
+Instagram içeriği alınmıyor, kesin fiyat yok, yorum/yol tarifi için yine Maps'e çıkılıyor. Ürün mevcut
+3 adımı kısaltmak yerine 4. bir durak ekleme riski taşıyor.
+
+7 sorunun her biri için 3-5 somut çözüm + öncelik sırası + kullanıcı-perspektifinden eksik/fazla analizi:
+**[docs/RISK-MITIGATION.md](RISK-MITIGATION.md)**.
+
+Henüz hangi çözümlerin uygulanacağına karar verilmedi — bu kullanıcıyla birlikte yapılacak sıradaki adım.
