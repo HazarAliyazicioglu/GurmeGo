@@ -13,8 +13,7 @@
 | Faz | İçerik |
 |---|---|
 | **MVP** | Mekan veri modeli (fiyat aralığı + favori ürünler) + kürasyon, keşif & arama (tamamen yapısal filtre), mekan detay (+ Google yorum deep-link, + WhatsApp paylaşım), yorum/puan, Gurme Puanı (esnek tasarım), admin panel |
-| **Faz 2** | Kullanıcı katkı (yeni mekan önerisi/düzeltme), mekan sahibi kendi bilgisini girme, tam menü sistemi (kalem+fiyat), Keşif Reels, otomatik veri toplama, rozet/itibar sistemi, gelir modeli aktivasyonu, ikinci şehir |
-| **Faz 3** | Arama iyileştirme: doğal dil → filtre çevirisi + semantic search (pgvector) |
+| **Faz 2** | Kullanıcı katkı (yeni mekan önerisi/düzeltme), mekan sahibi kendi bilgisini girme, tam menü sistemi (kalem+fiyat), arama iyileştirme (doğal dil → filtre çevirisi + semantic search/pgvector), Keşif Reels, otomatik veri toplama, rozet/itibar sistemi, gelir modeli aktivasyonu, ikinci şehir |
 | **İleri faz** | Influencer listeleri, B2B akışlar (mekan sahibi paneli, ücretli) |
 
 ### v2.0'dan kapsam değişiklikleri (2026-07-16, `idea-red-team` sonrası)
@@ -32,7 +31,7 @@ gerekçe tablosu: [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16.
 4. **"Butik" tanımı netleşti.** Yalnızca `branch_count ≤ eşik` DB kuralı değil; gerçek dünya kategorisi
    — zincir/franchise değil, en fazla 2-3 şubeli, Instagram/TikTok'ta mekan önerisi olarak dolaşan
    yerler. Uygulama detayı: [rule-engine.md §1](rule-engine.md).
-5. **Arama iyileştirme (doğal dil + semantic search) → Faz 3.** MVP'de arama tamamen yapısal filtrelerle
+5. **Arama iyileştirme (doğal dil + semantic search) → Faz 2.** MVP'de arama tamamen yapısal filtrelerle
    (kategori/fiyat/ilçe/mesafe) çalışır, AI/pgvector katmanı yok. Gerekçe: birkaç yüz mekanlık veri
    setinde semantic search gereksiz karmaşıklık; basit filtre yeterli.
 6. **WhatsApp paylaşım eklendi (yeni, MVP).** Kullanıcılar mekanı uygulama içinden WhatsApp'a
@@ -81,7 +80,7 @@ gerekçe tablosu: [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16.
 - **FR-KA-06 (yeni 2026-07-16):** Kategori bazlı hızlı rota: kullanıcı "tatlı", "kahve" gibi bir
   kategori seçtiğinde, o kategorideki mekanlara filtrelenmiş liste + doğrudan yol tarifi (FR-MD-03 ile
   aynı deep-link mekanizması).
-- **FR-KA-07 (yeni 2026-07-16, MVP'de kaldırıldı):** ~~Doğal dil arama~~ → **Faz 3**. MVP'de arama
+- **FR-KA-07 (yeni 2026-07-16, MVP'de kaldırıldı):** ~~Doğal dil arama~~ → **Faz 2**. MVP'de arama
   tamamen yapısal filtrelerle (FR-KA-03) çalışır; serbest metin arama kutusu yok. Gerekçe:
   [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16 madde 9.
 
@@ -116,16 +115,16 @@ gerekçe tablosu: [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16.
 - **FR-GP-03:** Hesaplama mantığı deterministik/kod tabanlı; formül [rule-engine.md](rule-engine.md)'de dokümante edilir.
 - **FR-GP-04:** Kötüye kullanım koruması: rate limit, tek kullanıcı-tek mekan-tek puan, şüpheli toplu puanlama tespiti (izlenebilirlik: NFR-10).
 
-### 2.6 Arama İyileştirme (hafif AI) — Faz 3 (MVP'de yok)
+### 2.6 Arama İyileştirme (hafif AI) — Faz 2 (MVP'de yok)
 
 **MVP'de bu modül hiç yok.** Keşif tamamen FR-KA-03'teki yapısal filtrelerle çalışır; AI çağrısı, pgvector,
 embedding maliyeti sıfır. Gerekçe: [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16 madde 9 — birkaç yüz
 mekanlık MVP hacminde semantic search gereksiz karmaşıklık.
 
-- **FR-AI-01 (Faz 3):** Doğal dil arama → yapısal filtre çevirisi ("yakınımda ucuz butik kahvaltıcı" → kategori+fiyat+mesafe).
-- **FR-AI-02 (Faz 3):** Semantic search: editöryal notlar ve yorumlar üzerinde anlam bazlı arama (pgvector).
-- **FR-AI-03 (Faz 3, korunacak invariant):** AI **destekleyici** kalacak; çekirdek keşif (liste/harita/filtre) AI olmadan tam çalışmaya devam eder — Faz 3'te bu modül eklenirken de bozulmayacak bir garanti.
-- **FR-AI-04 (Faz 3):** Maliyet disiplini: küçük/ucuz model, önbellekleme, sadece gerektiğinde çağrı. Detay: [ai-prompt-design.md](ai-prompt-design.md) (Faz 3 tasarımı olarak saklanıyor).
+- **FR-AI-01 (Faz 2):** Doğal dil arama → yapısal filtre çevirisi ("yakınımda ucuz butik kahvaltıcı" → kategori+fiyat+mesafe).
+- **FR-AI-02 (Faz 2):** Semantic search: editöryal notlar ve yorumlar üzerinde anlam bazlı arama (pgvector).
+- **FR-AI-03 (Faz 2, korunacak invariant):** AI **destekleyici** kalacak; çekirdek keşif (liste/harita/filtre) AI olmadan tam çalışmaya devam eder — Faz 2'de bu modül eklenirken de bozulmayacak bir garanti.
+- **FR-AI-04 (Faz 2):** Maliyet disiplini: küçük/ucuz model, önbellekleme, sadece gerektiğinde çağrı. Detay: [ai-prompt-design.md](ai-prompt-design.md) (Faz 2 tasarımı olarak saklanıyor).
 
 ### 2.7 Admin / Kürasyon Paneli — MVP
 
@@ -156,7 +155,7 @@ mekanlık MVP hacminde semantic search gereksiz karmaşıklık.
 - **NFR-02 — Performans:** Keşif ekranı açılışı < 2 sn; arama/filtreleme < 300 ms (ilçe başına binlerce mekan ölçeği); harita akıcı.
 - **NFR-03 — Ölçeklenebilirlik:** Şehir/ilçe birinci sınıf boyut; çoklu şehre genişleme baştan destekli.
 - **NFR-04 — Konum gizliliği:** Konum yalnızca yakınlık hesabı için; sunucuda gereğinden uzun tutulmaz; konum izni olmadan manuel ilçe seçimiyle tam işlevsellik.
-- **NFR-05 — Maliyet disiplini (Faz 3'te geçerli olacak):** MVP'de AI çağrısı yok, maliyeti sıfır. Faz 3'te arama iyileştirme eklenince: AI maliyeti toplam altyapının küçük kısmı; küçük model + cache + gerektiğinde çağrı.
+- **NFR-05 — Maliyet disiplini (Faz 2'de geçerli olacak):** MVP'de AI çağrısı yok, maliyeti sıfır. Faz 2'de arama iyileştirme eklenince: AI maliyeti toplam altyapının küçük kısmı; küçük model + cache + gerektiğinde çağrı.
 - **NFR-06 — Veri taşınabilirliği:** Mekan verisi tek komutla JSON/CSV export.
 - **NFR-07 — Moderasyon:** Rate limit + şikayet mekanizması; temel spam/otomatik hesap tespiti.
 - **NFR-08 — Gelir modeli esnekliği:** Model açık (reklam/freemium/B2B); mimari sonradan eklemeye uygun (`featured` alanı, rol bazlı yetki).

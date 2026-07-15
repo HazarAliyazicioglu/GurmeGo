@@ -63,11 +63,11 @@ Mobil:
 | DB | Supabase dashboard + `get_advisors` | Yavaş sorgu incelemesi |
 | AI maliyeti | Günlük LLM çağrı sayısı + token metriği → basit dashboard | `ai_fallback_rate` ve cache hit oranı dahil ([ai-prompt-design.md §5](ai-prompt-design.md)) |
 
-**Alarmlar:** API 5xx oranı, p95 gecikme > 500 ms (NFR-02 marjı), kürasyon kuyruğu bekleme > 72 saat (SLA). (AI harcama alarmı Faz 3'te eklenecek.)
+**Alarmlar:** API 5xx oranı, p95 gecikme > 500 ms (NFR-02 marjı), kürasyon kuyruğu bekleme > 72 saat (SLA). (AI harcama alarmı Faz 2'te eklenecek.)
 
 ## 6. Maliyet Tahmini (MVP, aylık)
 
-**Not (2026-07-16):** AI/LLM/embedding kalemleri MVP'den çıkarıldı — semantic search Faz 3'e alındı (bkz. [docs/CHANGELOG.md](CHANGELOG.md)).
+**Not (2026-07-16):** AI/LLM/embedding kalemleri MVP'den çıkarıldı — semantic search Faz 2'e alındı (bkz. [docs/CHANGELOG.md](CHANGELOG.md)).
 
 | Kalem | Tahmin |
 |---|---|
@@ -78,4 +78,4 @@ Mobil:
 | Sentry/uptime | $0 |
 | **Toplam** | **~$5-35/ay** ✅ bütçe içinde |
 
-Ölçek tetikleyicileri: Supabase Pro (DB > 500 MB veya günlük aktif > ~1K), Redis ekleme (rate limit sayaç yükü), Railway ölçekleme (p95 bozulunca). Faz 3'te LLM (Haiku, cache'li ~binlerce sorgu/ay ~$1-5) + embedding (<$1) eklenecek.
+Ölçek tetikleyicileri: Supabase Pro (DB > 500 MB veya günlük aktif > ~1K), Redis ekleme (rate limit sayaç yükü), Railway ölçekleme (p95 bozulunca). Faz 2'te LLM (Haiku, cache'li ~binlerce sorgu/ay ~$1-5) + embedding (<$1) eklenecek.

@@ -69,7 +69,7 @@ gourmet_score = (C × m + Σ(oy_i × w_i)) / (C + Σ w_i)
 ## 5. Moderasyon Kuralları (FR-KG-03, NFR-07)
 
 - **Rate limit** değerleri (MVP): [api-spec.md §6](api-spec.md) (yorum 5/saat, puan 20/gün). Öneri/düzeltme
-  10/gün limiti Faz 2'de kullanıcı katkısı açılınca aktive olur; NL arama 30/gün limiti Faz 3'te.
+  10/gün limiti Faz 2'de kullanıcı katkısı açılınca aktive olur; NL arama 30/gün limiti Faz 2'te.
 - Yorum akışı: anında yayın → şikayet → moderasyon kuyruğu → curator kararı (kaldır/tut). Şikayet eşiği: aynı yoruma ≥3 farklı kullanıcı şikayeti → yorum otomatik gizlenir, kuyruğa "acil" etiketiyle düşer (`RULES_MOD_AUTO_HIDE_REPORTS = 3`).
 - Yeni hesap kısıtı: kayıttan sonraki 24 saat yorum/puan limiti yarıya iner (`RULES_NEW_ACCOUNT_HOURS = 24`).
 - Otomatik spam filtresi (içerik analizi) **Faz 2**.

@@ -4,8 +4,8 @@
 
 İlgili: [prd.md](prd.md) · [api-spec.md](api-spec.md) · [infrastructure.md](infrastructure.md) · [docs/CHANGELOG.md](CHANGELOG.md)
 
-**Not:** pgvector/semantic search MVP'den çıkarılıp Faz 3'e alındı (bkz. [docs/CHANGELOG.md](CHANGELOG.md)
-2026-07-16 madde 9). Bu dokümanda pgvector/embedding'e dair maddeler Faz 3 olarak işaretlendi, MVP
+**Not:** pgvector/semantic search MVP'den çıkarılıp Faz 2'e alındı (bkz. [docs/CHANGELOG.md](CHANGELOG.md)
+2026-07-16 madde 9). Bu dokümanda pgvector/embedding'e dair maddeler Faz 2 olarak işaretlendi, MVP
 mimarisinden çıkarılmadı — çünkü extension'ı migration'a baştan eklemek (kullanmadan) ileride şema
 değişikliği gerektirmiyor; asıl maliyet olan LLM çağrısı + embedding pipeline'ı MVP'de kurulmuyor.
 
@@ -17,7 +17,7 @@ değişikliği gerektirmiyor; asıl maliyet olan LLM çağrısı + embedding pip
 |---|---|---|
 | Backend | **NestJS (Node.js + TypeScript)** | Module/DI/guard yapısı; public API + admin + rol bazlı yetki için uygun; Fastify adapter ile performans |
 | Veritabanı | **PostgreSQL + PostGIS** | Coğrafi veri çekirdek varlık; ilçe sınırı + yakınlık sorguları DB seviyesinde |
-| Semantic index | **pgvector** (aynı Postgres) — **Faz 3, MVP'de kurulmaz** | Extension migration'a eklenir (şema hazır) ama embedding pipeline/LLM çağrısı MVP'de yok; maliyet + operasyon sadeliği (NFR-05) |
+| Semantic index | **pgvector** (aynı Postgres) — **Faz 2, MVP'de kurulmaz** | Extension migration'a eklenir (şema hazır) ama embedding pipeline/LLM çağrısı MVP'de yok; maliyet + operasyon sadeliği (NFR-05) |
 | Mobil | **React Native** | iOS + Android tek kod tabanı; ana deneyim |
 | Web | **Next.js (SSR/SSG)** | Mekan sayfaları SEO indekslenebilir (FR-MW-03) |
 | Admin panel | **Next.js (ayrı app, CSR yeterli)** | İç ekip aracı; SEO gereksiz |
@@ -39,7 +39,7 @@ değişikliği gerektirmiyor; asıl maliyet olan LLM çağrısı + embedding pip
               │  NestJS API      │◄──────►│ Supabase Auth│
               │  (REST/OpenAPI)  │        └──────────────┘
               │                  │        ┌──────────────┐
-              │  - Discovery     │ · · · ▶│ LLM API      │ (Faz 3, MVP'de yok)
+              │  - Discovery     │ · · · ▶│ LLM API      │ (Faz 2, MVP'de yok)
               │  - Venue         │        │ (NL search)  │
               │  - Moderation    │        └──────────────┘
               │  - GourmetScore  │
@@ -49,7 +49,7 @@ değişikliği gerektirmiyor; asıl maliyet olan LLM çağrısı + embedding pip
               ┌─────────────────┐
               │ PostgreSQL       │
               │ + PostGIS        │  ← coğrafi sorgular (MVP)
-              │ + pgvector       │  ← semantic search (Faz 3, extension kurulu ama kullanılmıyor)
+              │ + pgvector       │  ← semantic search (Faz 2, extension kurulu ama kullanılmıyor)
               └─────────────────┘
 ```
 
@@ -101,7 +101,7 @@ Tag/Collection: mekanlara dış etiket — ileri faz influencer listeleri için 
 | signature_items | text[] | **yeni** — "favori ürünler" (FR-MV-01); tam menü sistemi (MenuItem) Faz 2 |
 | transport_note | text | ulaşım (FR-MV-01) |
 | opening_hours | jsonb | gün bazlı |
-| editorial_note | text | kürasyon notu; Faz 3'te embedding kaynağı olacak |
+| editorial_note | text | kürasyon notu; Faz 2'te embedding kaynağı olacak |
 | is_boutique | boolean | rule-engine hesaplar (FR-MV-04) — artık gerçek dünya tanınırlığına dayalı tanım |
 | branch_count | int | butik kuralı girdisi |
 | source | enum: manual/user/auto | MVP'de her zaman `manual` (FR-MV-02); `user` Faz 2, `auto` Faz 2+ |
@@ -109,7 +109,7 @@ Tag/Collection: mekanlara dış etiket — ileri faz influencer listeleri için 
 | status | enum: draft/published/archived | |
 | gourmet_score | numeric(2,1) | denormalize; rule-engine yazar |
 | featured | boolean | gelir modeli esnekliği (NFR-08); MVP'de hep false |
-| embedding | vector | **Faz 3** — pgvector; editorial_note + özet. Kolon migration'da var ama MVP'de hiç yazılmaz |
+| embedding | vector | **Faz 2** — pgvector; editorial_note + özet. Kolon migration'da var ama MVP'de hiç yazılmaz |
 
 **GourmetRating:** user_id, venue_id, score (1-5), weight (rol bazlı — AK-01 hangi yönde çözülürse çözülsün destekler), created_at. Unique(user_id, venue_id) → tek kullanıcı-tek mekan-tek puan (FR-GP-04).
 
@@ -132,13 +132,13 @@ Düzeltme önerisi ───┼──► ContributionQueue (pending)
 Cron: verified_at > N gün ──► kürasyon kuyruğuna "re-verify" görevi (FR-MV-03)
 ```
 
-## 6. Arama Katmanı — MVP'de tek parçalı, Faz 3'te iki parçalı olacak
+## 6. Arama Katmanı — MVP'de tek parçalı, Faz 2'te iki parçalı olacak
 
 **MVP:** yalnızca **yapısal** arama. Kategori, fiyat, ilçe, açık/kapalı, mesafe → doğrudan SQL +
 PostGIS (`ST_DWithin`, `ST_Distance` sıralama). Hedef < 300 ms (NFR-02): district_id + GIST index'ler,
 keyset pagination. Serbest metin arama kutusu yok.
 
-**Faz 3 (planlı, MVP'de yok):** Semantic katman eklenecek — doğal dil sorgu → LLM ile yapısal filtre
+**Faz 2 (planlı, MVP'de yok):** Semantic katman eklenecek — doğal dil sorgu → LLM ile yapısal filtre
 çıkarımı (FR-AI-01) + pgvector benzerlik (FR-AI-02). Sonuç yapısal filtrelerle AND'lenecek. Eklendiğinde
 de AI kapalıyken yapısal arama tam çalışır invariant'ı (FR-AI-03) korunacak. Tasarım detayı saklanıyor:
 [ai-prompt-design.md](ai-prompt-design.md).
@@ -155,4 +155,4 @@ de AI kapalıyken yapısal arama tam çalışır invariant'ı (FR-AI-03) korunac
 - **Versiyonlama:** Venue yazma işlemleri VenueVersion'a snapshot; geri alma = eski snapshot'ı uygula (FR-MV-05).
 - **Export:** `pnpm export:venues` → JSON/CSV (NFR-06); admin panelden de tetiklenebilir.
 - **Rate limiting:** API gateway seviyesinde IP bazlı + kullanıcı bazlı (yorum/puan/öneri uçları sıkı) — [api-spec.md](api-spec.md).
-- **Cache:** keşif listeleri kısa TTL (60 sn) HTTP cache; mekan detay ETag. (NL arama cache'i Faz 3'te eklenecek, bkz. NFR-05.)
+- **Cache:** keşif listeleri kısa TTL (60 sn) HTTP cache; mekan detay ETag. (NL arama cache'i Faz 2'te eklenecek, bkz. NFR-05.)

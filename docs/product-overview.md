@@ -78,25 +78,24 @@ değil, rakiplerle asgari düzeyde eşleşme.
 ayırabileceği haftalık kürasyon süresine göre belirlenecek (bkz. [docs/CHANGELOG.md](CHANGELOG.md)
 2026-07-16, madde 2). Artış Faz 2'ye bırakılıyor.
 
-**Zamanlama:** 3-4 ay agresif MVP. Bu ufuk kapsam disiplinini zorunlu kılar — çekirdek dışı her şey Faz 2/3'e.
+**Zamanlama:** 3-4 ay agresif MVP. Bu ufuk kapsam disiplinini zorunlu kılar — çekirdek dışı her şey Faz 2'ye.
 
 ### Modüller
 
-| Modül | MVP | Faz 2 | Faz 3 |
-|---|---|---|---|
-| Mekan Veri Modeli & Kürasyon Sistemi (fiyat aralığı + favori ürünler) | ✅ Çekirdek | Tam menü sistemi (kalem+fiyat) | |
-| Keşif & Arama (liste/harita/yapısal filtre + kategori bazlı rota) | ✅ Çekirdek | | |
-| Mekan Detay Sayfası (+ Google yorumlarına deep-link, + WhatsApp paylaşım) | ✅ Çekirdek | | |
-| Yorum/Puan (kendi review sistemi) | ✅ | | |
-| Kullanıcı Katkı (yeni mekan önerisi, düzeltme) | ❌ | ✅ Faz 2 | |
-| Mekan sahibi kendi bilgisini girme | ❌ | ✅ Faz 2 | |
-| Rozet/itibar sistemi | ❌ | ✅ Faz 2 | |
-| Gurme Puanı | ✅ (rol bazlı esnek tasarım) | | |
-| Admin / Kürasyon Paneli | ✅ Çekirdek | | |
-| Arama İyileştirme (doğal dil → filtre + semantic search) | ❌ | | ✅ Faz 3 |
-| Keşif Reels | ❌ | ✅ Faz 2 (telif/operasyon riski nedeniyle ertelendi) | |
-| Influencer Listeleri | ❌ | | ✅ İleri faz |
-| B2B akışlar (mekan sahibi paneli, ücretli) | ❌ | | ✅ İleri faz |
+| Modül | MVP | Faz 2 |
+|---|---|---|
+| Mekan Veri Modeli & Kürasyon Sistemi (fiyat aralığı + favori ürünler) | ✅ Çekirdek | Tam menü sistemi (kalem+fiyat) |
+| Keşif & Arama (liste/harita/yapısal filtre + kategori bazlı rota) | ✅ Çekirdek | Arama iyileştirme: doğal dil → filtre + semantic search |
+| Mekan Detay Sayfası (+ Google yorumlarına deep-link, + WhatsApp paylaşım) | ✅ Çekirdek | |
+| Yorum/Puan (kendi review sistemi) | ✅ | |
+| Kullanıcı Katkı (yeni mekan önerisi, düzeltme) | ❌ | ✅ |
+| Mekan sahibi kendi bilgisini girme | ❌ | ✅ |
+| Rozet/itibar sistemi | ❌ | ✅ |
+| Gurme Puanı | ✅ (rol bazlı esnek tasarım) | |
+| Admin / Kürasyon Paneli | ✅ Çekirdek | |
+| Keşif Reels | ❌ | ✅ (telif/operasyon riski nedeniyle ertelendi) |
+| Influencer Listeleri | ❌ | İleri faz |
+| B2B akışlar (mekan sahibi paneli, ücretli) | ❌ | İleri faz |
 
 **Not:** "Arama İyileştirme" MVP'de yapısal filtrelerle (kategori/fiyat/ilçe/mesafe) tamamen çalışır,
 AI katmanı yok — bkz. [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16 madde 9 ve [architecture.md §6](architecture.md).

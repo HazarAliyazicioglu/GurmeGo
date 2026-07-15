@@ -45,7 +45,7 @@ HTTP kodları: 400 validasyon, 401 auth yok, 403 rol yetersiz, 404, 409 çakış
 | GET | `/districts/nearest?lat&lng` | — | Konumdan ilçe önerisi (FR-KA-01); koordinat loglanmaz (NFR-04) |
 | GET | `/venues` | — | Keşif listesi. Filtreler: `district_id, category, cuisine, price_range, open_now, is_boutique, lat, lng, radius_m, sort=distance\|gourmet_score\|newest` |
 | GET | `/venues/map?bbox=...` | — | Harita görünümü: bbox içi hafif payload (id, name, location, category, gourmet_score) |
-| GET | `/search?q=...` | — | **Faz 3, MVP'de yok.** Doğal dil arama (FR-AI-01/02). Yanıt: yapısal sonuç + `interpreted_filters` (LLM çıkarımı şeffaf gösterilir). AI hatasında yapısal fallback (FR-AI-03) |
+| GET | `/search?q=...` | — | **Faz 2, MVP'de yok.** Doğal dil arama (FR-AI-01/02). Yanıt: yapısal sonuç + `interpreted_filters` (LLM çıkarımı şeffaf gösterilir). AI hatasında yapısal fallback (FR-AI-03) |
 
 ## 3. Public API — Mekan Detay
 
@@ -98,6 +98,6 @@ Değerler config'te (`RATE_LIMIT_*` env), başlangıç seti:
 | Yorum yazma | 5/saat | kullanıcı |
 | Gurme Puanı | 20/gün | kullanıcı |
 | Öneri/düzeltme (**Faz 2**) | 10/gün | kullanıcı |
-| NL arama (**Faz 3**, `/search`) | 30/gün | kullanıcı (anonim: 10/gün IP) — AI maliyet disiplini (NFR-05) |
+| NL arama (**Faz 2**, `/search`) | 30/gün | kullanıcı (anonim: 10/gün IP) — AI maliyet disiplini (NFR-05) |
 
 Aşımda `429` + `Retry-After` header. Kural gerekçeleri: [rule-engine.md](rule-engine.md).

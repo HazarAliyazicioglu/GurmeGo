@@ -1,11 +1,11 @@
 # GurmeGo — AI Prompt Design
 
-**Versiyon:** 1.0 · **Tarih:** 2026-07-06 · **Durum: Faz 3 (MVP kapsamında değil)**
+**Versiyon:** 1.0 · **Tarih:** 2026-07-06 · **Durum: Faz 2 (MVP kapsamında değil)**
 
 > **2026-07-16 not:** Bu doküman `idea-red-team` sonrası MVP'den çıkarıldı — Codex'in tespiti, birkaç
 > yüz mekanlık MVP veri hacminde semantic search/pgvector'ın gereksiz karmaşıklık olduğuydu. MVP'de
 > arama tamamen yapısal filtrelerle (kategori/fiyat/ilçe/mesafe) çalışır. Bu doküman **referans olarak
-> saklanıyor** — Faz 3'te arama iyileştirme gerçekten gerekli görülürse (bkz. [prd.md §5](prd.md)
+> saklanıyor** — Faz 2'te arama iyileştirme gerçekten gerekli görülürse (bkz. [prd.md §5](prd.md)
 > MVP doğrulama eşiği) buradaki tasarım baz alınır. Gerekçe: [docs/CHANGELOG.md](CHANGELOG.md)
 > 2026-07-16 madde 9.
 

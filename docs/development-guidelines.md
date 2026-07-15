@@ -49,7 +49,7 @@ gurmego/
 | **Rule engine** (butik kuralı, Gurme Puanı formülü, güncellik, anomali) | Zorunlu unit — hedef ~%80+ bu modülde | Vitest/Jest |
 | **Kürasyon akışı** (MVP: admin CRUD + moderasyon şikayeti → Venue + versiyon) | Zorunlu integration (test DB ile) | Jest + Testcontainers/Supabase lokal |
 | **Arama filtreleri** (yapısal sorgu + cursor pagination + PostGIS yakınlık) | Zorunlu integration | aynı |
-| **AI filtre çıkarımı** | **Faz 3, MVP'de yok.** Prompt regression: örnek sorgu seti → beklenen filtre snapshot'ları; fallback yolu test edilir | fixture bazlı, canlı LLM CI'da çağrılmaz (mock) |
+| **AI filtre çıkarımı** | **Faz 2, MVP'de yok.** Prompt regression: örnek sorgu seti → beklenen filtre snapshot'ları; fallback yolu test edilir | fixture bazlı, canlı LLM CI'da çağrılmaz (mock) |
 | **UI** | Smoke E2E (MVP): keşif→detay→favori, mekan paylaş (WhatsApp), admin CRUD ile mekan ekle (3-4 senaryo) | Playwright (web/admin), Maestro (mobil, opsiyonel) |
 
 - Genel kapsam yüzdesi eşiği **yok** — kritik modüller derin, geri kalan pragmatik.
