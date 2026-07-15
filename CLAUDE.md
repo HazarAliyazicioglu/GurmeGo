@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+@docs/STATE.md
+
 ## Proje durumu
 
 Bu repo şu an yalnızca `docs/` altında spec/tasarım dokümanlarından oluşuyor — henüz kod yok (`apps/`, `packages/`, `package.json` mevcut değil). İlk kod yazma turunda [architecture.md](docs/architecture.md) §3'teki monorepo iskeletini (pnpm workspace + Turborepo) kurmak gerekecek. Aşağıdaki komutlar ve yapı, bu dokümanlarda **kararlaştırılmış** hedef durumu anlatır; iskelet kurulana kadar gerçek scriptler mevcut değildir.
