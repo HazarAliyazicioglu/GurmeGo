@@ -1,25 +1,32 @@
 # GurmeGo — Rule Engine
 
-**Versiyon:** 1.0 · **Tarih:** 2026-07-06
+**Versiyon:** 1.1 (red-team sonrası revize) · **Tarih:** 2026-07-16
 
 Tüm kurallar deterministik/kod tabanlı; AI karar vermez. Eşikler config'te (`RULES_*` env / ayarlar tablosu) — ayar değişikliği deploy gerektirmez.
 
-İlgili: [prd.md](prd.md) · [architecture.md](architecture.md)
+İlgili: [prd.md](prd.md) · [architecture.md](architecture.md) · [docs/CHANGELOG.md](CHANGELOG.md)
 
 ---
 
 ## 1. "Butik" Tanım Kuralları (FR-MV-04)
 
+**Tanım (revize 2026-07-16):** "Butik", Codex red-team'in "kullanıcı için anlamsız, keyfi DB kuralı"
+eleştirisi üzerine netleşti. Artık salt bir şube-sayısı eşiği değil, **gerçek dünyada tanınabilir bir
+kategori**: Burger King, McDonald's, Starbucks, Kahve Dünyası, Simit Sarayı gibi **çok şubeli
+zincirlerin karşıtı** — Instagram/TikTok'ta "mekan önerisi" olarak paylaşılan, en fazla 2-3 şubeli
+yerler. Şube sayısı eşiği bu tanımı **uygulamak** için kullanılan bir kod kuralı, tanımın kendisi değil.
+
 Bir mekan `is_boutique = true` olur ⟺ tüm koşullar sağlanır:
 
 | # | Kural | Config | Başlangıç |
 |---|---|---|---|
-| B1 | Şube sayısı ≤ eşik | `RULES_BOUTIQUE_MAX_BRANCHES` | **4** *(karar: 3-5 arası kararsız → ortadan başla, veriyle ayarla; tek config değişikliği)* |
+| B1 | Şube sayısı ≤ eşik | `RULES_BOUTIQUE_MAX_BRANCHES` | **3** *(revize 2026-07-16: "en fazla 2-3 şube" tanımına göre 4'ten indirildi; veriyle ayarlanabilir, tek config değişikliği)* |
 | B2 | Franchise/zincir markası değil | `franchise_flag = false` (kürasyon girer) | — |
 | B3 | Kürasyon onayı: editöryal not girilmiş ve `status = published` | — | — |
 
 - Eşiği aşan mekan otomatik dışlanmaz; `is_boutique = false` ile **ayrı kategoride** kalabilir (kürasyon kararı).
 - `branch_count` ve `franchise_flag` kürasyon ekibi tarafından girilir/doğrulanır; değişince kural yeniden değerlendirilir (DB trigger veya service hook).
+- Sınır durumları (ör. hızlı büyüyen 3 şubeli bir marka) kürasyon ekibinin editöryal takdirine bırakılır — B3 (editöryal not) bu yüzden zorunlu, salt sayısal kural yeterli değil.
 
 ## 2. Veri Güncellik Kuralları (FR-MV-03)
 
@@ -61,7 +68,8 @@ gourmet_score = (C × m + Σ(oy_i × w_i)) / (C + Σ w_i)
 
 ## 5. Moderasyon Kuralları (FR-KG-03, NFR-07)
 
-- **Rate limit** değerleri: [api-spec.md §6](api-spec.md) (yorum 5/saat, puan 20/gün, öneri 10/gün, NL arama 30/gün).
+- **Rate limit** değerleri (MVP): [api-spec.md §6](api-spec.md) (yorum 5/saat, puan 20/gün). Öneri/düzeltme
+  10/gün limiti Faz 2'de kullanıcı katkısı açılınca aktive olur; NL arama 30/gün limiti Faz 3'te.
 - Yorum akışı: anında yayın → şikayet → moderasyon kuyruğu → curator kararı (kaldır/tut). Şikayet eşiği: aynı yoruma ≥3 farklı kullanıcı şikayeti → yorum otomatik gizlenir, kuyruğa "acil" etiketiyle düşer (`RULES_MOD_AUTO_HIDE_REPORTS = 3`).
 - Yeni hesap kısıtı: kayıttan sonraki 24 saat yorum/puan limiti yarıya iner (`RULES_NEW_ACCOUNT_HOURS = 24`).
 - Otomatik spam filtresi (içerik analizi) **Faz 2**.
@@ -70,10 +78,13 @@ gourmet_score = (C × m + Σ(oy_i × w_i)) / (C + Σ w_i)
 
 Kuyruk sıralaması (FR-AP-01):
 
+**MVP** (yalnızca moderasyon şikayeti + re-verify akışta):
 1. Otomatik gizlenen yorumlar (acil)
-2. "Mekan kapandı" düzeltme önerileri (yanlış açık bilgi = güven kırıcı)
-3. Fiyat/menü düzeltmeleri
-4. Yeni mekan önerileri
-5. `re_verify` görevleri (90 gün)
+2. `re_verify` görevleri (90 gün)
+
+**Faz 2'de eklenecek** (kullanıcı katkısı + mekan-sahibi-girişi açılınca):
+3. "Mekan kapandı" düzeltme önerileri (yanlış açık bilgi = güven kırıcı)
+4. Fiyat/favori ürün düzeltmeleri
+5. Yeni mekan önerileri
 
 Hedef SLA: öneri → karar ≤ 72 saat (başarı metriği, [prd.md §5](prd.md)).

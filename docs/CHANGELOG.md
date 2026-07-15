@@ -30,7 +30,7 @@ bulundu: Menüde Ne Var, Menülen, HepMenu, Cafinder.
 | 6 | (yoktu) | Kategori bazlı rota: kullanıcı "tatlı" veya "kahve" seçtiğinde o kategorideki mekanlara filtre + yol tarifi | Konumlanma değişikliğinin doğal uzantısı |
 | 7 | (yoktu) | WhatsApp paylaşım özelliği: kullanıcılar beğendikleri mekanı birbirine uygulama içinden gönderebilecek | Organik dağıtım/viral büyüme mekanizması eksikti (Codex: "bilinmeyenler" listesinde işaretlenmişti) |
 | 8 | Kendi review sistemi (Review modeli), Google yorumları hiç yok | Google yorumlarına **deep-link** (Maps'e yönlendirme); Places API entegrasyonu yok | API'nin ToS kısıtları (attribution zorunlu, review metni 30 günden fazla cache'lenemez, ücretli istek) MVP'de gereksiz risk/maliyet. Kendi review sistemi FR-MD-02 olarak duruyor, ek olarak Google'a link veriliyor |
-| 9 | Semantic search/pgvector MVP'de (FR-AI-02) | **Sorgulanıyor** — henüz karar verilmedi | Codex: birkaç yüz mekanlık veri setinde gereksiz karmaşıklık ("mühendislik kostümü"); MVP hacminde basit filtreler yeterli |
+| 9 | Semantic search/pgvector MVP'de (FR-AI-02) | **Faz 3'e alındı.** MVP arama tamamen yapısal filtre (kategori/fiyat/ilçe/mesafe), AI/pgvector/LLM çağrısı yok | Codex: birkaç yüz mekanlık veri setinde gereksiz karmaşıklık ("mühendislik kostümü"); kullanıcı en basit seçeneği (sadece yapısal filtre) onayladı |
 | 10 | Gelir modeli tamamen açık | **Hâlâ açık** — freemium fikri beğenildi ama "o mantığa uyan bir sistem yok" (kullanıcı notu) | Codex: gelir modelinin "ertelenmesi" değil ürün mantığından çıkarılmış olması eleştirisi kısmen geçerliliğini koruyor |
 | 11 | Kürasyon ekibi büyüklüğü belirtilmemiş | Netleşti: kullanıcı + 1-2 kişi daha | Codex'in "tek kişi sürdüremez" bulgusuna kısmi cevap — hâlâ küçük ekip, ama MVP kapsamı azaltılan mekan sayısıyla dengeleniyor |
 | 12 | İlk kullanıcı kitlesi kaynağı belirtilmemiş | Netleşti: mevcut restoran/mekan bağlantıları + organik/SEO büyüme | Codex'in "dağıtım kanalı dokümanda yok, bu da olumsuz sinyal" bulgusuna cevap |
@@ -44,6 +44,13 @@ bulundu: Menüde Ne Var, Menülen, HepMenu, Cafinder.
   veri tabanıyla aynı savaşa giren geç bir kopya" olarak kalır — rakip karşılaştırması yapılmadan MVP'ye
   girilirse aynı ölüm senaryosuna (%35, alışkanlık oluşmaz) düşme riski sürer.
 
+### Uygulanan doküman güncellemeleri
+
+Yukarıdaki tablonun tamamı şu dosyalara işlendi: `product-overview.md`, `prd.md`, `architecture.md`,
+`rule-engine.md`, `api-spec.md`, `ai-prompt-design.md` (Faz 3 referansı olarak işaretlendi, silinmedi),
+`infrastructure.md` (maliyet tablosundan AI kalemleri çıkarıldı), `development-guidelines.md` (test
+stratejisi güncellendi).
+
 ### Sonraki adım
-Semantic search kararı netleşince `prd.md`, `product-overview.md`, `architecture.md`, `rule-engine.md`
-bu tabloya göre güncellenecek.
+MVP mekan sayısı hedefi (~225 yerine ne kadar) netleşince `prd.md §1`'e yazılacak. Ardından ilk kod
+turu: `architecture.md §3`'teki monorepo iskeleti.

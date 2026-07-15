@@ -1,8 +1,8 @@
 # GurmeGo — API Spec
 
-**Versiyon:** 1.0 · **Tarih:** 2026-07-06 · **Stil:** REST + OpenAPI 3.1
+**Versiyon:** 1.1 (red-team sonrası revize) · **Tarih:** 2026-07-16 · **Stil:** REST + OpenAPI 3.1
 
-İlgili: [architecture.md](architecture.md) · [rule-engine.md](rule-engine.md)
+İlgili: [architecture.md](architecture.md) · [rule-engine.md](rule-engine.md) · [docs/CHANGELOG.md](CHANGELOG.md)
 
 ---
 
@@ -45,19 +45,20 @@ HTTP kodları: 400 validasyon, 401 auth yok, 403 rol yetersiz, 404, 409 çakış
 | GET | `/districts/nearest?lat&lng` | — | Konumdan ilçe önerisi (FR-KA-01); koordinat loglanmaz (NFR-04) |
 | GET | `/venues` | — | Keşif listesi. Filtreler: `district_id, category, cuisine, price_range, open_now, is_boutique, lat, lng, radius_m, sort=distance\|gourmet_score\|newest` |
 | GET | `/venues/map?bbox=...` | — | Harita görünümü: bbox içi hafif payload (id, name, location, category, gourmet_score) |
-| GET | `/search?q=...` | — | Doğal dil arama (FR-AI-01/02). Yanıt: yapısal sonuç + `interpreted_filters` (LLM çıkarımı şeffaf gösterilir). AI hatasında yapısal fallback (FR-AI-03) |
+| GET | `/search?q=...` | — | **Faz 3, MVP'de yok.** Doğal dil arama (FR-AI-01/02). Yanıt: yapısal sonuç + `interpreted_filters` (LLM çıkarımı şeffaf gösterilir). AI hatasında yapısal fallback (FR-AI-03) |
 
 ## 3. Public API — Mekan Detay
 
 | Method | Path | Auth | Açıklama |
 |---|---|---|---|
-| GET | `/venues/:slug` | — | Tam profil: menü, fiyat aralığı, ulaşım notu, saatler, fotoğraflar, gourmet_score, `verified_at` + `source` (FR-MD-04) |
+| GET | `/venues/:slug` | — | Tam profil: fiyat aralığı, favori ürünler, ulaşım notu, saatler, fotoğraflar, gourmet_score, `verified_at` + `source`, Google yorumlarına deep-link (FR-MD-04, FR-MD-05) |
 | GET | `/venues/:id/reviews` | — | Yorumlar; `sort=helpful\|newest` (FR-MD-02) |
-| GET | `/venues/:id/menu` | — | Kalem + fiyat listesi |
+| GET | `/venues/:id/menu` | — | **Faz 2, MVP'de yok.** Kalem + fiyat listesi (tam menü sistemi) |
 
-Yol tarifi (FR-MD-03) istemci tarafı deep link — API ucu gerekmez; detay yanıtı `location` içerir.
+Yol tarifi (FR-MD-03) ve mekan paylaşımı (FR-MD-06, WhatsApp) istemci tarafı deep link — API ucu
+gerekmez; detay yanıtı `location` içerir.
 
-## 4. Public API — Katkı, Yorum, Puan, Favoriler
+## 4. Public API — Yorum, Puan, Favoriler (MVP) / Katkı (Faz 2)
 
 Hepsi `user` rolü ister (AK-02: katkı için hesap).
 
@@ -66,10 +67,10 @@ Hepsi `user` rolü ister (AK-02: katkı için hesap).
 | POST | `/venues/:id/reviews` | Yorum + yıldız. Anında yayın, şikayet üzerine inceleme (FR-KG-03) |
 | POST | `/reviews/:id/report` | Şikayet → moderasyon kuyruğu |
 | PUT | `/venues/:id/gourmet-rating` | Gurme Puanı oyu (1-5). Rol kontrolü AK-01 konfigürasyonuna göre (`approved_rater` gerekebilir). Unique upsert → tek kullanıcı-tek mekan-tek puan (FR-GP-04) |
-| POST | `/contributions/venues` | Yeni mekan önerisi → ContributionQueue (FR-KG-01) |
-| POST | `/venues/:id/contributions` | Düzeltme önerisi (fiyat/menü/kapandı) → kuyruk (FR-KG-02) |
 | GET/POST | `/me/lists` · `/me/lists/:id/venues` | Favori koleksiyonları (FR-KA-04) |
-| GET | `/me/contributions` | Kullanıcının önerileri + durumları |
+| POST | `/contributions/venues` | **Faz 2, MVP'de yok.** Yeni mekan önerisi → ContributionQueue (FR-KG-01) |
+| POST | `/venues/:id/contributions` | **Faz 2, MVP'de yok.** Düzeltme önerisi (fiyat/kapandı) → kuyruk (FR-KG-02) |
+| GET | `/me/contributions` | **Faz 2, MVP'de yok.** Kullanıcının önerileri + durumları |
 
 ## 5. Admin API — `/v1/admin/*` (curator/admin role guard)
 
@@ -77,7 +78,7 @@ Tek NestJS app içinde; ayrı servis yok (MVP kararı).
 
 | Method | Path | Açıklama |
 |---|---|---|
-| GET | `/admin/queue?type=&status=` | Onay kuyruğu: öneriler + düzeltmeler + şikayetler tek yerde (FR-AP-01) |
+| GET | `/admin/queue?type=&status=` | Onay kuyruğu: MVP'de yalnızca şikayetler; öneri/düzeltme tipleri Faz 2'de aynı kuyruğa eklenir (FR-AP-01) |
 | POST | `/admin/queue/:id/approve` · `/reject` | Onay → Venue'ye uygula + VenueVersion + `verified_at` güncelle |
 | POST | `/admin/venues` · PUT `/admin/venues/:id` | Manuel kürasyon CRUD |
 | POST | `/admin/venues/:id/revert/:versionId` | Versiyon geri alma (FR-MV-05) |
@@ -96,7 +97,7 @@ Değerler config'te (`RATE_LIMIT_*` env), başlangıç seti:
 | Okuma uçları | 100 istek/dk | IP |
 | Yorum yazma | 5/saat | kullanıcı |
 | Gurme Puanı | 20/gün | kullanıcı |
-| Öneri/düzeltme | 10/gün | kullanıcı |
-| NL arama (`/search`) | 30/gün | kullanıcı (anonim: 10/gün IP) — AI maliyet disiplini (NFR-05) |
+| Öneri/düzeltme (**Faz 2**) | 10/gün | kullanıcı |
+| NL arama (**Faz 3**, `/search`) | 30/gün | kullanıcı (anonim: 10/gün IP) — AI maliyet disiplini (NFR-05) |
 
 Aşımda `429` + `Retry-After` header. Kural gerekçeleri: [rule-engine.md](rule-engine.md).
