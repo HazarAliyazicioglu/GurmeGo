@@ -4,6 +4,7 @@ import { DistrictsModule } from "./districts/districts.module";
 import { VenuesModule } from "./venues/venues.module";
 import { AuthModule } from "./auth/auth.module";
 import { FavoritesModule } from "./favorites/favorites.module";
+import { ReportsModule } from "./reports/reports.module";
 
 @Controller("health")
 class HealthController {
@@ -14,7 +15,7 @@ class HealthController {
 }
 
 @Module({
-  imports: [PrismaModule, DistrictsModule, VenuesModule, AuthModule, FavoritesModule],
+  imports: [PrismaModule, DistrictsModule, VenuesModule, AuthModule, FavoritesModule, ReportsModule],
   controllers: [HealthController],
 })
 export class AppModule {}

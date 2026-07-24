@@ -152,3 +152,11 @@ model Favorite {
 
   @@unique([listId, venueId])
 }
+
+model RateLimitCounter {
+  key       String   @id
+  count     Int      @default(0)
+  windowEnd DateTime
+
+  @@map("rate_limit_counters")
+}
