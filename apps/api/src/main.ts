@@ -10,6 +10,15 @@ async function bootstrap() {
   await app.register(fastifyMultipart);
   app.setGlobalPrefix("v1", { exclude: ["health"] });
 
+  // Browser clients (Plan 2's Next.js web/PWA app) need CORS to call this API cross-origin.
+  // No production origin exists yet — Plan 4 (infra) will set the real value via CORS_ORIGIN.
+  // Never use origin:true/"*" here: this API carries authenticated (credentialed) requests.
+  const corsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000,http://localhost:3001")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: corsOrigins, credentials: true });
+
   const config = new DocumentBuilder().setTitle("GurmeGo API").setVersion("1.0").build();
   const document = SwaggerModule.createDocument(app, config);
   if (process.env.EXPORT_OPENAPI) {
