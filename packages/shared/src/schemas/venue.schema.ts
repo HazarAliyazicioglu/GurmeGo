@@ -1,0 +1,44 @@
+import { z } from "zod";
+import { PRICE_RANGE_VALUES } from "../enums/price-range";
+
+export const VenueStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]);
+export const VenueSourceSchema = z.enum(["MANUAL", "USER", "AUTO"]);
+
+export const VenueSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  slug: z.string().min(1).max(220),
+  districtId: z.string().uuid(),
+  category: z.string().min(1),
+  cuisineType: z.string().optional(),
+  priceRange: z.enum(PRICE_RANGE_VALUES),
+  signatureItems: z.array(z.string().min(1)).max(10),
+  transportNote: z.string().max(500).optional(),
+  openingHours: z.record(z.string(), z.string()),
+  editorialNote: z.string().max(1000).optional(),
+  isBoutique: z.boolean(),
+  branchCount: z.number().int().min(1),
+  verifiedAt: z.string().datetime(),
+  status: VenueStatusSchema,
+  googleRating: z.number().min(0).max(5).optional(),
+  googleRatingCount: z.number().int().min(0).optional(),
+  googlePlaceId: z.string().optional(),
+});
+export type Venue = z.infer<typeof VenueSchema>;
+
+export const VenueListQuerySchema = z
+  .object({
+    districtId: z.string().uuid().optional(),
+    category: z.string().optional(),
+    cuisineType: z.string().optional(),
+    priceRange: z.enum(PRICE_RANGE_VALUES).optional(),
+    isBoutique: z.coerce.boolean().optional(),
+    lat: z.coerce.number().min(-90).max(90).optional(),
+    lng: z.coerce.number().min(-180).max(180).optional(),
+    radiusM: z.coerce.number().int().positive().max(20000).optional(),
+    sort: z.enum(["distance", "newest"]).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    cursor: z.string().optional(),
+  })
+  .transform((v) => ({ ...v, sort: v.sort ?? (v.lat && v.lng ? "distance" : "newest") }));
+export type VenueListQuery = z.infer<typeof VenueListQuerySchema>;
