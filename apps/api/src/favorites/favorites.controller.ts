@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post, Req, UsePipes } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, UseGuards, UsePipes } from "@nestjs/common";
 import { CreateFavoriteListSchema } from "@gurmego/shared";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
+import { RateLimit, RateLimitGuard } from "../common/rate-limit.guard";
 import { FavoritesService } from "./favorites.service";
 
 @Controller("me/lists")
@@ -8,6 +9,8 @@ export class FavoritesController {
   constructor(private favorites: FavoritesService) {}
 
   @Get()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(100, 60)
   list(@Req() req: any) {
     return this.favorites.listLists(req.user.id);
   }

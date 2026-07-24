@@ -2,17 +2,25 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { VenuesController } from "./venues.controller";
 import { VenuesService } from "./venues.service";
+import { RateLimitGuard } from "../common/rate-limit.guard";
+import { CACHE_STORE } from "../common/cache-store.interface";
 
 describe("VenuesController (e2e)", () => {
   let app: NestFastifyApplication;
   let service: { list: jest.Mock };
+  let store: { increment: jest.Mock };
 
   beforeAll(async () => {
     service = { list: jest.fn() };
+    store = { increment: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [VenuesController],
-      providers: [{ provide: VenuesService, useValue: service }],
+      providers: [
+        { provide: VenuesService, useValue: service },
+        RateLimitGuard,
+        { provide: CACHE_STORE, useValue: store },
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -26,6 +34,8 @@ describe("VenuesController (e2e)", () => {
 
   beforeEach(() => {
     service.list.mockReset();
+    store.increment.mockReset();
+    store.increment.mockResolvedValue(1);
   });
 
   it("returns the service result for a valid query", async () => {
