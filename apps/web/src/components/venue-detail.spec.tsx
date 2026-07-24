@@ -20,7 +20,7 @@ describe("VenueDetail", () => {
     expect(link.href).toContain("maps/dir");
   });
 
-  it("renders a WhatsApp share link", () => {
+  it("renders a WhatsApp share button", () => {
     render(<VenueDetail venue={venue} />);
     const link = screen.getByTestId("whatsapp-share") as HTMLAnchorElement;
     expect(link.href).toContain("wa.me");

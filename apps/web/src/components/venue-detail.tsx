@@ -1,5 +1,6 @@
 import type { VenueDetail as VenueDetailType } from "@gurmego/shared";
 import { PRICE_RANGE_LABELS } from "@gurmego/shared";
+import { WhatsappShareButton } from "./whatsapp-share-button";
 
 // `findBySlug` (Plan 1) does not expose lat/lng — only `findInBbox`/the map endpoint does (ADR 002:
 // raw SQL is the only way to read the `Unsupported("geography")` column, and the detail endpoint
@@ -10,11 +11,6 @@ import { PRICE_RANGE_LABELS } from "@gurmego/shared";
 function directionsUrl(venue: VenueDetailType): string {
   const query = encodeURIComponent(`${venue.name} ${venue.district.name}`);
   return `https://www.google.com/maps/dir/?api=1&destination=${query}`;
-}
-
-function whatsappShareUrl(venue: VenueDetailType): string {
-  const text = encodeURIComponent(`${venue.name} — GurmeGo'da keşfet: ${window.location.href}`);
-  return `https://wa.me/?text=${text}`;
 }
 
 export function VenueDetail({ venue }: { venue: VenueDetailType }) {
@@ -42,9 +38,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
       <a data-testid="directions-link" href={directionsUrl(venue)} target="_blank" rel="noreferrer">
         Yol tarifi al
       </a>
-      <a data-testid="whatsapp-share" href={whatsappShareUrl(venue)} target="_blank" rel="noreferrer">
-        WhatsApp'ta paylaş
-      </a>
+      <WhatsappShareButton venue={venue} />
       {/* Mini-map, report form — composed in by Tasks 5/7/9's components and Codex's visual pass */}
     </article>
   );
