@@ -15,6 +15,7 @@ export default function ImportPage() {
     if (!session?.access_token || !file) return;
     setUploading(true);
     setError(null);
+    setResult(null);
     try {
       const res = await importCsv(session.access_token, file);
       setResult(res);

@@ -40,6 +40,22 @@ describe("ImportPage", () => {
     expect(screen.getByRole("button", { name: /yükle/i })).not.toBeDisabled();
   });
 
+  it("clears a stale success summary when a subsequent upload fails", async () => {
+    importCsv.mockResolvedValueOnce({ created: 2, skipped: 0, errors: [] });
+    render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+
+    await waitFor(() => expect(screen.getByText(/2.*oluşturuldu/i)).toBeInTheDocument());
+
+    importCsv.mockRejectedValueOnce(new Error("Import failed: 500"));
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/yükleme başarısız/i));
+    expect(screen.queryByText(/2.*oluşturuldu/i)).not.toBeInTheDocument();
+  });
+
   it("disables the upload button while a request is in flight", async () => {
     let resolveImport: (value: unknown) => void = () => {};
     importCsv.mockReturnValue(new Promise((resolve) => { resolveImport = resolve; }));
