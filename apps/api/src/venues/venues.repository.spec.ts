@@ -36,6 +36,24 @@ describe("VenuesRepository.searchPublished", () => {
   });
 });
 
+describe("VenuesRepository.updateWithLocation", () => {
+  it("throws a clean error envelope when the venue does not exist (regression: no top-level message field)", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as unknown as PrismaService;
+    const repo = new VenuesRepository(prisma);
+
+    try {
+      await repo.updateWithLocation("missing-id", { name: "New name" });
+      throw new Error("expected updateWithLocation to throw");
+    } catch (err: any) {
+      expect(err.getResponse()).toEqual({
+        error: { code: "VENUE_NOT_FOUND", message: "Mekan bulunamadı" },
+      });
+      expect(err.getResponse().message).toBeUndefined();
+      expect(err.message).toBe("Mekan bulunamadı");
+    }
+  });
+});
+
 describe("VenuesRepository.findInBbox", () => {
   it("queries venues within the bounding box", async () => {
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1", name: "A", location: {} }]) } as any;

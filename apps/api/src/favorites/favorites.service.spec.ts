@@ -19,4 +19,19 @@ describe("FavoritesService", () => {
 
     await expect(service.addVenue("user-1", "l1", "v1")).rejects.toThrow("Liste bulunamadı");
   });
+
+  it("addVenue rejects with a clean error envelope (regression: no top-level message field)", async () => {
+    const prisma = { favoriteList: { findUnique: jest.fn().mockResolvedValue(null) } } as any;
+    const service = new FavoritesService(prisma);
+
+    try {
+      await service.addVenue("user-1", "l1", "v1");
+      throw new Error("expected addVenue to throw");
+    } catch (err: any) {
+      expect(err.getResponse()).toEqual({
+        error: { code: "LIST_NOT_FOUND", message: "Liste bulunamadı" },
+      });
+      expect(err.getResponse().message).toBeUndefined();
+    }
+  });
 });
