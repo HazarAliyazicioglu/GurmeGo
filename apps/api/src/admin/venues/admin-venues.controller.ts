@@ -41,6 +41,8 @@ export class AdminVenuesController {
       throw new BadRequestException({ error: { code: "VALIDATION_ERROR", message: "file zorunlu" } });
     }
     const buffer = await data.toBuffer();
-    return this.csvImport.parseRows(buffer.toString("utf-8"));
+    const { valid, errors } = this.csvImport.parseRows(buffer.toString("utf-8"));
+    const { created, skipped, rowErrors } = await this.venues.importRows(valid);
+    return { created, skipped, errors: [...errors, ...rowErrors] };
   }
 }

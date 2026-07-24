@@ -3,6 +3,7 @@ import { AdminVenueCreateInput, AdminVenueUpdateInput } from "@gurmego/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { BoutiqueService } from "../../rule-engine/boutique.service";
 import { VenuesRepository } from "../../venues/venues.repository";
+import type { CsvRow } from "./csv-import.service";
 
 @Injectable()
 export class AdminVenuesService {
@@ -60,5 +61,48 @@ export class AdminVenuesService {
       throw notFound;
     }
     return this.prisma.venue.update({ where: { id: venueId }, data: version.snapshot as any });
+  }
+
+  async importRows(rows: CsvRow[]): Promise<{ created: number; skipped: number; rowErrors: { row: number; message: string }[] }> {
+    let created = 0;
+    let skipped = 0;
+    const rowErrors: { row: number; message: string }[] = [];
+
+    for (const [index, row] of rows.entries()) {
+      try {
+        const district = await this.prisma.district.findUnique({ where: { slug: row.districtSlug } });
+        if (!district) {
+          rowErrors.push({ row: index + 1, message: `'${row.districtSlug}' slug'lı ilçe bulunamadı` });
+          continue;
+        }
+        const existing = await this.prisma.venue.findUnique({ where: { slug: row.slug } });
+        if (existing) {
+          skipped++;
+          continue;
+        }
+        // Explicit field mapping (not a raw type cast) — AdminVenueCreateSchema's `.default([])`/
+        // `.optional()` fields only apply when the schema is actually run through `.parse()`; this
+        // object is constructed directly and passed to `create()`, which takes the already-typed
+        // `AdminVenueCreateInput` shape, so every field `create()` needs must be set explicitly here.
+        await this.create({
+          name: row.name,
+          slug: row.slug,
+          districtId: district.id,
+          category: row.category,
+          priceRange: row.priceRange,
+          signatureItems: [],
+          openingHours: row.openingHours,
+          branchCount: row.branchCount,
+          franchiseFlag: row.franchiseFlag,
+          lat: row.lat,
+          lng: row.lng,
+        });
+        created++;
+      } catch (err) {
+        rowErrors.push({ row: index + 1, message: err instanceof Error ? err.message : "Bilinmeyen hata" });
+      }
+    }
+
+    return { created, skipped, rowErrors };
   }
 }

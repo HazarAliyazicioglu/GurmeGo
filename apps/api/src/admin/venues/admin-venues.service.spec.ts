@@ -98,3 +98,72 @@ describe("AdminVenuesService.revert", () => {
     expect(prisma.venue.update).not.toHaveBeenCalled();
   });
 });
+
+describe("AdminVenuesService.importRows", () => {
+  it("creates new-slug rows, skips existing-slug rows, and reports district-not-found as a row error", async () => {
+    const rows = [
+      {
+        name: "New Cafe",
+        slug: "new-cafe",
+        districtSlug: "kadikoy",
+        category: "cafe",
+        priceRange: "MODERATE" as const,
+        branchCount: 1,
+        franchiseFlag: false,
+        lat: 40.99,
+        lng: 29.02,
+        openingHours: { mon_fri: "09:00-18:00" },
+      },
+      {
+        name: "Existing Cafe",
+        slug: "existing-cafe",
+        districtSlug: "kadikoy",
+        category: "cafe",
+        priceRange: "MODERATE" as const,
+        branchCount: 1,
+        franchiseFlag: false,
+        lat: 40.98,
+        lng: 29.03,
+        openingHours: { mon_fri: "09:00-18:00" },
+      },
+      {
+        name: "Bad District",
+        slug: "bad-district-venue",
+        districtSlug: "nowhere",
+        category: "cafe",
+        priceRange: "MODERATE" as const,
+        branchCount: 1,
+        franchiseFlag: false,
+        lat: 40.9,
+        lng: 29.0,
+        openingHours: { mon_fri: "09:00-18:00" },
+      },
+    ];
+    const prisma = {
+      district: {
+        findUnique: jest.fn().mockImplementation(({ where: { slug } }: { where: { slug: string } }) =>
+          slug === "kadikoy" ? Promise.resolve({ id: "d1", slug: "kadikoy" }) : Promise.resolve(null),
+        ),
+      },
+      venue: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce(null) // new-cafe: doesn't exist yet
+          .mockResolvedValueOnce({ id: "v-existing" }), // existing-cafe: already exists
+      },
+    } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
+    const venuesRepository = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
+    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
+
+    const result = await service.importRows(rows);
+
+    expect(result.created).toBe(1);
+    expect(result.skipped).toBe(1);
+    expect(result.rowErrors).toEqual([{ row: 3, message: expect.stringContaining("ilçe") }]);
+    expect(venuesRepository.createWithLocation).toHaveBeenCalledTimes(1);
+    expect(venuesRepository.createWithLocation).toHaveBeenCalledWith(
+      expect.objectContaining({ slug: "new-cafe", districtId: "d1", signatureItems: [] }),
+    );
+  });
+});

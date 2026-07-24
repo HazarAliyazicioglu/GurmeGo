@@ -21,11 +21,11 @@ const VALID_CREATE_PAYLOAD = {
 
 describe("AdminVenuesController (e2e) — RolesGuard", () => {
   let app: NestFastifyApplication;
-  let venues: { create: jest.Mock; update: jest.Mock; revert: jest.Mock };
+  let venues: { create: jest.Mock; update: jest.Mock; revert: jest.Mock; importRows: jest.Mock };
   let csvImport: { parseRows: jest.Mock };
 
   beforeAll(async () => {
-    venues = { create: jest.fn(), update: jest.fn(), revert: jest.fn() };
+    venues = { create: jest.fn(), update: jest.fn(), revert: jest.fn(), importRows: jest.fn() };
     csvImport = { parseRows: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
@@ -58,6 +58,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
     venues.create.mockReset();
     venues.update.mockReset();
     venues.revert.mockReset();
+    venues.importRows.mockReset();
     csvImport.parseRows.mockReset();
   });
 
@@ -121,8 +122,9 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
   });
 
   describe("POST /admin/import", () => {
-    it("parses a real multipart CSV upload via @fastify/multipart", async () => {
+    it("parses a real multipart CSV upload via @fastify/multipart and persists via importRows", async () => {
       csvImport.parseRows.mockReturnValue({ valid: [{ name: "A" }], errors: [] });
+      venues.importRows.mockResolvedValue({ created: 1, skipped: 0, rowErrors: [] });
 
       const csvContent = "name,districtSlug,category,priceRange,branchCount\nA,kadikoy,cafe,MODERATE,1\n";
       const boundary = "----gurmegoTestBoundary";
@@ -145,7 +147,8 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
 
       expect(res.statusCode).toBe(201);
       expect(csvImport.parseRows).toHaveBeenCalledWith(csvContent);
-      expect(JSON.parse(res.payload)).toEqual({ valid: [{ name: "A" }], errors: [] });
+      expect(venues.importRows).toHaveBeenCalledWith([{ name: "A" }]);
+      expect(JSON.parse(res.payload)).toEqual({ created: 1, skipped: 0, errors: [] });
     });
 
     it("returns 400 when no file part is present", async () => {
@@ -164,6 +167,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
 
       expect(res.statusCode).toBe(400);
       expect(csvImport.parseRows).not.toHaveBeenCalled();
+      expect(venues.importRows).not.toHaveBeenCalled();
     });
   });
 });
