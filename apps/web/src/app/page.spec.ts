@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { getDefaultDistrictSlug } from "./page";
+import { getDefaultDistrictSlug } from "@/lib/discovery";
 
 vi.mock("@/lib/api", () => ({
   getDistricts: vi.fn().mockResolvedValue([{ slug: "kadikoy", name: "Kadıköy" }]),
