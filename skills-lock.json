@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "expo-react-native-performance": {
+      "source": "pproenca/dot-skills",
+      "sourceType": "github",
+      "skillPath": "skills/.experimental/expo-react-native-performance/SKILL.md",
+      "computedHash": "84100681c79072fd1920304b8b15551e885eb5004385d96f70d19e8500731954"
+    },
+    "postgis": {
+      "source": "postgis/postgis",
+      "sourceType": "github",
+      "skillPath": "doc/skills/postgis/SKILL.md",
+      "computedHash": "b9590f5ababfcd131fabeeaa08ee8200b0d73ca6cfad29f1a8bdc29005a5b300"
+    },
+    "turborepo-monorepo": {
+      "source": "giuseppe-trisciuoglio/developer-kit",
+      "sourceType": "github",
+      "skillPath": "plugins/developer-kit-typescript/skills/turborepo-monorepo/SKILL.md",
+      "computedHash": "ff0d773bec7d716f5765f385119234e48731546809d279ffcb3917c508bc6833"
+    },
+    "zod-schema-validation": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "skillPath": "zod-schema-validation/SKILL.md",
+      "computedHash": "1fe64a913897075c7ac9e57980170b00b787c0ea14f857c1fbda2cf85406affd"
+    }
+  }
+}

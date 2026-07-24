@@ -77,3 +77,121 @@ Instagram içeriği alınmıyor, kesin fiyat yok, yorum/yol tarifi için yine Ma
 **[docs/RISK-MITIGATION.md](RISK-MITIGATION.md)**.
 
 Henüz hangi çözümlerin uygulanacağına karar verilmedi — bu kullanıcıyla birlikte yapılacak sıradaki adım.
+
+---
+
+## 2026-07-24 — Round 3: 8 perspektifli panel + kullanıcı kararları
+
+### Bağlam
+Kullanıcı isteği: projeyi farklı uzmanlıklara sahip, paralel çalışan ve birbiriyle iletişim kurabilen
+ajanlardan oluşan bir panele A'dan Z'ye tartıştır (ürün, mimari, frontend, backend, güvenlik, pazar,
+büyüme dahil), Faz 2'ye ne gider/MVP'de ne kalır/ne değişir netleşsin, son karar kullanıcıda kalsın.
+
+7 Claude subagent'ı (Ürün/UX, Backend/Mimari, Büyüme/Dağıtım, Veri/AI, Frontend, Güvenlik, Pazar) +
+Codex (GPT-5.6, "karşıt görüş koltuğu") paralel çalıştırıldı; her biri tüm `docs/*.md` setini bağımsız
+okuyup MVP'de-kalsın/Faz2/değişmeli/değişmemeli + riskler + sorular üretti. Round 2'de her ajana
+diğerlerinin ve Codex'in bulguları geri gönderildi, tepki/itiraz istendi.
+
+**Codex'in bulduğu, panelin kaçırdığı yeni risk:** Restoranlar hem beklenen dağıtım ortağı (kendi
+takipçilerine paylaşmaları bekleniyor) hem de MVP'de anında yayınlanan yorum/editöryal
+sınıflandırma/Gurme Puanı ile değerlendirilen taraf; mekan sahibinin itiraz/düzeltme akışı yok. Büyüme,
+Ürün, Veri/AI ve Pazar ajanları bunu "kör noktaydım" diyerek kabul edip pozisyonlarını değiştirdi.
+
+**Panelin genel verdikti:** Bugünkü kapsamla hâlâ NO-GO, ama daraltılmış bir pilotla (web/PWA, editör-only
+öneri, Gurme Puanı yok) "yapılabilir" bir yola var. Tam rapor bu oturumda Artifact olarak yayınlandı.
+
+### Panelde yakınsanan öneriler (round 2 sonrası)
+
+| # | Konu | Round 2 sonrası ortak öneri | Kim değiştirdi/onayladı |
+|---|---|---|---|
+| 1 | Mobil istemci | React Native MVP'den çıkar, web/PWA ile pilot yap, talep doğrulanınca native'e geç | Ürün, Backend, Frontend, Codex |
+| 2 | Gurme Puanı | Ertelemek değil, MVP'den tamamen çıkar — yalnızca imzalı editör önerisi kalsın | Ürün, Veri/AI, Pazar, Codex |
+| 3 | Konumlanma | "Tek yerden toplayan platform" değil "rehber" (Michelin/Time Out tarzı, az sayıda seçici öneri) | Pazar, Ürün, Codex (bağımsız 3 yoldan aynı sonuç) |
+| 4 | Restoran ilişkisi | "Ortak" değil, çıkar çatışması kabul edilip kürasyon bağımsızlığı yazılı ilkeye bağlanmalı | Pazar, Büyüme |
+| 5 | Doğrulama sırası | Kod yazmadan landing page + kronometre testiyle doğrula | Büyüme, Codex — **kullanıcı reddetti, bkz. aşağı** |
+| 6 | Mekan sahibi itiraz akışı | Minimal "bilgi yanlış/itiraz et" formu MVP'ye girsin | Ürün, Backend, Büyüme — **Güvenlik karşı çıktı, çözülmedi** |
+| 7 | KVKK | Aydınlatma/rıza/saklama metni launch öncesi zorunlu | Güvenlik |
+
+### Kullanıcı kararları — panelin bazı önerilerini geçersiz kıldı
+
+- **Madde 5 reddedildi:** Kullanıcı ayrı bir landing page/kronometre ön-testi yerine minimal-ama-gerçek
+  bir web/PWA ürünü inşa edip doğrulamayı gerçek kullanımla yapmayı tercih etti. Gerekçe: "ortaya bir
+  ürün koymadan insanların test edip etmeyeceğini bilemeyiz."
+- **Madde 6 ertelendi, çözülmedi:** Mekan sahibi itiraz akışı kararı pilot sonrasına bırakıldı — henüz
+  kullanıcı çoğunluğu ve toksiklik riski yokken hızlı çözülebileceği gerekçesiyle.
+- **Madde 7 sıralaması değişti:** KVKK metinleri MVP inşası öncesi değil, sistem şekillendikten sonra
+  ve gerçek kullanıcı verisi toplanmadan hemen önce yazılacak.
+- **Genel hedef:** Revize kapsamla en azından "yapılabilir" (idealde GO) bir MVP'ye ulaşmak — geliştirme
+  devam ediyor.
+
+### Round 3 red-team verdikti: KOŞULLU-GO (ilk kez NO-GO'nun ötesinde)
+
+Revize kapsam Codex'e round 3 idea-red-team olarak gönderildi. **Verdikt: KOŞULLU-GO.** Codex'in özeti:
+*"Önceki 'her şeyi toplayan ama hiçbir şeyi yeterince iyi yapmayan platform' sorunu büyük ölçüde kapanmış.
+Web/PWA, az sayıda seçilmiş mekan ve imzalı editöryal öneri gerçek bir ürün tezi oluşturuyor."*
+
+**Koşul:** Koddan önce sayısal bir "pilot karar sözleşmesi" yazılmalı — mekan sayısı, süre, başarı
+metriği, bırakma eşiği belirlenmeden başlanırsa MVP doğrulama aracı değil, ucu açık bir geliştirme
+projesi olur. Kullanıcı Codex'in önerdiği eşikleri **aynen kabul etti** (2026-07-24):
+
+| Ölçüt | Eşik |
+|---|---|
+| Pilot kapsamı | 30–45 mekan (ilçe başına ~10–15) |
+| Pilot süresi | 6 hafta |
+| Kullanıcı edinimi | ≥150 hedef kullanıcı |
+| Karar davranışı | ≥%25 Maps'e gitme/kaydetme/paylaşma |
+| 4. hafta geri dönüş | ≥%20 |
+| Veri uyuşmazlığı / bakım yükü | <%5 / ayda <30 insan-saat |
+
+Diğer Codex notları: (a) gerçek ürünle doğrulama kararını "savunulabilir ama daha pahalı bir deney"
+olarak nitelendirdi, riskini adlandırdı — "ürün yapmak duygusal bağlılık yaratır, başarısızlık karşısında
+'bir özellik daha ekleyelim' döngüsüne girilir"; pilot süre/bütçe sınırı sabit tutulmazsa klasik
+build-first yanılgısı. (b) Mekan sahibi itiraz akışının ertelenmesini bu ölçekte makul buldu ama sınır
+koydu: 50+ mekan veya 8+ hafta veya görünür trafiğe çıkıştan sonra hâlâ itiraz yolu yoksa savunulamaz.
+(c) KVKK metinlerinin geliştirme sonunda yazılmasını kabul etti, ama gerçek kullanıcı verisi
+toplanmadan önce yayınlanmış olmalı — KVKK'nın kendi çerçevesi bunu gerektiriyor.
+
+**CONFIDENCE:** Güven %82. Varsayımlar: kürasyon ekibi 2-3 kişi, içerik suçlayıcı değil, pilotta ücretli
+tanıtım yok, gerçek kişisel veri launch öncesi toplanmıyor. Fikrini değiştirecek şey: pilotun sayısal
+sınırları reddedilirse NO-GO'ya döner; güçlü erken kullanım/geri dönüş verisi tam GO'ya taşır.
+Bilmediği: restoran bağlantılarının gerçek erişimi, ekibin haftalık kapasitesi, kullanıcı edinme maliyeti.
+
+### Uygulanan doküman güncellemeleri
+Pilot Karar Sözleşmesi + revize kapsam `prd.md` (§1, §2.5, §2.8, AK-01, §5) ve `product-overview.md`
+(§1, §5, §6, §8) dosyalarına işlendi.
+
+### Sonraki adım (güncellendi)
+`superpowers:writing-plans` ile Plan 1/4 (Backend + Data Foundation) yazıldı:
+`docs/superpowers/plans/2026-07-24-mvp-backend-foundation.md` — 24 task, TDD adımlarıyla, tam kod içeren.
+3 ADR yazıldı (`docs/adr/001-003`): Redis yok/Postgres CacheStore, PostGIS $queryRaw izolasyonu, tek
+NestJS monolit. Kalan 3 plan (web/PWA, admin UI, infra/CI/KVKK) sırayla, her biri kendi review'ından
+geçtikten sonra yazılacak.
+
+---
+
+## 2026-07-24 (devam) — Plan 1 `plan-red-team` (Codex)
+
+İlk 3 deneme, tam planı (24 task, ~30K+ token) okumaya çalışırken 10+ dakikada zaman aşımına uğradı.
+Kısaltılmış bir sözleşme özeti (yalnızca Files/Consumes/Produces) hazırlanıp tekrar gönderildi —
+**teknik not:** Codex CLI'nin sandbox'ı proje dizini dışındaki dosyaları (AppData\Temp) okuyamıyor gibi
+görünüyor, özet dosyası proje içine taşınınca (`docs/superpowers/plans/`) denetim ~40 saniyede tamamlandı.
+
+**İlk verdikt: YENİDEN BÖL.** Ama Codex'in kendi CONFIDENCE bloğu bunun özet kaynaklı olabileceğini
+işaret ediyordu ("tam planda açık wiring, Swagger üretimi, update endpoint'i ve task-bağımlılıkları
+bulunması" fikrini değiştirirdi). Bulgular tek tek değerlendirildi, gerçek olanlar plana işlendi:
+
+- Eksik `PUT /admin/venues/:id` ucu → Task 16'ya eklendi
+- `/v1` global prefix eksikti (`api-spec.md`'deki Base URL ile çelişiyordu) → Task 3 + Task 21'e eklendi
+- `429` yanıtlarında `Retry-After` header eksikti → `RateLimitGuard`'a eklendi
+- `RULES_MOD_AUTO_HIDE_REPORTS` eşiği iki yerde bağımsız okunuyordu (drift riski) → `rule-config.ts`'e çıkarıldı
+- `jwt.strategy.ts` yanıltıcı isimlendirilmişti (Passport Strategy değil, NestMiddleware) → `jwt-auth.middleware.ts`
+- `CACHE_STORE` provider wiring'i venues/districts/favorites modüllerinde eksikti → Task 20'ye netleştirildi
+- ADR 001/002/003'te gerçek hatalar (crash/restart karışıklığı, "injection riski yok" aşırı kesinliği, blast-radius abartısı) → düzeltildi
+
+**Genel "YENİDEN BÖL" verdikti reddedildi** — hiçbir bulgu task/dosya sınırlarının yanlış çizildiğini
+göstermiyordu (paralel çalışacak iki task'ın çakışması gibi bir şey yok), hepsi ekleme/düzeltme
+seviyesindeydi. Tam gerekçe ve "bu yanlışsa ne olur" analizi: planın kendi içindeki "Red-team bulguları"
+bölümü.
+
+### Sonraki adım
+Kullanıcıya sonucu sun, yürütme onayı iste.

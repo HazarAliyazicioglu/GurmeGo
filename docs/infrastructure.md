@@ -1,8 +1,11 @@
 # GurmeGo — Infrastructure
 
-**Versiyon:** 1.0 · **Tarih:** 2026-07-06 · **Bütçe hedefi:** $0-50/ay (MVP dönemi)
+**Versiyon:** 1.1 (round 3 revize) · **Tarih:** 2026-07-24 · **Bütçe hedefi:** $0-50/ay (MVP/pilot dönemi)
 
 İlgili: [architecture.md](architecture.md) · [development-guidelines.md](development-guidelines.md)
+
+**Not (2026-07-24):** MVP yalnızca web/PWA — mobil dağıtım (Expo EAS) ve mobil CI/CD adımları Faz 2'ye
+ertelendi, pilot döneminde kurulmaz.
 
 ---
 
@@ -14,7 +17,7 @@
 | NestJS API | **Railway** (container) | Hobby (~$5) |
 | Next.js web (tüketici) | **Vercel** | Hobby (free) |
 | Next.js admin | **Vercel** (ayrı proje, erişim korumalı) | Hobby (free) |
-| Mobil dağıtım | **Expo EAS** | Free katman; build kotası aşılırsa ücretli |
+| Mobil dağıtım | **Expo EAS** — **Faz 2, MVP'de kurulmaz** | Free katman; build kotası aşılırsa ücretli |
 | DNS/CDN | Cloudflare | Free |
 
 - Fotoğraflar: Supabase Storage + Cloudflare CDN önü; istemciye imzalı URL.
@@ -47,7 +50,7 @@ PR açıldı:
 main'e merge:
   migration'ları staging'e uygula → API'yi Railway staging'e deploy → smoke test
   → manuel onay (tag) → prod migration + deploy
-Mobil:
+Mobil (Faz 2, MVP'de yok):
   EAS build — release branch'te; OTA update (Expo Updates) küçük düzeltmeler için
 ```
 
@@ -57,7 +60,7 @@ Mobil:
 
 | Alan | Araç | Not |
 |---|---|---|
-| Hata takibi | Sentry (free katman) | API + web + mobil tek projede |
+| Hata takibi | Sentry (free katman) | API + web tek projede (mobil Faz 2'de eklenir) |
 | API log | Railway log + yapılandırılmış JSON log (pino) | Kullanıcı koordinatı loglanmaz (NFR-04) |
 | Uptime | Better Stack / UptimeRobot free | `/health` ucu |
 | DB | Supabase dashboard + `get_advisors` | Yavaş sorgu incelemesi |

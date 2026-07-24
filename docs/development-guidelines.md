@@ -1,6 +1,6 @@
 # GurmeGo — Development Guidelines
 
-**Versiyon:** 1.0 · **Tarih:** 2026-07-06
+**Versiyon:** 1.1 (round 3 revize) · **Tarih:** 2026-07-24
 
 İlgili: [architecture.md](architecture.md) · [infrastructure.md](infrastructure.md)
 
@@ -12,9 +12,9 @@
 gurmego/
 ├─ apps/
 │  ├─ api/        # NestJS + Prisma
-│  ├─ mobile/     # React Native (Expo)
-│  ├─ web/        # Next.js tüketici
-│  └─ admin/      # Next.js kürasyon paneli
+│  ├─ web/        # Next.js tüketici + PWA — MVP'nin tek istemcisi
+│  ├─ admin/      # Next.js kürasyon paneli
+│  └─ mobile/     # React Native (Expo) — Faz 2, MVP'de KURULMAZ
 ├─ packages/
 │  ├─ shared/     # zod şemaları, ortak tipler, sabitler (ilçe listesi, enum'lar)
 │  └─ api-client/ # OpenAPI'den üretilen istemci
@@ -46,11 +46,11 @@ gurmego/
 
 | Katman | Kapsam | Araç |
 |---|---|---|
-| **Rule engine** (butik kuralı, Gurme Puanı formülü, güncellik, anomali) | Zorunlu unit — hedef ~%80+ bu modülde | Vitest/Jest |
-| **Kürasyon akışı** (MVP: admin CRUD + moderasyon şikayeti → Venue + versiyon) | Zorunlu integration (test DB ile) | Jest + Testcontainers/Supabase lokal |
+| **Rule engine** (butik kuralı, veri güncellik) | Zorunlu unit — hedef ~%80+ bu modülde. (Gurme Puanı formülü/anomali testleri **Faz 2**, modül MVP'de kodda yok) | Vitest/Jest |
+| **Kürasyon akışı** (MVP: admin CRUD + "bilgi yanlış" bildirimi → Venue + versiyon) | Zorunlu integration (test DB ile) | Jest + Testcontainers/Supabase lokal |
 | **Arama filtreleri** (yapısal sorgu + cursor pagination + PostGIS yakınlık) | Zorunlu integration | aynı |
 | **AI filtre çıkarımı** | **Faz 2, MVP'de yok.** Prompt regression: örnek sorgu seti → beklenen filtre snapshot'ları; fallback yolu test edilir | fixture bazlı, canlı LLM CI'da çağrılmaz (mock) |
-| **UI** | Smoke E2E (MVP): keşif→detay→favori, mekan paylaş (WhatsApp), admin CRUD ile mekan ekle (3-4 senaryo) | Playwright (web/admin), Maestro (mobil, opsiyonel) |
+| **UI** | Smoke E2E (MVP, web/PWA tek istemci): keşif→detay→favori, mekan paylaş (WhatsApp), bilgi yanlış bildir, admin CRUD ile mekan ekle (4-5 senaryo) | Playwright (web/admin). Maestro (mobil) **Faz 2** |
 
 - Genel kapsam yüzdesi eşiği **yok** — kritik modüller derin, geri kalan pragmatik.
 - Her bugfix, önce hatayı üreten test ile gelir.

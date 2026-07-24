@@ -1,25 +1,29 @@
 # GurmeGo — Product Overview
 
-**Versiyon:** 2.0 (red-team sonrası revize) · **Sahip:** Hazar · **Tarih:** 2026-07-16 · **Durum:** Onaylı
+**Versiyon:** 3.0 (round 3 panel + Codex koşullu-GO sonrası revize) · **Sahip:** Hazar · **Tarih:** 2026-07-24 · **Durum:** Koşullu-GO — pilot karar sözleşmesi geçerli ([prd.md §5](prd.md))
 
-Değişiklik geçmişi ve gerekçeler: [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16 girdisi.
+Değişiklik geçmişi ve gerekçeler: [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-24 girdisi.
 
 ---
 
 ## 1. Vizyon & Elevator Pitch
 
-GurmeGo, şehirlerin ilçelerinde saklı kalmış **butik ve özel yemek mekanlarını** (zincirler ve
-franchise'lar hariç — Instagram/TikTok'ta mekan önerisi olarak dolaşan, en fazla 2-3 şubeli yerler),
-konum, ulaşım, fiyat aralığı ve favori ürün bilgisiyle **tek yerden, kolayca** keşfetmeni sağlayan
-mobil öncelikli platformdur.
+GurmeGo, İstanbul'un butik ve özel yemek mekanları için **rehber** (Michelin/Time Out tarzı, az sayıda
+seçici, imzalı öneri) — zincirler ve franchise'lar hariç (Instagram/TikTok'ta mekan önerisi olarak
+dolaşan, en fazla 2-3 şubeli yerler). Google Maps'in yerini almaz; **karar aşamasını hızlandıran**,
+kürasyon ekibinin "neden burayı seçtik" dediği bir katman.
 
-> **Tek cümle:** "Semtindeki gerçek butik mekanı; fiyatı ve nasıl gideceğinle birlikte, tek uygulamadan bulan platform."
+> **Tek cümle:** "Semtindeki gerçek butik mekanı, kürasyon ekibinin imzasıyla — fiyatını ve nasıl gideceğini bil, kararını hızlandır."
 
-**Değer önerisi üç sütun üzerine kurulu:**
+**Değer önerisi iki sütun üzerine kurulu** (2026-07-24: "tek yerden git" iddiası round 3'te çürütüldüğü
+için üç sütundan ikiye indirildi — bkz. [docs/RISK-MITIGATION.md](RISK-MITIGATION.md) Sorun 7):
 
-1. **Kürasyon** — zincirler dışlanır, her mekan editöryal süzgeçten geçer; "herkesin bildiği yer" değil "gerçek keşif". Butik tanımı gerçek dünya kategorisine dayanır (bkz. [rule-engine.md §1](rule-engine.md)).
-2. **Tek yerden git kolaylığı** — bugün mekanı Instagram'da görüp Maps'te doğrulayıp fiyatı ayrı yerden öğrenmek gereken 3-4 adımlık akışı tek ekranda toplar: fiyat aralığı, favori ürünler, ulaşım notu, çalışma saatleri, kategoriye göre rota. (Tam menü sistemi Faz 2 — bkz. §6.)
-3. **İlçe bazlı yerel odak** — şehir geneli değil, "bulunduğum ilçedeki butik kahvaltıcılar" derinliğinde keşif.
+1. **Kürasyon / editöryal seçicilik** — zincirler dışlanır, her mekan imzalı bir editöryal notla yayınlanır; "herkesin bildiği yer" değil "gerçek keşif". Butik tanımı gerçek dünya kategorisine dayanır (bkz. [rule-engine.md §1](rule-engine.md)). Bu, Google'a karşı tek gerçek savunulabilir fark — veri hacmi değil.
+2. **İlçe bazlı yerel odak** — şehir geneli değil, "bulunduğum ilçedeki butik kahvaltıcılar" derinliğinde keşif.
+
+**Değişmeyen ama küçültülmüş vaat:** yol tarifi ve Google puanları için kullanıcı yine Maps'e çıkar —
+GurmeGo bunu gizlemez, tam tersine mekan kartında Google puanı özet rozeti + tek dokunuşla deep-link
+sunarak bu geçişi en hızlı hale getirir. "3-4 adımı tek yere topluyoruz" iddiası artık kullanılmıyor.
 
 ## 2. Problem
 
@@ -49,49 +53,55 @@ mobil öncelikli platformdur.
 | Menüde Ne Var / Menülen / HepMenu | Menü+fiyat verisi, TR'de mevcut | Butik/zincir ayrımı yok; kürasyon zayıf/yok; ilçe bazlı derinlik yok |
 | Cafinder | Kafe keşfi + puanlama | Kategori dar (kafe); menü/fiyat derinliği yok |
 
-**Not (2026-07-16 red-team sonrası):** "Kimsenin doldurmadığı boşluk" iddiası doğru değil — yukarıdaki
-3 uygulama (Menüde Ne Var, Menülen, HepMenu) aynı kesişimi (menü+fiyat+keşif) zaten hedefliyor. Bkz.
-[docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16. GurmeGo'nun **gerçek** farkı artık "yeni veri kaynağı"
-değil, konumlanma: kullanıcının zaten yaptığı "Instagram'da gör → Maps'te doğrula → fiyatı ayrı yerden
-öğren" 3-4 adımlık akışı **tek yerde toplamak + kategoriye göre rota oluşturmak** (bkz. §6 MVP Kapsamı).
-Bu farkın gerçekten yeterli olduğu henüz doğrulanmadı — MVP doğrulama eşiği için [prd.md §5](prd.md)
-altındaki metriklere bakın.
+**Not (2026-07-24, round 3 sonrası):** "Kimsenin doldurmadığı boşluk" iddiası doğru değil — yukarıdaki
+3 uygulama (Menüde Ne Var, Menülen, HepMenu) aynı kesişimi (menü+fiyat+keşif) zaten hedefliyor. "Tek
+yerden toplama" iddiası da round 3'te çürütüldü: yol tarifi ve yorumlar için kullanıcı yine Maps'e
+çıkıyor, bu gizlenmiyor artık. GurmeGo'nun **gerçek** farkı veri hacmi ya da kapsayıcılık değil,
+**editöryal seçicilik** — Google'ın yapısal olarak yapamayacağı, az sayıda mekana insan kararıyla
+"evet" demek. Bu farkın yeterli olduğu henüz doğrulanmadı — Pilot Karar Sözleşmesi için
+[prd.md §5](prd.md)'e bakın.
 
-GurmeGo dördünün kesişimindedir. **Savunulabilir fark (revize):** kürasyon + ilçe bazlı odak + "tek
-yerden git" kolaylığı + kategori bazlı rota + sosyal paylaşım (WhatsApp). Yapısal veri derinliği iddiası
-MVP'de zayıflatıldı (tam menü yerine fiyat aralığı + favori ürünler) — bu artık ayırt edici bir üstünlük
-değil, rakiplerle asgari düzeyde eşleşme.
+GurmeGo dördünün kesişimindedir. **Savunulabilir fark (revize 2026-07-24):** kürasyon/rehber
+konumlanması + ilçe bazlı odak + kategori bazlı rota + sosyal paylaşım (WhatsApp). Yapısal veri
+derinliği iddiası MVP'de zayıflatıldı (tam menü yerine fiyat aralığı + favori ürünler) — bu artık ayırt
+edici bir üstünlük değil, rakiplerle asgari düzeyde eşleşme.
 
-## 5. Platform Stratejisi
+## 5. Platform Stratejisi (revize 2026-07-24)
 
-**Mobil önce, web SEO destek:**
+**Web/PWA öncelikli pilot, mobil doğrulama sonrası:**
 
-- **React Native mobil uygulama** = ana deneyim (konum bazlı keşif, harita, favoriler)
-- **Next.js web (SSR/SSG)** = mekan sayfaları Google'da indekslenir → organik keşif kanalı; app'e yönlendirme hunisi
-- Tek backend/API iki istemciyi besler (bkz. [architecture.md](architecture.md))
+- **Next.js web (SSR/SSG + PWA)** = MVP'de **tek istemci** ve ana deneyim (konum bazlı keşif, harita,
+  favoriler) — hem SEO/organik keşif kanalı hem gerçek kullanım deneyimi aynı codebase'de.
+- **React Native mobil uygulama** = Faz 2. Pilot Karar Sözleşmesi'nin (bkz. [prd.md §5](prd.md)) eşikleri
+  karşılanınca devreye girer — talep doğrulanmadan iki platform bakım yükü/App Store onay riski alınmaz.
+- Tek backend/API, istemci sayısı artınca da değişmeden kalır (bkz. [architecture.md](architecture.md)).
 
 ## 6. MVP Kapsamı
 
 **Coğrafi kapsam:** İstanbul — **Kadıköy, Beşiktaş, Beyoğlu** (butik mekan yoğunluğu en yüksek 3 ilçe). Veri modeli şehir-agnostik; ikinci şehre geçiş minimum mühendislik değişikliğiyle.
 
-**Mekan sayısı:** ~225 hedefi (3×75) **düşürüldü** — kesin sayı kürasyon ekibinin (Hazar + 1-2 kişi)
-ayırabileceği haftalık kürasyon süresine göre belirlenecek (bkz. [docs/CHANGELOG.md](CHANGELOG.md)
-2026-07-16, madde 2). Artış Faz 2'ye bırakılıyor.
+**Mekan sayısı:** **30-45 mekan** (ilçe başına ~10-15), Codex round 3 Pilot Karar Sözleşmesi'nin parçası
+(bkz. [prd.md §5](prd.md)) — kesin, sabit, öncesinde belirlenmiş bir eşik; sonradan ölçülüp ayarlanacak
+bir tahmin değil.
 
-**Zamanlama:** 3-4 ay agresif MVP. Bu ufuk kapsam disiplinini zorunlu kılar — çekirdek dışı her şey Faz 2'ye.
+**Zamanlama:** 6 haftalık gerçek kullanıcı pilotu (Pilot Karar Sözleşmesi). Bu ufuk kapsam disiplinini
+zorunlu kılar — çekirdek dışı her şey Faz 2'ye.
 
-### Modüller
+### Modüller (revize 2026-07-24)
 
-| Modül | MVP | Faz 2 |
+| Modül | MVP (pilot) | Faz 2 |
 |---|---|---|
 | Mekan Veri Modeli & Kürasyon Sistemi (fiyat aralığı + favori ürünler) | ✅ Çekirdek | Tam menü sistemi (kalem+fiyat) |
 | Keşif & Arama (liste/harita/yapısal filtre + kategori bazlı rota) | ✅ Çekirdek | Arama iyileştirme: doğal dil → filtre + semantic search |
-| Mekan Detay Sayfası (+ Google yorumlarına deep-link, + WhatsApp paylaşım) | ✅ Çekirdek | |
-| Yorum/Puan (kendi review sistemi) | ✅ | |
+| Mekan Detay Sayfası (+ Google puanı özet rozeti + deep-link, + WhatsApp paylaşım) | ✅ Çekirdek | |
+| İmzalı editöryal öneri (kürasyon notu) | ✅ Çekirdek | |
+| Yorum/Puan (kullanıcı review sistemi) | ❌ | ✅ |
+| Gurme Puanı | ❌ | ✅ (AK-01 kararı Faz 2'de verilir) |
+| Mekan sahibi doğrulama/itiraz akışı | ❌ (bkz. [prd.md §1](prd.md) madde 4 — koşullu sınır) | ✅ |
 | Kullanıcı Katkı (yeni mekan önerisi, düzeltme) | ❌ | ✅ |
 | Mekan sahibi kendi bilgisini girme | ❌ | ✅ |
 | Rozet/itibar sistemi | ❌ | ✅ |
-| Gurme Puanı | ✅ (rol bazlı esnek tasarım) | |
+| React Native mobil uygulama | ❌ | ✅ (Pilot Karar Sözleşmesi eşikleri karşılanınca) |
 | Admin / Kürasyon Paneli | ✅ Çekirdek | |
 | Keşif Reels | ❌ | ✅ (telif/operasyon riski nedeniyle ertelendi) |
 | Influencer Listeleri | ❌ | İleri faz |
@@ -114,13 +124,14 @@ MVP'de gelir modeli **bilinçli olarak açık bırakılmıştır** (NFR-08). De�
 
 Veri modeli ve mimari, hangi model seçilirse seçilsin sonradan eklenebilecek şekilde esnek tasarlanır (ör. `featured` alanı, rol bazlı yetkiler). Karar Faz 2 başında verilir.
 
-## 8. Başarı Metrikleri (özet)
+## 8. Başarı Metrikleri (özet — 2026-07-24 revize)
 
-- **Veri kapsamı:** 3 MVP ilçesinde ilçe başına minimum butik mekan hedefi karşılandı mı
-- **Veri doğruluğu:** "bu bilgi yanlış" şikayet oranı / mekan görüntülenme düşük mü
-- **Retention proxy:** haftalık ≥1 keşif ekranı dönüşü
-- **Katkı oranı:** kullanıcı öneri/düzeltme sayısı zamanla artıyor mu
-- **Kürasyon kuyruğu sağlığı:** öneri → yayın süresi hedef eşik altında mı
-- **Şehir genişleme hazırlığı:** ikinci şehre geçiş eforu minimum mu
+MVP artık ayrı bir "belki doğrulanır" ürünü değil, doğrudan Pilot Karar Sözleşmesi ile ölçülen bir deney:
 
-Tam metrik listesi ve eşikler: [prd.md](prd.md)
+- **Kapsam:** 30-45 mekan, 6 hafta (sabit — sonradan gevşetilmez)
+- **Kullanıcı edinimi:** ≥150 hedef kullanıcı
+- **Karar davranışı:** ≥%25 Maps'e gitme/kaydetme/paylaşma
+- **4. hafta geri dönüş:** aktif kullanıcıların ≥%20'si
+- **Veri uyuşmazlığı / bakım yükü:** <%5 / ayda <30 insan-saat
+
+Tam metrik listesi, eşikler ve "eşikler karşılanmazsa ne olur": [prd.md §5](prd.md)

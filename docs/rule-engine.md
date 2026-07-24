@@ -1,10 +1,14 @@
 # GurmeGo — Rule Engine
 
-**Versiyon:** 1.1 (red-team sonrası revize) · **Tarih:** 2026-07-16
+**Versiyon:** 1.2 (round 3 panel + Codex koşullu-GO sonrası revize) · **Tarih:** 2026-07-24
 
 Tüm kurallar deterministik/kod tabanlı; AI karar vermez. Eşikler config'te (`RULES_*` env / ayarlar tablosu) — ayar değişikliği deploy gerektirmez.
 
 İlgili: [prd.md](prd.md) · [architecture.md](architecture.md) · [docs/CHANGELOG.md](CHANGELOG.md)
+
+**Not (2026-07-24):** Gurme Puanı (§3, §4) Faz 2'ye ertelendi — MVP'de bu kurallar kodda yer almaz,
+yalnızca referans olarak saklanır. §5 moderasyon kuralları, MVP'de yorum sistemi olmadığı için genel
+"bilgi yanlış" bildirimine göre revize edildi.
 
 ---
 
@@ -30,12 +34,14 @@ Bir mekan `is_boutique = true` olur ⟺ tüm koşullar sağlanır:
 
 ## 2. Veri Güncellik Kuralları (FR-MV-03)
 
-- **N = 90 gün** (`RULES_STALE_DAYS`). Gerekçe: fiyat/menü verisi TR koşullarında ~3 ayda bayatlar; 3 ilçe × ~75 mekan → ayda ~75 re-verify, küçük ekiple sürdürülebilir.
+- **N = 90 gün** (`RULES_STALE_DAYS`). Gerekçe: fiyat/menü verisi TR koşullarında ~3 ayda bayatlar; pilot
+  kapsamı 30-45 mekan ([prd.md §5](prd.md) Pilot Karar Sözleşmesi) → 6 haftalık pilot süresinde re-verify
+  yükü pratikte oluşmaz, Faz 2'de mekan sayısı artınca devreye girer.
 - Günlük cron: `verified_at < now() - 90 gün` olan yayınlanmış kayıtlar için ContributionQueue'ya `re_verify` görevi açılır (mevcut açık görev varsa çift açılmaz).
 - Bayat kayıt yayında kalır ama detay sayfasında güncellik damgası gösterilir (FR-MD-04) — kullanıcı "son doğrulama: X" görür.
 - Onaylanan her kürasyon işlemi `verified_at`'i günceller.
 
-## 3. Gurme Puanı Hesaplama (FR-GP-03)
+## 3. Gurme Puanı Hesaplama (FR-GP-03) — Faz 2, MVP'de yok
 
 **Oy verme (UX):** basit 1-5 tam yıldız. Kullanıcı tek dokunuşla puan verir; başka girdi yok.
 
@@ -56,7 +62,7 @@ gourmet_score = (C × m + Σ(oy_i × w_i)) / (C + Σ w_i)
 - Zaman azalımı (eski oyların ağırlığının düşmesi) **Faz 2** adayı; formüle `w_i × decay(t)` çarpanı olarak eklenebilir.
 - Minimum gösterim eşiği: `Σ w_i < 3` ise skor yerine "yeni" rozeti (`RULES_GS_MIN_WEIGHT`).
 
-## 4. Puanlama Bütünlüğü (FR-GP-04, NFR-10)
+## 4. Puanlama Bütünlüğü (FR-GP-04, NFR-10) — Faz 2, MVP'de yok
 
 - Unique(user_id, venue_id) — tek kullanıcı-tek mekan-tek puan; tekrar oy = güncelleme (PUT upsert).
 - Her oy `created_at/updated_at` ile izlenebilir; kim, ne zaman, hangi mekan.
@@ -66,25 +72,33 @@ gourmet_score = (C × m + Σ(oy_i × w_i)) / (C + Σ w_i)
   - Hep 5 veya hep 1 veren, mekan çeşitliliği düşük kullanıcılar
 - Rapor işaretler, otomatik silmez — karar kürasyon ekibinin (NFR-01 ruhu: doğruluk > otomasyon).
 
-## 5. Moderasyon Kuralları (FR-KG-03, NFR-07)
+## 5. Moderasyon Kuralları (FR-KG-03, NFR-07) — revize 2026-07-24 (MVP'de yorum yok)
 
-- **Rate limit** değerleri (MVP): [api-spec.md §6](api-spec.md) (yorum 5/saat, puan 20/gün). Öneri/düzeltme
-  10/gün limiti Faz 2'de kullanıcı katkısı açılınca aktive olur; NL arama 30/gün limiti Faz 2'te.
-- Yorum akışı: anında yayın → şikayet → moderasyon kuyruğu → curator kararı (kaldır/tut). Şikayet eşiği: aynı yoruma ≥3 farklı kullanıcı şikayeti → yorum otomatik gizlenir, kuyruğa "acil" etiketiyle düşer (`RULES_MOD_AUTO_HIDE_REPORTS = 3`).
-- Yeni hesap kısıtı: kayıttan sonraki 24 saat yorum/puan limiti yarıya iner (`RULES_NEW_ACCOUNT_HOURS = 24`).
-- Otomatik spam filtresi (içerik analizi) **Faz 2**.
+- **Rate limit** değerleri (MVP): [api-spec.md §6](api-spec.md) — yalnızca "bilgi yanlış" bildirimi
+  (10/gün, IP bazlı, kimlik gerektirmez). Yorum (5/saat) ve Gurme Puanı (20/gün) limitleri **Faz 2**,
+  o modüller açılınca aktive olur. Öneri/düzeltme 10/gün limiti Faz 2'de kullanıcı katkısı açılınca
+  aktive olur; NL arama 30/gün limiti Faz 2'te.
+- **Bilgi yanlış bildirimi akışı (MVP):** herhangi bir ziyaretçi mekan sayfasından "bu bilgi yanlış"
+  bildirir → `ContributionQueue` (`report` tipi) → moderasyon kuyruğu. Şikayet eşiği: aynı mekana ≥3
+  farklı bildirim gelirse mekan kürasyon kuyruğuna **"acil"** etiketiyle düşer (`RULES_MOD_AUTO_HIDE_REPORTS = 3`,
+  isim korunuyor ama davranışı değişti: MVP'de bir şeyi otomatik *gizlemez* — mekan yayında kalır,
+  yalnızca kürasyon ekibine önceliklendirilmiş inceleme sinyali gönderir; içerik anonim olduğu için
+  otomatik gizleme yanlış pozitif riski taşırdı).
+- Yeni hesap kısıtı (`RULES_NEW_ACCOUNT_HOURS = 24`) ve otomatik spam filtresi (içerik analizi): **Faz 2**
+  — MVP'de bildirim kimliksiz olduğu için hesap yaşına dayalı kısıt uygulanamaz.
 
 ## 6. Kürasyon Kuyruğu Öncelik Kuralları
 
 Kuyruk sıralaması (FR-AP-01):
 
-**MVP** (yalnızca moderasyon şikayeti + re-verify akışta):
-1. Otomatik gizlenen yorumlar (acil)
+**MVP** (yalnızca genel "bilgi yanlış" bildirimi + re-verify akışta):
+1. "Acil" etiketli mekanlar (≥3 bildirim, bkz. §5)
 2. `re_verify` görevleri (90 gün)
 
-**Faz 2'de eklenecek** (kullanıcı katkısı + mekan-sahibi-girişi açılınca):
+**Faz 2'de eklenecek** (kullanıcı katkısı + mekan-sahibi-girişi + mekan-sahibi-doğrulama açılınca):
 3. "Mekan kapandı" düzeltme önerileri (yanlış açık bilgi = güven kırıcı)
-4. Fiyat/favori ürün düzeltmeleri
-5. Yeni mekan önerileri
+4. Mekan sahibi doğrulama/itiraz talepleri
+5. Fiyat/favori ürün düzeltmeleri
+6. Yeni mekan önerileri
 
 Hedef SLA: öneri → karar ≤ 72 saat (başarı metriği, [prd.md §5](prd.md)).

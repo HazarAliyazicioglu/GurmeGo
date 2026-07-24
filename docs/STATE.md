@@ -1,42 +1,42 @@
-# Durum — 2026-07-16
+# Durum — 2026-07-24
 
 ## Aktif plan
-Yok — kod yazma turu henüz başlamadı. İki round `idea-red-team` tamamlandı (Codex/GPT-5.6 Sol, high
-effort), ikisi de NO-GO. Şu an doğrulama testleri konuşulacak, kod yazılmayacak.
+`docs/superpowers/plans/2026-07-24-mvp-backend-foundation.md` — Plan 1/4 (Backend + Data Foundation).
+`plan-red-team` (Codex) tamamlandı: ilk verdikt YENİDEN BÖL (kısaltılmış özet üzerinden), gerçek
+bulgular (eksik PUT endpoint, /v1 prefix, Retry-After header, tekrarlanan eşik sabiti, ADR hataları)
+plana işlendi, genel "YENİDEN BÖL" verdikti gerekçeyle reddedildi (bkz. planın "Red-team bulguları"
+bölümü). ADR 001/002/003 yazıldı (`docs/adr/`). Henüz yürütülmedi. 0/24 task.
+Yol haritası: 1) Backend+Data (bu plan) → 2) Web/PWA client → 3) Admin panel UI → 4) Infra/CI/KVKK/pilot.
+
+**Teknik not:** Codex CLI sandbox'ı proje dizini dışındaki dosyaları (ör. AppData\Temp) okuyamıyor gibi
+görünüyor — süresiz takılıp zaman aşımına uğruyor; önce proje içine kopyalanmalı.
 
 ## Şu an ne yapıyoruz
-Round 1: proje Codex'e yıktırıldı → NO-GO → kullanıcıyla kapsam daraltıldı (tam menü sistemi, kullanıcı
-katkısı, semantic search MVP'den çıkarıldı/Faz 2'ye alındı — bkz. docs/CHANGELOG.md). Round 2: revize
-spec tekrar yıktırıldı → **hâlâ NO-GO**. En kritik round 2 bulgusu: ürünün "Instagram → Maps → fiyat"
-akışını tek yere toplama vaadi fiilen çalışmıyor — Instagram içeriği alınmıyor, kesin fiyat yok, yorum/
-yol tarifi için yine Maps'e çıkılıyor; ürün 4. bir durak ekleme riski taşıyor (= Sorun 7). Ayrıca dağıtım
-kanalı (restoran bağlantıları, WhatsApp, SEO) henüz ölçülmüş değil, sadece varsayım (= Sorun 5). 7
-sorunun tamamı + her biri için 3-5 çözüm + kullanıcı-perspektifi ürün analizi: docs/RISK-MITIGATION.md.
+8 perspektifli panel + Codex round 3 red-team **KOŞULLU-GO** verdi (Pilot Karar Sözleşmesi: 30-45 mekan,
+6 hafta, ≥150 kullanıcı — prd.md §5). Kullanıcı "önce landing page testi" önerisini reddedip
+"minimal-ama-gerçek ürünle doğrula" yaklaşımını seçti. Tüm docs/*.md round 3 kapsamıyla (web/PWA-only,
+Gurme Puanı/yorum/RN → Faz 2) tutarlı hale getirildi. Plan 1 yazıldı ve red-team'den geçirildi.
+
+## Kullanıcı kararları (2026-07-24)
+- Doğrulama: ayrı ön-test yok, minimal-ama-gerçek web/PWA pilotla gerçek kullanımla doğrulanacak.
+- Mekan sahibi itiraz akışı (panelin tek anlaşmazlığı): karar pilot SONRASINA ertelendi.
+- KVKK metinleri: sistem şekillendikten sonra, gerçek veri toplanmadan hemen önce yazılacak.
 
 ## Sıradaki adım
-Sorun 7 (değer önerisi) ve Sorun 5 (dağıtım) için **kod yazmadan** doğrulama testlerine nasıl
-başlanacağını konuş: (a) Sorun 7 → 10 kişilik kronometre testi ("GurmeGo ile" vs "bugünkü IG+Maps
-yöntemiyle" mekan bulma süresi), (b) Sorun 5 → landing page + WhatsApp/Instagram bekleme listesiyle
-restoran bağlantılarından gerçek ilgi/erişim sayısını ölçmek. Kullanıcı bir sonraki oturuma bu konudan
-devam etmek istiyor — henüz hiçbir test tasarımı netleşmedi, sıfırdan planlanacak.
+Kullanıcıya Plan 1'in red-team sonucunu + CONFIDENCE bloğunu sun, yürütme onayı iste
+(`subagent-driven-development` veya `executing-plans`).
 
 ## Bloke olanlar
 - Yok.
 
 ## Yakın kararlar
-- Round 1 pivot tablosu + reddedilen bulgu: docs/CHANGELOG.md (2026-07-16 ilk girdi)
-- Round 2 verdikti + sorun→çözüm envanteri + öncelik sırası: docs/RISK-MITIGATION.md
+- Round 1/2 red-team + çözüm envanteri: docs/CHANGELOG.md, docs/RISK-MITIGATION.md
+- Round 3 panel + red-team (KOŞULLU-GO) + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5
+- Plan 1 mimari kararları: docs/adr/001-003, plan-red-team bulguları planın kendi içinde
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar
-- Tam menü sistemi (kalem+fiyat, MVP'de): ELENDİ. Gerekçe: sürekli çürüyen envanter, küçük ekiple
-  sürdürülemez. KOŞULLU — kürasyon ekibi büyür veya mekan-sahibi-girişi (Faz 2) aktif olursa yeniden aç.
-- Semantic search/pgvector (MVP'de): ELENDİ → Faz 2'ye alındı. Round 2'de "ÇÖZÜLDÜ" diye doğrulandı.
-  KALICI — tekrar önerme.
-- "Butik" tanımını salt şube-sayısı DB kuralına dayandırmak: ELENDİ, gerçek dünya kategorisine
-  (IG/TikTok'ta dolaşan, ≤3 şube) çevrildi. KISMİ ÇÖZÜM — round 2: "keyfilik DB'den küratör takdirine
-  taşındı", hâlâ ölçülebilir değil (bkz. RISK-MITIGATION.md Sorun 3).
-- Kullanıcı katkısı (yeni mekan/düzeltme) MVP'de: ELENDİ → Faz 2'ye alındı. NOT: yorum/puanlama/Gurme
-  Puanı hâlâ MVP'de, aynı cold-start riskini taşıyor — henüz elenmedi (Sorun 2, çözülmedi).
-- "3-4 adımı tek yere toplama" iddiası (mevcut mimariyle): Round 2'de ÇÜRÜTÜLDÜ — yol tarifi/yorumlar
-  hâlâ Maps'e çıkıyor, Instagram içeriği yok. KOŞULLU — Sorun 7 çözümleri (uygulama içi harita, IG
-  bağlantısı, Google puan özeti) uygulanırsa yeniden değerlendirilebilir.
+- Tam menü, semantic search/pgvector, geniş kullanıcı katkısı (MVP'de): ELENDİ → Faz 2. KALICI.
+- "Butik" tanımı salt DB kuralı: ELENDİ, hâlâ tam ölçülebilir değil — kaynak-linki önerildi (Sorun 3).
+- React Native mobil (MVP'de): ELENDİ (round 3) → web/PWA ile pilot. KOŞULLU — retention kanıtlanırsa aç.
+- Gurme Puanı/yorum-puanlama (MVP'de): ELENDİ (round 3, 4 ajan+Codex mutabakatı). KALICI, Faz 2'ye kadar.
+- Landing page ön-testi: ELENDİ (kullanıcı kararı). KOŞULLU — pilot sonrası Codex'in eşikleri uygulanacak.
