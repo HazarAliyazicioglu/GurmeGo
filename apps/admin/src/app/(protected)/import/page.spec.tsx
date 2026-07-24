@@ -65,5 +65,6 @@ describe("ImportPage", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: /yükle/i })).toBeDisabled());
     resolveImport({ created: 0, skipped: 0, errors: [] });
+    await waitFor(() => expect(screen.getByRole("button", { name: /yükle/i })).not.toBeDisabled());
   });
 });
