@@ -8,10 +8,28 @@
 düzeltildi) + zorunlu Codex cross-model-review (3 High/Critical bulgu — JWT alg/issuer/audience
 eksikti, admin queue approve/reject atomik değildi, revert() venue/version eşleşmesi kontrol
 etmiyordu — hepsi düzeltildi ve doğrulandı). Sonuç: 77/77 test geçiyor, tsc temiz, lint 0 hata.
-Henüz master'a merge edilmedi — worktree'de duruyor, sıradaki plan(lar) da aynı worktree'de devam
-edecek, hepsi bittiğinde tek seferde review edilip merge edilecek.
 
-Yol haritası: 1) Backend+Data ✅ TAMAMLANDI → 2) Web/PWA client (sırada) → 3) Admin panel UI → 4) Infra/CI/KVKK/pilot.
+`docs/superpowers/plans/2026-07-24-web-pwa-client.md` — Plan 2/4 (Web/PWA Client). **TAMAMLANDI:
+12/12 task (0-11).** Plan-red-team (Codex, verdict YENIDEN BOL) fixleri implementasyondan önce
+uygulandı. Her task subagent-driven-development ile (implementer + Claude task-reviewer + Codex
+delegating-ui-work görsel pass, ilgili task'larda). Task 6'da gerçek bir SSR çökme hatası bulundu
+(WhatsappShareButton render sırasında window'a erişiyordu) ve düzeltildi. Task 11'de apps/api'nin
+gerçek process olarak hiç boot olamadığı keşfedildi (@fastify/static eksikti, jest'in in-process
+TestingModule'ü bunu maskeliyordu) + packages/shared'ın build adımı olmadığı için compiled
+dist/main.js'in production'da çökeceği tespit edildi (bkz. "Acil" bölümü). Sonunda: Claude
+whole-branch review + zorunlu Codex cross-model-review (kod-reviewer agent'ı otomatik Codex'e
+delege ediyor) — 0 Critical, 7 Important bulgu (favoriler ucdan uca kirikti: addFavoriteVenue
+validasyonsuzdu, eklenen mekanlar hicbir zaman geri gosterilmiyordu, liste secimi
+deterministik degildi, auth hatasi sonsuz loading'e dusuruyordu; kategori hizli-rota degerleri
+gercek veriyle eslesmiyordu (tum sonuclar bos donuyordu); hizli-rota ve normal filtreler ayni
+state'i coordinasyonsuz eziyordu; .nvmrc Node 20 diyordu ama bir bagimlilik Node >=22 gerektiriyordu)
+— hepsi düzeltildi ve dogrulandi (apps/api 77/77, apps/web 52/52, packages/shared 3/3). Ayrica
+design spec'in "service worker + temel onbellekleme" gereksinimi hicbir task'a donusturulmemis
+bir plan bosluguydu — bulundu, minimal bir service worker eklendi. Henüz master'a merge
+edilmedi — worktree'de duruyor, sıradaki plan(lar) da aynı worktree'de devam edecek, hepsi
+bittiğinde tek seferde review edilip merge edilecek.
+
+Yol haritası: 1) Backend+Data ✅ TAMAMLANDI → 2) Web/PWA client ✅ TAMAMLANDI → 3) Admin panel UI (sırada) → 4) Infra/CI/KVKK/pilot.
 
 **Teknik notlar:**
 - Codex CLI sandbox'ı proje dizini dışındaki dosyaları okuyamıyor — süresiz takılıyor, önce proje içine kopyala.
@@ -69,6 +87,16 @@ gerekiyor, extensionless import'lara güvenmeden.
   da bilerek eklenmedi (var olmayan filtreyi UI'da göstermek çalışıyormuş gibi görünüp hiçbir şey yapmazdı).
   Küçük, sınırlı iş: `openNow: z.coerce.boolean().optional()` şemaya + Europe/Istanbul saat dilimi
   duyarlı SQL karşılaştırması repository'ye.
+- Plan 2 final whole-branch review'dan Minor bulgular (bloke etmiyor, backlog):
+  - E2E smoke suite 2 senaryo kapsıyor (keşif→detay→bildir, favori-gating→giriş); development-guidelines.md
+    §4'ün hedefi 4-5 senaryo (harita, WhatsApp paylaşım, giriş yapmış favori akışı eksik) — Task 11'in
+    brief'i yalnızca 2 senaryo istemişti, plan metninin kendisi dar kapsamlıydı.
+  - `useGeolocation` hook'u aynı ağaçta iki kez mount ediliyor (`district-picker.tsx` ve
+    `discovery-client.tsx`), bu yüzden `getCurrentPosition` iki kez tetikleniyor — plan tek izin
+    promptu varsaymıştı ama hook paylaşılan state/provider değil, her mount kendi isteğini yapıyor.
+  - `discovery-client.tsx`/`category-quick-route.tsx`'te `setVenues` çağrılarında sıra koruması yok —
+    yavaş/gecikmeli bir yanıt daha yeni bir seçimi ezebilir (haritanın bbox loader'ındaki
+    request-sequence guard pattern'i burada uygulanmadı).
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar
 - Tam menü, semantic search/pgvector, geniş kullanıcı katkısı (MVP'de): ELENDİ → Faz 2. KALICI.
