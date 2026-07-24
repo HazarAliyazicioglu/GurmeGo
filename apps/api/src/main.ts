@@ -13,7 +13,9 @@ async function bootstrap() {
   // Browser clients (Plan 2's Next.js web/PWA app) need CORS to call this API cross-origin.
   // No production origin exists yet — Plan 4 (infra) will set the real value via CORS_ORIGIN.
   // Never use origin:true/"*" here: this API carries authenticated (credentialed) requests.
-  const corsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000,http://localhost:3001")
+  const corsOrigins = (
+    process.env.CORS_ORIGIN ?? "http://localhost:3000,http://localhost:3001,http://localhost:3002"
+  )
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);

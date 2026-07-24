@@ -42,3 +42,28 @@ export const VenueListQuerySchema = z
   })
   .transform((v) => ({ ...v, sort: v.sort ?? (v.lat && v.lng ? "distance" : "newest") }));
 export type VenueListQuery = z.infer<typeof VenueListQuerySchema>;
+
+// `GET /venues/:slug` (apps/api's `VenuesRepository.findBySlug`) returns a DIFFERENT projection than
+// `VenueSchema` above: `district` as a nested {name,slug} object (not `districtId`), and no
+// `branchCount`/`status` (admin-only fields, not exposed on the public detail endpoint). Validating
+// the detail response against `VenueSchema` fails on every real request — use this schema instead.
+export const VenueDetailSchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string().min(1).max(220),
+  name: z.string().min(1).max(200),
+  category: z.string().min(1),
+  cuisineType: z.string().nullable(),
+  priceRange: z.enum(PRICE_RANGE_VALUES),
+  signatureItems: z.array(z.string().min(1)),
+  transportNote: z.string().nullable(),
+  openingHours: z.record(z.string(), z.string()),
+  editorialNote: z.string().nullable(),
+  isBoutique: z.boolean(),
+  verifiedAt: z.string().datetime(),
+  source: VenueSourceSchema,
+  googleRating: z.number().min(0).max(5).nullable(),
+  googleRatingCount: z.number().int().min(0).nullable(),
+  googlePlaceId: z.string().nullable(),
+  district: z.object({ name: z.string(), slug: z.string() }),
+});
+export type VenueDetail = z.infer<typeof VenueDetailSchema>;
