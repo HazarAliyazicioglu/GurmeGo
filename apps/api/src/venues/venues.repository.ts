@@ -36,7 +36,7 @@ export class VenuesRepository {
 
     const orderBy =
       filters.sort === "distance" && filters.lat && filters.lng
-        ? Prisma.sql`ORDER BY distance_m ASC`
+        ? Prisma.sql`ORDER BY v.location <-> ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography ASC`
         : Prisma.sql`ORDER BY v."createdAt" DESC`;
 
     const rows = await this.prisma.$queryRaw<VenueRow[]>(Prisma.sql`
