@@ -109,7 +109,7 @@ apps/web/
   "scripts": {
     "dev": "next dev -p 3002",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3002",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test"
@@ -236,7 +236,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 - [ ] **Step 8: Install and verify the dev server boots**
 
-Run: `pnpm install && pnpm --filter @gurmego/web dev &` then `curl -s http://localhost:3000 | head -5` (or open in a browser), then stop the dev server.
+Run: `pnpm install && pnpm --filter @gurmego/web dev &` then `curl -s http://localhost:3002 | head -5` (or open in a browser — the `dev` script runs on `-p 3002`, not Next's default 3000), then stop the dev server.
 Expected: HTML response, no crash.
 
 - [ ] **Step 9: Commit**
@@ -427,8 +427,37 @@ git commit -m "feat(web): add Supabase Auth client and useAuth hook"
 - Test: `apps/web/src/lib/api.spec.ts`
 
 **Interfaces:**
-- Consumes: `createApiClient` from `@gurmego/api-client` (Plan 1 Task 21), `VenueSchema`/`VenueListQuerySchema`/`DistrictSchema`/`FavoriteListSchema` from `@gurmego/shared` (Plan 1 Task 1)
-- Produces: `getVenues(query)`, `getVenueBySlug(slug)`, `getDistricts()`, `getNearestDistrict(lat,lng)`, `getFavoriteLists(token)`, `createFavoriteList(token, name)`, `addFavoriteVenue(token, listId, venueId)`, `reportVenue(id, reason)` — every page/component in this plan calls these, never `fetch`/`createApiClient` directly. Each function `safeParse`s the response and throws a typed `ApiValidationError` on mismatch (closes Plan 1's known gap: generated response types are untyped).
+- Consumes: `createApiClient` from `@gurmego/api-client` (Plan 1 Task 21), `VenueSchema`/`VenueDetailSchema`/`VenueListQuerySchema`/`DistrictSchema`/`FavoriteListSchema` from `@gurmego/shared` (Plan 1 Task 1 + `VenueDetailSchema` added by this task, see Step 0 — `plan-red-team` found `GET /venues/:slug`'s actual response shape doesn't match `VenueSchema`)
+- Produces: `getVenues(query)`, `getVenueBySlug(slug)`, `getDistricts()`, `getNearestDistrict(lat,lng)`, `getFavoriteLists(token)`, `createFavoriteList(token, name)`, `reportVenue(id, reason)` — every page/component in this plan calls these, never `fetch`/`createApiClient` directly. Each function `safeParse`s the response and throws a typed `ApiValidationError` on mismatch (closes Plan 1's known gap: generated response types are untyped). **`addFavoriteVenue` is NOT produced by this task** — Task 9 adds it once `packages/api-client`'s `.post` method exists (Step 0b below); do not assume it's callable before Task 9.
+
+- [ ] **Step 0: Add `VenueDetailSchema` to `packages/shared`** — `plan-red-team` verified against the real `venues.repository.ts` (Plan 1) that `findBySlug`'s SELECT returns `district: {name, slug}` (not `districtId`), and omits `branchCount`/`status` entirely (admin-only fields). Validating the detail response against the existing `VenueSchema` (designed for the list/admin shape) fails on every real request. Add to `packages/shared/src/schemas/venue.schema.ts`:
+
+```typescript
+// GET /venues/:slug returns a DIFFERENT projection than VenueSchema: nested `district` object
+// (not districtId), no branchCount/status (admin-only, not on the public detail endpoint).
+export const VenueDetailSchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string().min(1).max(220),
+  name: z.string().min(1).max(200),
+  category: z.string().min(1),
+  cuisineType: z.string().nullable(),
+  priceRange: z.enum(PRICE_RANGE_VALUES),
+  signatureItems: z.array(z.string().min(1)),
+  transportNote: z.string().nullable(),
+  openingHours: z.record(z.string(), z.string()),
+  editorialNote: z.string().nullable(),
+  isBoutique: z.boolean(),
+  verifiedAt: z.string().datetime(),
+  source: VenueSourceSchema,
+  googleRating: z.number().min(0).max(5).nullable(),
+  googleRatingCount: z.number().int().min(0).nullable(),
+  googlePlaceId: z.string().nullable(),
+  district: z.object({ name: z.string(), slug: z.string() }),
+});
+export type VenueDetail = z.infer<typeof VenueDetailSchema>;
+```
+
+Run `cd packages/shared && npx tsc --noEmit && npx vitest run` — confirm this addition doesn't break Plan 1's existing `venue.schema.spec.ts` (it's additive, should be a no-op for existing tests). Commit this as its own small commit before continuing: `feat(shared): add VenueDetailSchema matching GET /venues/:slug's actual response shape`.
 
 - [ ] **Step 1: Write the failing test — `api.spec.ts`**
 
@@ -443,7 +472,7 @@ vi.mock("@gurmego/api-client", () => ({
 }));
 
 describe("getVenueBySlug", () => {
-  it("throws ApiValidationError when the response doesn't match VenueSchema", async () => {
+  it("throws ApiValidationError when the response doesn't match VenueDetailSchema", async () => {
     await expect(getVenueBySlug("kadikoy-kahvecisi")).rejects.toThrow(ApiValidationError);
   });
 });
@@ -458,7 +487,7 @@ Expected: FAIL — `Cannot find module './api'`
 
 ```typescript
 import { createApiClient } from "@gurmego/api-client";
-import { VenueSchema, DistrictSchema, FavoriteListSchema, type Venue, type District } from "@gurmego/shared";
+import { VenueSchema, VenueDetailSchema, DistrictSchema, FavoriteListSchema, type VenueDetail, type District } from "@gurmego/shared";
 import { z } from "zod";
 
 export class ApiValidationError extends Error {
@@ -468,10 +497,11 @@ export class ApiValidationError extends Error {
   }
 }
 
-const client = createApiClient(process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1");
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1";
+const client = createApiClient(API_BASE);
 
 async function fetchValidated<T>(path: string, schema: z.ZodType<T>, token?: string): Promise<T> {
-  const authedClient = token ? createApiClient(process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1", () => token) : client;
+  const authedClient = token ? createApiClient(API_BASE, () => token) : client;
   const raw = await authedClient.get<unknown>(path);
   const result = schema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(path, result.error.issues);
@@ -488,8 +518,8 @@ export function getVenues(query: Record<string, string>) {
   return fetchValidated(`/venues?${qs}`, VenueListResponseSchema);
 }
 
-export function getVenueBySlug(slug: string): Promise<Venue> {
-  return fetchValidated(`/venues/${slug}`, VenueSchema);
+export function getVenueBySlug(slug: string): Promise<VenueDetail> {
+  return fetchValidated(`/venues/${slug}`, VenueDetailSchema);
 }
 
 export function getDistricts(): Promise<District[]> {
@@ -504,23 +534,52 @@ export function getFavoriteLists(token: string) {
   return fetchValidated(`/me/lists`, z.array(FavoriteListSchema), token);
 }
 
+const CreatedFavoriteListSchema = FavoriteListSchema; // POST /me/lists returns the created list, same shape
+
 export async function createFavoriteList(token: string, name: string) {
-  const authedClient = createApiClient(process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1", () => token);
-  return authedClient.get(`/me/lists`); // POST support added when api-client gains a `.post` method — see Step 3b below
+  // Uses .post, added in Step 0b below — do not call this before that step lands.
+  const authedClient = createApiClient(API_BASE, () => token);
+  const raw = await authedClient.post<unknown>(`/me/lists`, { name });
+  const result = CreatedFavoriteListSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError("/me/lists", result.error.issues);
+  return result.data;
 }
 
+const ReportResponseSchema = z.object({ urgent: z.boolean() });
+
 export async function reportVenue(venueId: string, reason: string) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1"}/venues/${venueId}/report`, {
+  const res = await fetch(`${API_BASE}/venues/${venueId}/report`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) throw new Error(`Report failed: ${res.status}`);
-  return res.json();
+  const raw = await res.json();
+  const result = ReportResponseSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError(`/venues/${venueId}/report`, result.error.issues);
+  return result.data;
 }
 ```
 
-- [ ] **Step 3b: `packages/api-client`'s `createApiClient` (Plan 1 Task 21) only has a `.get` method — no `.post`.** Extend it now rather than working around it in this app: modify `packages/api-client/src/index.ts` to add a `.post(path, body)` method mirroring `.get`'s auth-header logic. Update `createFavoriteList`/`addFavoriteVenue` above to use `authedClient.post(...)` once it exists, instead of the placeholder `.get` call. Run `packages/api-client`'s own typecheck after this change (`cd packages/api-client && npx tsc --noEmit -p tsconfig.json` or equivalent) to confirm the addition doesn't break Plan 1's existing consumers.
+- [ ] **Step 0b: `packages/api-client`'s `createApiClient` (Plan 1 Task 21) only has a `.get` method — no `.post`.** This step must land BEFORE Step 3 above compiles (Step 3's `createFavoriteList` calls `authedClient.post`). Modify `packages/api-client/src/index.ts` to add:
+
+```typescript
+async post<T>(path: string, body: unknown): Promise<T> {
+  const token = getToken?.();
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  return res.json();
+},
+```
+
+Add this inside the object `createApiClient` returns, alongside the existing `get`. Run `cd packages/api-client && npx tsc --noEmit -p tsconfig.json` to confirm Plan 1's existing consumers (there are none yet that call `.post` — this is purely additive) still compile.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -544,7 +603,8 @@ git commit -m "feat(web): add Zod-validated API wrapper closing the untyped-resp
 
 **Interfaces:**
 - Consumes: `getDistricts`, `getNearestDistrict` (Task 2)
-- Produces: `DiscoveryPage` server component that fetches districts + venues and passes them to `<VenueList>`/`<VenueFilters>`/`<VenueMap>` (Task 4/5) as props — this task establishes the page's data contract, not its final look
+- Produces: `getDefaultDistrictSlug()`, `DiscoveryPage` server component (fetches districts + venues for a given `params.district`), `<DistrictPicker>` client component (geolocation-based auto-suggest, FR-KA-01). **This task does NOT yet produce a reusable `venues` prop for Task 4/5/6 to consume as-is** — `plan-red-team` flagged that Task 4 restructures this page into a `DiscoveryClient` wrapper; Task 4's Interfaces section states this restructuring explicitly rather than assuming Task 3 already exposes it.
+- **City handling (FR-KA-05):** the API is already city-agnostic (`getDistricts`/`getVenues` take a `districtId`, not a hardcoded city); this app's ONLY hardcoded city reference is the `city=istanbul` query param in `getDistricts()` (Task 2) — correct for MVP (single city), and isolated to one call site so a second city later is a one-line change, not a rewrite. No further action needed in this task; noted here so it isn't mistaken for an oversight.
 
 - [ ] **Step 1: Write the failing test for the redirect logic in `apps/web/src/app/page.tsx`**
 
@@ -615,16 +675,96 @@ export default async function DiscoveryPage({ params }: { params: { district: st
 Run: `cd apps/web && npx vitest run src/app/page.spec.ts`
 Expected: PASS (1 test)
 
-- [ ] **Step 6: Commit the data-layer half**
+- [ ] **Step 6: Create `apps/web/src/lib/use-geolocation.ts` and `apps/web/src/components/district-picker.tsx`** — FR-KA-01 (konuma göre otomatik ilçe önerisi), logic-only. `plan-red-team` found this requirement had no task at all; it's Claude-authored logic, not a Codex visual concern (browser geolocation + `getNearestDistrict` call + `router.push` are behavior, not styling). The raw coordinate-fetch is factored into a standalone `useGeolocation` hook because Task 4 (distance filter) needs the same coordinates independently of district-suggestion — see Task 4 Step 5.
 
-```bash
-git add apps/web/src/app/page.tsx apps/web/src/app/[district] apps/web/src/app/page.spec.ts
-git commit -m "feat(web): add district-based discovery route with data fetching"
+```typescript
+// apps/web/src/lib/use-geolocation.ts
+"use client";
+import { useEffect, useState } from "react";
+
+export interface Coords {
+  lat: number;
+  lng: number;
+}
+
+export function useGeolocation(): Coords | null {
+  const [coords, setCoords] = useState<Coords | null>(null);
+
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {}, // permission denied or unavailable — silently fall back, no error UI needed
+      { timeout: 5000 },
+    );
+  }, []);
+
+  return coords;
+}
 ```
 
-- [ ] **Step 7: Codex visual pass — dispatch via `delegating-ui-work`**
+```tsx
+// apps/web/src/components/district-picker.tsx
+"use client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getNearestDistrict } from "@/lib/api";
+import { useGeolocation } from "@/lib/use-geolocation";
+import type { District } from "@gurmego/shared";
 
-Brief for Codex: "Design the root layout's navigation shell (`layout.tsx`) and the Discovery page's district picker (`district-picker.tsx`, a `'use client'` component taking `districts: District[]` and `current: string` props, calling `router.push('/'+slug)` on selection). Reference: `product-overview.md`'s 'rehber' positioning (Michelin/Time Out feel, not a generic listing app), `ui-ux-pro-max` skill for palette/type. Mobile-first (this is the pilot's primary device class). Acceptance: district switch works, nav is usable one-handed, no layout shift on load." Iterate live with Codex until visually approved, then commit as a separate commit: `style(web): district picker and nav shell visual design`.
+export function useSuggestedDistrict(currentSlug: string): District | null {
+  const coords = useGeolocation();
+  const [suggested, setSuggested] = useState<District | null>(null);
+
+  useEffect(() => {
+    if (!coords) return;
+    getNearestDistrict(coords.lat, coords.lng)
+      .then((nearest) => {
+        if (nearest && nearest.slug !== currentSlug) setSuggested(nearest);
+      })
+      .catch(() => {});
+  }, [coords, currentSlug]);
+
+  return suggested;
+}
+
+export function DistrictPicker({ districts, current }: { districts: District[]; current: string }) {
+  const router = useRouter();
+  const suggested = useSuggestedDistrict(current);
+
+  function handleSelect(slug: string) {
+    router.push(`/${slug}`);
+  }
+
+  return (
+    <div data-testid="district-picker">
+      {districts.map((d) => (
+        <button key={d.slug} data-testid={`district-${d.slug}`} onClick={() => handleSelect(d.slug)} aria-current={d.slug === current}>
+          {d.name}
+        </button>
+      ))}
+      {suggested && (
+        <button data-testid="district-suggestion" onClick={() => handleSelect(suggested.slug)}>
+          {suggested.name}'e mi geçmek istersin?
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+Compose `<DistrictPicker districts={districts} current={params.district} />` into `[district]/page.tsx` (it needs the full `districts` list, not just the current one — fetch it there alongside `venues`).
+
+- [ ] **Step 7: Commit the data/logic half**
+
+```bash
+git add apps/web/src/app/page.tsx "apps/web/src/app/[district]" apps/web/src/app/page.spec.ts apps/web/src/components/district-picker.tsx apps/web/src/lib/use-geolocation.ts
+git commit -m "feat(web): add district-based discovery route with geolocation-based district suggestion (FR-KA-01)"
+```
+
+- [ ] **Step 8: Codex visual pass — dispatch via `delegating-ui-work`**
+
+Brief for Codex: "Design the root layout's navigation shell (`layout.tsx`) and the Discovery page's district picker's VISUAL PRESENTATION ONLY — `district-picker.tsx`'s `handleSelect`/`useSuggestedDistrict` logic and `data-testid` attributes are already written and tested; restyle the JSX, do not change the props, the geolocation behavior, or the button click handlers. Reference: `product-overview.md`'s 'rehber' positioning (Michelin/Time Out feel, not a generic listing app), `ui-ux-pro-max` skill for palette/type. Mobile-first (this is the pilot's primary device class). Acceptance: district switch works, geolocation suggestion banner is dismissible and non-intrusive, nav is usable one-handed, no layout shift on load." Iterate live with Codex until visually approved, then commit as a separate commit: `style(web): district picker and nav shell visual design`.
 
 ---
 
@@ -635,8 +775,10 @@ Brief for Codex: "Design the root layout's navigation shell (`layout.tsx`) and t
 - Test: `apps/web/src/components/venue-filters.spec.tsx` (filter-state logic, not visual)
 
 **Interfaces:**
-- Consumes: `Venue[]` from Task 3's page, `getVenues` (Task 2) for client-side refetch on filter change
-- Produces: `<VenueFilters onChange={(filters) => void}>` — Task 3's Discovery page wires this to a client-side refetch; `<VenueList venues={Venue[]}>` renders `<VenueCard>` per item
+- Consumes: server-fetched initial venues from `[district]/page.tsx` (Task 3, passed as a prop into the new `DiscoveryClient` this task creates — Task 3 itself never declared this prop, this task is where the contract is actually established, per `plan-red-team`'s note), `getVenues` (Task 2) for client-side refetch on filter change, `useGeolocation` from Task 3's `lib/use-geolocation.ts` (same hook `useSuggestedDistrict` calls, for the distance filter's coordinates)
+- Produces: `<VenueFilters onChange={(filters) => void}>` (category, price range, distance, boutique — **not** open/closed, see note below), `<VenueList venues={Venue[]}>`/`<VenueCard>`, `<CategoryQuickRoute>` (FR-KA-06)
+
+**Scope correction from `plan-red-team`:** api-spec.md's FR-KA-03 lists an "açık/kapalı" (open-now) filter, but Plan 1's `VenueListQuerySchema`/`VenuesRepository.searchPublished` never implemented it (no `openNow` field, no opening-hours comparison in the SQL) — verified by reading both files directly, not assumed. Shipping a UI toggle for a filter the backend silently ignores would be a real bug (looks functional, does nothing). **This task does not include open-now filtering in the UI.** Log it as a Plan 1 follow-up in `docs/STATE.md` (small, bounded: add `openNow: z.coerce.boolean().optional()` to `VenueListQuerySchema`, add an `Europe/Istanbul`-timezone-aware SQL comparison against `openingHours` in the repository) rather than faking it here or silently dropping the requirement.
 
 - [ ] **Step 1: Write the failing test for filter-state serialization (the logic Codex's UI will call)**
 
@@ -646,8 +788,18 @@ import { serializeFilters } from "./venue-filters";
 
 describe("serializeFilters", () => {
   it("omits unset filters and includes set ones as query params", () => {
-    const result = serializeFilters({ category: "cafe", priceRange: undefined, isBoutique: true });
+    const result = serializeFilters({ category: "cafe", priceRange: undefined, isBoutique: true, radiusM: undefined });
     expect(result).toEqual({ category: "cafe", isBoutique: "true" });
+  });
+
+  it("only includes radiusM when both radiusM and coordinates are present (distance filtering needs lat/lng too)", () => {
+    const result = serializeFilters({ radiusM: 1500 }, { lat: 40.99, lng: 29.02 });
+    expect(result).toEqual({ radiusM: "1500", lat: "40.99", lng: "29.02" });
+  });
+
+  it("omits radiusM when coordinates are unavailable — server ignores radiusM without lat/lng anyway", () => {
+    const result = serializeFilters({ radiusM: 1500 }, null);
+    expect(result).toEqual({});
   });
 });
 ```
@@ -657,7 +809,7 @@ describe("serializeFilters", () => {
 Run: `cd apps/web && npx vitest run src/components/venue-filters.spec.tsx`
 Expected: FAIL — `Cannot find module './venue-filters'`
 
-- [ ] **Step 3: Create `apps/web/src/components/venue-filters.tsx`** — logic + minimal unstyled markup; Codex's visual pass replaces the JSX, not the exported `serializeFilters` function or the component's props contract
+- [ ] **Step 3: Create `apps/web/src/components/venue-filters.tsx`** — logic + minimal unstyled markup; Codex's visual pass replaces the JSX, not the exported `serializeFilters` function or the component's props contract. Covers FR-KA-03's category/fiyat/mesafe/butik filters (open-now excluded per the scope note above).
 
 ```tsx
 "use client";
@@ -667,17 +819,31 @@ export interface FilterState {
   category?: string;
   priceRange?: string;
   isBoutique?: boolean;
+  radiusM?: number;
 }
 
-export function serializeFilters(filters: FilterState): Record<string, string> {
+interface Coords {
+  lat: number;
+  lng: number;
+}
+
+// `radiusM` alone does nothing server-side — Plan 1's ST_DWithin filter only activates when lat+lng
+// are ALSO present (verified in venues.repository.ts). Without known coordinates, drop radiusM rather
+// than send a query param that silently has no effect.
+export function serializeFilters(filters: FilterState, coords?: Coords | null): Record<string, string> {
   const out: Record<string, string> = {};
   if (filters.category) out.category = filters.category;
   if (filters.priceRange) out.priceRange = filters.priceRange;
   if (filters.isBoutique !== undefined) out.isBoutique = String(filters.isBoutique);
+  if (filters.radiusM !== undefined && coords) {
+    out.radiusM = String(filters.radiusM);
+    out.lat = String(coords.lat);
+    out.lng = String(coords.lng);
+  }
   return out;
 }
 
-export function VenueFilters({ onChange }: { onChange: (filters: FilterState) => void }) {
+export function VenueFilters({ onChange, coordsAvailable }: { onChange: (filters: FilterState) => void; coordsAvailable: boolean }) {
   const [filters, setFilters] = useState<FilterState>({});
   function update(patch: Partial<FilterState>) {
     const next = { ...filters, ...patch };
@@ -685,9 +851,58 @@ export function VenueFilters({ onChange }: { onChange: (filters: FilterState) =>
     onChange(next);
   }
   // Placeholder markup — Codex visual pass (Step 6 below) replaces this with real chip/filter UI.
+  // The distance select must be disabled (not just hidden) when `coordsAvailable` is false, so the
+  // user understands why it's unavailable rather than it silently vanishing.
   return (
     <div data-testid="venue-filters">
-      <button onClick={() => update({ isBoutique: !filters.isBoutique })}>Butik</button>
+      <button data-testid="filter-boutique" onClick={() => update({ isBoutique: !filters.isBoutique })}>Butik</button>
+      <select
+        data-testid="filter-radius"
+        disabled={!coordsAvailable}
+        onChange={(e) => update({ radiusM: e.target.value ? Number(e.target.value) : undefined })}
+      >
+        <option value="">Mesafe</option>
+        <option value="500">500m</option>
+        <option value="1500">1.5km</option>
+        <option value="3000">3km</option>
+      </select>
+      <select data-testid="filter-price" onChange={(e) => update({ priceRange: e.target.value || undefined })}>
+        <option value="">Fiyat</option>
+        <option value="BUDGET">₺</option>
+        <option value="MODERATE">₺₺</option>
+        <option value="EXPENSIVE">₺₺₺</option>
+        <option value="PREMIUM">₺₺₺₺</option>
+      </select>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 3b: Create `apps/web/src/components/category-quick-route.tsx`** — FR-KA-06 (kategori bazlı hızlı rota). Logic-only.
+
+```tsx
+"use client";
+import { getVenues } from "@/lib/api";
+import { useState } from "react";
+
+const QUICK_CATEGORIES = ["kahve", "tatli", "kahvalti"] as const;
+
+export function CategoryQuickRoute({ districtId, onSelect }: { districtId: string; onSelect: (venues: unknown[]) => void }) {
+  const [active, setActive] = useState<string | null>(null);
+
+  async function handleClick(category: string) {
+    setActive(category);
+    const { data } = await getVenues({ districtId, category, sort: "distance" });
+    onSelect(data);
+  }
+
+  return (
+    <div data-testid="category-quick-route">
+      {QUICK_CATEGORIES.map((c) => (
+        <button key={c} data-testid={`quick-category-${c}`} aria-pressed={active === c} onClick={() => handleClick(c)}>
+          {c}
+        </button>
+      ))}
     </div>
   );
 }
@@ -726,50 +941,54 @@ export function VenueList({ venues }: { venues: Partial<Venue>[] }) {
 }
 ```
 
-- [ ] **Step 5: Wire `VenueFilters`/`VenueList` into `[district]/page.tsx`** — convert the relevant part to a client component that refetches on filter change (modify Task 3's page: extract a `<DiscoveryClient>` client component that takes the initial server-fetched venues as a prop and re-fetches via `getVenues` from Task 2 when filters change)
+- [ ] **Step 5: Wire `VenueFilters`/`VenueList`/`CategoryQuickRoute` into `[district]/page.tsx`** — convert the relevant part to a client component that refetches on filter change (modify Task 3's page: extract a `<DiscoveryClient>` client component that takes the initial server-fetched venues as a prop and re-fetches via `getVenues` from Task 2 when filters change). Reuses `useGeolocation` from Task 3's `lib/use-geolocation.ts` for the distance filter's coordinates — the same hook Task 3's `useSuggestedDistrict` calls, so the browser is only asked for permission once.
 
 ```tsx
 "use client";
 import { useState } from "react";
 import { VenueFilters, serializeFilters, type FilterState } from "@/components/venue-filters";
 import { VenueList } from "@/components/venue-list";
+import { CategoryQuickRoute } from "@/components/category-quick-route";
+import { useGeolocation } from "@/lib/use-geolocation";
 import { getVenues } from "@/lib/api";
 import type { Venue } from "@gurmego/shared";
 
 export function DiscoveryClient({ districtId, initialVenues }: { districtId: string; initialVenues: Partial<Venue>[] }) {
   const [venues, setVenues] = useState(initialVenues);
+  const coords = useGeolocation();
 
   async function handleFilterChange(filters: FilterState) {
-    const { data } = await getVenues({ districtId, ...serializeFilters(filters) });
+    const { data } = await getVenues({ districtId, ...serializeFilters(filters, coords) });
     setVenues(data);
   }
 
   return (
     <>
-      <VenueFilters onChange={handleFilterChange} />
+      <CategoryQuickRoute districtId={districtId} onSelect={setVenues} />
+      <VenueFilters onChange={handleFilterChange} coordsAvailable={coords !== null} />
       <VenueList venues={venues} />
     </>
   );
 }
 ```
 
-Save this as `apps/web/src/components/discovery-client.tsx`, then update `[district]/page.tsx` to render `<DiscoveryClient districtId={current.id} initialVenues={venues} />` instead of the placeholder `<p>` from Task 3.
+Save the component as `apps/web/src/components/discovery-client.tsx`, then update `[district]/page.tsx` to render `<DiscoveryClient districtId={current.id} initialVenues={venues} />` instead of the placeholder `<p>` from Task 3.
 
 - [ ] **Step 6: Run test to verify it passes**
 
 Run: `cd apps/web && npx vitest run src/components/venue-filters.spec.tsx`
-Expected: PASS (1 test)
+Expected: PASS (3 tests)
 
 - [ ] **Step 7: Commit the data/logic half**
 
 ```bash
-git add apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-card.tsx apps/web/src/components/venue-list.tsx apps/web/src/components/discovery-client.tsx "apps/web/src/app/[district]/page.tsx"
-git commit -m "feat(web): add venue list, cards, and filter state logic"
+git add apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-card.tsx apps/web/src/components/venue-list.tsx apps/web/src/components/category-quick-route.tsx apps/web/src/components/discovery-client.tsx apps/web/src/components/district-picker.tsx apps/web/src/lib/use-geolocation.ts "apps/web/src/app/[district]/page.tsx"
+git commit -m "feat(web): add venue list, cards, filter state, and category quick-route (FR-KA-06)"
 ```
 
 - [ ] **Step 8: Codex visual pass — dispatch via `delegating-ui-work`**
 
-Brief: "Design `venue-card.tsx` (must show: name, category, price range symbol ₺-₺₺₺₺, boutique badge if `isBoutique`), `venue-list.tsx`'s grid/list layout (mobile-first, this is the pilot's primary screen), and `venue-filters.tsx`'s filter chip UI (category, price range, açık/kapalı, mesafe, butik — per `prd.md` FR-KA-03). Keep the `data-testid` attributes and the `serializeFilters`/props contracts exactly as Claude wrote them — only replace the JSX/styling, not the logic." Iterate until approved, commit as `style(web): venue list, card, and filter visual design`.
+Brief: "Design `venue-card.tsx` (must show: name, category, price range symbol ₺-₺₺₺₺, boutique badge if `isBoutique`), `venue-list.tsx`'s grid/list layout (mobile-first, this is the pilot's primary screen), `venue-filters.tsx`'s filter chip UI (category, price range, mesafe, butik — per `prd.md` FR-KA-03; note there is deliberately NO open/closed filter, the backend doesn't support it yet, don't add a control for it), and `category-quick-route.tsx`'s quick-category buttons (FR-KA-06). Keep every `data-testid` attribute and the `serializeFilters`/props contracts exactly as Claude wrote them — only replace the JSX/styling, not the logic." Iterate until approved, commit as `style(web): venue list, card, filter, and quick-route visual design`.
 
 ---
 
@@ -897,16 +1116,33 @@ export default async function VenueDetailPage({ params }: { params: { slug: stri
 }
 ```
 
-- [ ] **Step 4: Create `apps/web/src/components/venue-detail.tsx`** — data layout only, no styling
+- [ ] **Step 4: Create `apps/web/src/components/venue-detail.tsx`** — data layout only, no styling. Uses `VenueDetail` (Task 2's Step 0 schema), NOT `Venue` — the two have different shapes (`district` object vs. `districtId`), using the wrong type here would either fail to compile or silently read `undefined` fields.
 
 ```tsx
-import type { Venue } from "@gurmego/shared";
+import type { VenueDetail as VenueDetailType } from "@gurmego/shared";
 import { PRICE_RANGE_LABELS } from "@gurmego/shared";
 
-export function VenueDetail({ venue }: { venue: Venue }) {
+// `findBySlug` (Plan 1) does not expose lat/lng — only `findInBbox`/the map endpoint does (ADR 002:
+// raw SQL is the only way to read the `Unsupported("geography")` column, and the detail endpoint
+// deliberately keeps to a standard Prisma `select` for the rest of its fields). Rather than adding a
+// raw-SQL branch to the detail endpoint just for this, MVP uses a name+district text search — Google
+// Maps resolves this to the correct place reliably at pilot scale (30-45 known venues). Documented
+// here as a deliberate simplification, not an oversight; revisit if the pilot shows mis-resolves.
+function directionsUrl(venue: VenueDetailType): string {
+  const query = encodeURIComponent(`${venue.name} ${venue.district.name}`);
+  return `https://www.google.com/maps/dir/?api=1&destination=${query}`;
+}
+
+function whatsappShareUrl(venue: VenueDetailType): string {
+  const text = encodeURIComponent(`${venue.name} — GurmeGo'da keşfet: ${window.location.href}`);
+  return `https://wa.me/?text=${text}`;
+}
+
+export function VenueDetail({ venue }: { venue: VenueDetailType }) {
   return (
     <article data-testid="venue-detail">
       <h1>{venue.name}</h1>
+      <p data-testid="district-name">{venue.district.name}</p>
       <p data-testid="price-range">{PRICE_RANGE_LABELS[venue.priceRange]}</p>
       {venue.editorialNote && <p data-testid="editorial-note">{venue.editorialNote}</p>}
       {venue.transportNote && <p data-testid="transport-note">{venue.transportNote}</p>}
@@ -915,16 +1151,63 @@ export function VenueDetail({ venue }: { venue: Venue }) {
           <li key={item}>{item}</li>
         ))}
       </ul>
+      <p data-testid="opening-hours">
+        {Object.entries(venue.openingHours).map(([day, hours]) => `${day}: ${hours}`).join(" · ")}
+      </p>
+      <p data-testid="verified-at">Son doğrulama: {new Date(venue.verifiedAt).toLocaleDateString("tr-TR")}</p>
       {venue.googleRating && (
         <a data-testid="google-rating" href={`https://maps.google.com/?q=${encodeURIComponent(venue.name)}`} target="_blank" rel="noreferrer">
           {venue.googleRating}★ · {venue.googleRatingCount} Google yorumu
         </a>
       )}
-      {/* Mini-map, WhatsApp share, directions deep-link, report form — composed in by Tasks 7/9 and Codex's visual pass */}
+      <a data-testid="directions-link" href={directionsUrl(venue)} target="_blank" rel="noreferrer">
+        Yol tarifi al
+      </a>
+      <a data-testid="whatsapp-share" href={whatsappShareUrl(venue)} target="_blank" rel="noreferrer">
+        WhatsApp'ta paylaş
+      </a>
+      {/* Mini-map, report form — composed in by Tasks 5/7/9's components and Codex's visual pass */}
     </article>
   );
 }
 ```
+
+*This closes `plan-red-team`'s "FR-MD-01/03/04/06" gap: opening hours, `verified_at`/güncellik damgası (FR-MD-04), the directions deep-link (FR-MD-03), and WhatsApp share (FR-MD-06) are now explicit Claude-authored behavior with fixed URLs and `data-testid`s — not left for the Codex pass to invent (URL construction is behavior, not styling, so it doesn't belong in a visual-only delegation).*
+
+- [ ] **Step 4b: Write a failing test for the two URL builders, then verify they pass**
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { VenueDetail } from "./venue-detail";
+
+const venue = {
+  id: "v1", slug: "test-cafe", name: "Test Cafe", category: "cafe", cuisineType: null,
+  priceRange: "MODERATE", signatureItems: ["Latte"], transportNote: null,
+  openingHours: { mon: "09:00-18:00" }, editorialNote: null, isBoutique: true,
+  verifiedAt: "2026-01-01T00:00:00.000Z", source: "MANUAL",
+  googleRating: null, googleRatingCount: null, googlePlaceId: null,
+  district: { name: "Kadıköy", slug: "kadikoy" },
+} as const;
+
+describe("VenueDetail", () => {
+  it("renders a directions link built from name + district", () => {
+    render(<VenueDetail venue={venue} />);
+    const link = screen.getByTestId("directions-link") as HTMLAnchorElement;
+    expect(link.href).toContain("Test%20Cafe%20Kad");
+    expect(link.href).toContain("maps/dir");
+  });
+
+  it("renders a WhatsApp share link", () => {
+    render(<VenueDetail venue={venue} />);
+    const link = screen.getByTestId("whatsapp-share") as HTMLAnchorElement;
+    expect(link.href).toContain("wa.me");
+  });
+});
+```
+
+Run: `cd apps/web && npx vitest run src/components/venue-detail.spec.tsx`
+Expected: PASS (2 tests) — add this file alongside `venue-detail.tsx` (Vitest's `jsdom` environment, already configured in Task 0, provides `window.location`).
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -934,13 +1217,13 @@ Expected: PASS (1 test)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add "apps/web/src/app/mekan" apps/web/src/components/venue-detail.tsx
-git commit -m "feat(web): add venue detail page with ISR"
+git add "apps/web/src/app/mekan" apps/web/src/components/venue-detail.tsx apps/web/src/components/venue-detail.spec.tsx
+git commit -m "feat(web): add venue detail page with ISR, directions deep-link, and WhatsApp share"
 ```
 
 - [ ] **Step 7: Codex visual pass — dispatch via `delegating-ui-work`**
 
-Brief: "This page is the direct fix for GurmeGo's biggest identified product risk (Sorun 7 — read `docs/RISK-MITIGATION.md` Sorun 7 and the panel report's §01/§05 before starting): the product's core claim is undermined if the user still feels like this is 'a 4th stop' before Maps. Design `venue-detail.tsx`'s full layout so fold-priority is: editorial note (the actual differentiator) → price/signature items → mini-map + directions CTA (reuse Task 5's map approach) → Google rating badge → WhatsApp share + report link, all visible without excessive scrolling on mobile. Keep every `data-testid` and the props contract exactly as written." Iterate, commit as `style(web): venue detail page layout and information hierarchy`.
+Brief: "This page is the direct fix for GurmeGo's biggest identified product risk (Sorun 7 — read `docs/RISK-MITIGATION.md` Sorun 7 and the panel report's §01/§05 before starting): the product's core claim is undermined if the user still feels like this is 'a 4th stop' before Maps. Design `venue-detail.tsx`'s full layout so fold-priority is: editorial note (the actual differentiator) → price/signature items → mini-map (reuse Task 5's `<VenueMap>`) + the existing `directions-link` CTA → Google rating badge → the existing `whatsapp-share` link + report form, all visible without excessive scrolling on mobile. The directions/WhatsApp links, their URLs, and their `data-testid`s are already implemented — restyle them, do not change their `href` logic. Keep every `data-testid` and the props contract exactly as written." Iterate, commit as `style(web): venue detail page layout and information hierarchy`.
 
 ---
 
@@ -1142,7 +1425,7 @@ Brief: "Design `auth-form.tsx` and the `/giris` page shell — a conventional bu
 - Test: `apps/web/src/app/favoriler/page.spec.tsx`
 
 **Interfaces:**
-- Consumes: `useAuth` (Task 1), `getFavoriteLists`/`createFavoriteList`/`addFavoriteVenue` (Task 2)
+- Consumes: `useAuth` (Task 1), `getFavoriteLists`/`createFavoriteList` (Task 2); `addFavoriteVenue` is added by this task itself (Step 5), following Task 2's `.post`-based pattern — Task 2 does not produce it, avoiding the same overclaim `plan-red-team` found elsewhere
 - Produces: `/favoriler` route (redirects to `/giris` if `useAuth().user` is null, per Plan 1's verified 403-on-anonymous behavior) and `<FavoriteButton venueId>` usable from the venue detail page
 
 - [ ] **Step 1: Write the failing test for the auth-redirect logic**
@@ -1206,51 +1489,107 @@ export default function FavorilerPage() {
 }
 ```
 
-- [ ] **Step 4: Create `apps/web/src/components/favorite-button.tsx`** — logic only
+- [ ] **Step 4: Write the failing test for the get-or-create-default-list logic**
+
+`plan-red-team` flagged the original draft for pushing a real product decision ("what list does a favorite go into with no existing list?") into the Codex visual-pass brief — that's behavior, not styling, so Claude decides it here: MVP has no list-management UI (`product-overview.md`'s MVP scope is a single flat favorites concept; multi-list organization is Faz 2), so `FavoriteButton` uses the user's first existing list, or lazily creates one named "Favorilerim" if none exists yet.
+
+```tsx
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { FavoriteButton } from "./favorite-button";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("@/lib/auth-context", () => ({
+  useAuth: () => ({ user: { id: "u1" }, session: { access_token: "tok" } }),
+}));
+const getFavoriteLists = vi.fn();
+const createFavoriteList = vi.fn();
+const addFavoriteVenue = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/api", () => ({
+  getFavoriteLists: (...args: unknown[]) => getFavoriteLists(...args),
+  createFavoriteList: (...args: unknown[]) => createFavoriteList(...args),
+  addFavoriteVenue: (...args: unknown[]) => addFavoriteVenue(...args),
+}));
+
+describe("FavoriteButton", () => {
+  it("creates a default 'Favorilerim' list when the user has none, then adds the venue", async () => {
+    getFavoriteLists.mockResolvedValue([]);
+    createFavoriteList.mockResolvedValue({ id: "list1", name: "Favorilerim" });
+    render(<FavoriteButton venueId="v1" />);
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("tok", "Favorilerim"));
+    expect(addFavoriteVenue).toHaveBeenCalledWith("tok", "list1", "v1");
+  });
+
+  it("reuses the user's first existing list instead of creating a new one", async () => {
+    getFavoriteLists.mockResolvedValue([{ id: "existing", name: "Denenecekler" }]);
+    render(<FavoriteButton venueId="v1" />);
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    await waitFor(() => expect(addFavoriteVenue).toHaveBeenCalledWith("tok", "existing", "v1"));
+    expect(createFavoriteList).not.toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 4b: Run test to verify it fails**
+
+Run: `cd apps/web && npx vitest run src/components/favorite-button.spec.tsx`
+Expected: FAIL — module not found
+
+- [ ] **Step 4c: Create `apps/web/src/components/favorite-button.tsx`**
 
 ```tsx
 "use client";
+import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
-import { addFavoriteVenue } from "@/lib/api";
+import { getFavoriteLists, createFavoriteList, addFavoriteVenue } from "@/lib/api";
 
-export function FavoriteButton({ venueId, defaultListId }: { venueId: string; defaultListId?: string }) {
+const DEFAULT_LIST_NAME = "Favorilerim";
+
+export function FavoriteButton({ venueId }: { venueId: string }) {
   const { user, session } = useAuth();
   const router = useRouter();
+  const [added, setAdded] = useState(false);
 
   async function handleClick() {
     if (!user) {
       router.push("/giris");
       return;
     }
-    if (session?.access_token && defaultListId) {
-      await addFavoriteVenue(session.access_token, defaultListId, venueId);
-    }
+    if (!session?.access_token) return;
+    const lists = await getFavoriteLists(session.access_token);
+    const list = lists[0] ?? (await createFavoriteList(session.access_token, DEFAULT_LIST_NAME));
+    await addFavoriteVenue(session.access_token, list.id, venueId);
+    setAdded(true);
   }
 
-  return <button onClick={handleClick}>Favorilere ekle</button>;
+  return (
+    <button data-testid="favorite-button" onClick={handleClick} aria-pressed={added}>
+      {added ? "Favorilerde" : "Favorilere ekle"}
+    </button>
+  );
 }
 ```
 
-*Note: `defaultListId` handling (which list a favorite goes into when the user has none yet, or more than one) is a real UX decision Codex's visual pass should resolve alongside the styling — flag this explicitly in the Step 6 brief rather than silently picking a default here.*
-
 - [ ] **Step 5: Add `addFavoriteVenue` to `apps/web/src/lib/api.ts`** (Task 2's file), following the `createFavoriteList` pattern (uses `authedClient.post`, added in Task 2 Step 3b).
 
-- [ ] **Step 6: Run test to verify it passes**
+- [ ] **Step 6: Run both test files to verify they pass**
 
-Run: `cd apps/web && npx vitest run src/app/favoriler/page.spec.tsx`
-Expected: PASS (1 test)
+Run: `cd apps/web && npx vitest run src/app/favoriler/page.spec.tsx src/components/favorite-button.spec.tsx`
+Expected: PASS (1 + 2 tests)
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add "apps/web/src/app/favoriler" apps/web/src/components/favorite-button.tsx apps/web/src/lib/api.ts
-git commit -m "feat(web): add favorites page and favorite-button component"
+git add "apps/web/src/app/favoriler" apps/web/src/components/favorite-button.tsx apps/web/src/components/favorite-button.spec.tsx apps/web/src/lib/api.ts
+git commit -m "feat(web): add favorites page and favorite-button with default-list creation"
 ```
 
 - [ ] **Step 8: Codex visual pass — dispatch via `delegating-ui-work`**
 
-Brief: "Design `/favoriler`'s empty-state and list layout, and `favorite-button.tsx`'s visual state (default vs. favorited). Also resolve: when a user favorites a venue and has no existing list, should this silently create a default 'Favorilerim' list, or prompt for a list name? Make a UX call and implement it — this is exactly the kind of judgment call this delegation exists for." Iterate, commit as `style(web): favorites page and favorite-button design`.
+Brief: "Design `/favoriler`'s empty-state and list layout, and `favorite-button.tsx`'s visual state (default vs. favorited, using the existing `aria-pressed` state — do not change the get-or-create-list logic, it's already implemented and tested)." Iterate, commit as `style(web): favorites page and favorite-button design`.
 
 ---
 
@@ -1268,7 +1607,7 @@ Brief: "Design `/favoriler`'s empty-state and list layout, and `favorite-button.
 
 Brief: "Design GurmeGo's app icon (192x192 and 512x512 PNG, matching the 'rehber' visual identity established in Task 3) and export both files to `apps/web/public/icons/`. Also add a lightweight 'add to home screen' prompt component to the layout if you judge it improves the pilot's install rate — this is optional polish, not required for the pilot's 6-week window, use your judgment on whether it's worth the complexity."
 
-- [ ] **Step 2: Verify the manifest resolves correctly** — `cd apps/web && pnpm dev`, open `http://localhost:3000/manifest.json` in a browser, confirm both icon URLs return 200 (not 404).
+- [ ] **Step 2: Verify the manifest resolves correctly** — `cd apps/web && pnpm dev`, open `http://localhost:3002/manifest.json` in a browser (Task 0 runs the dev server on `-p 3002`, not Next's default 3000), confirm both icon URLs return 200 (not 404).
 
 - [ ] **Step 3: Commit**
 
@@ -1295,10 +1634,11 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  use: { baseURL: "http://localhost:3000" },
+  // Task 0's dev script runs on -p 3002 (apps/api occupies 3000/3001 locally) — must match, not Next's default.
+  use: { baseURL: "http://localhost:3002" },
   webServer: {
     command: "pnpm dev",
-    url: "http://localhost:3000",
+    url: "http://localhost:3002",
     reuseExistingServer: true,
   },
 });
@@ -1360,6 +1700,10 @@ git commit -m "test(web): add Playwright smoke tests for discovery, detail, repo
 ## Self-Review Notes
 
 - **Spec coverage:** every page in the design doc (Keşif, Mekan Detay, Favoriler, Giriş) has a task. `packages/api-client`'s missing `.post` method (a real gap discovered while planning, not previously known) is folded into Task 2 rather than left implicit.
-- **Placeholder scan:** no TBD/TODO. Two known open items are explicitly flagged as decisions for Codex's visual passes to resolve (map library choice in Task 5, default-favorite-list UX in Task 9) rather than silently assumed — this is intentional delegation of a real judgment call, not a placeholder.
-- **Type consistency:** `Venue`/`District`/`FavoriteList` types flow from `packages/shared` (Task 2) into every component unchanged; `FilterState` (Task 4) and `toggleViewMode`'s view-mode union (Task 5) are each defined once and reused.
-- **Port collision (found and fixed during self-review):** `apps/api` and a default Next.js app both listen on port 3000. Resolved: this app's `dev` script runs on `-p 3002` (Task 0 Step 1), and Task 1's `.env.local.example` documents running `apps/api` locally with `PORT=3001`, with `NEXT_PUBLIC_API_BASE_URL` set accordingly.
+- **Placeholder scan:** no TBD/TODO. One open item remains an explicit Codex visual-pass decision (map library choice in Task 5 — a real design/cost tradeoff, not disguised logic); the default-favorite-list UX (Task 9) was found by `plan-red-team` to be a disguised logic decision hiding in a "visual pass" brief and was moved to Claude-authored, tested code instead (get-or-create-list, see Task 9 Step 4).
+- **Type consistency:** `Venue`/`District`/`FavoriteList`/`VenueDetail` types flow from `packages/shared` (Task 2) into every component unchanged; `FilterState` (Task 4) and `toggleViewMode`'s view-mode union (Task 5) are each defined once and reused.
+- **Port collision (found and fixed during self-review, then re-verified by `plan-red-team` and fixed everywhere it was still missed):** `apps/api` and a default Next.js app both listen on port 3000. Resolved consistently: `dev`/`start` scripts run on `-p 3002` (Task 0), the Task 0 boot-check curl, Task 10's manifest verification, and Task 11's Playwright `baseURL`/`webServer.url` all target `3002`; Task 1's `.env.local.example` documents running `apps/api` locally with `PORT=3001`. `apps/api/src/main.ts`'s CORS default origin list (a Plan 1 file) has been updated directly to include `http://localhost:3002` — a one-line default-value change, verified with `tsc --noEmit`, not a behavior change to any tested path.
+- **`VenueDetailSchema`/`district`-shaped response (found by `plan-red-team`, the most severe finding):** Task 2 originally validated `GET /venues/:slug` against `VenueSchema` (wrong shape — real endpoint returns a nested `district` object and omits `districtId`/`branchCount`/`status`). Fixed: `packages/shared` gained a purpose-built `VenueDetailSchema` matching the real `VenuesRepository.findBySlug` projection exactly (verified against Plan 1's actual code, not assumed); Task 2 and Task 6 both updated to use it.
+- **`radiusM`-without-coordinates no-op (found while fixing the above):** Plan 1's `ST_DWithin` distance filter only activates when `lat`+`lng` are also present. `serializeFilters` (Task 4) now takes an optional `coords` argument and omits `radiusM` entirely when coordinates are unavailable; the distance `<select>` is disabled (not hidden) via a `coordsAvailable` prop so the user understands why.
+- **Non-existent `open_now` filter (found while fixing the above):** api-spec.md's FR-KA-03 lists an open/closed filter, but Plan 1 never implemented backend support for it (verified via grep on `VenueListQuerySchema`/`venues.repository.ts`). Task 4 does not ship a UI control for it; logged as a Plan 1 follow-up in `docs/STATE.md` instead of faking it.
+- **FR-MD-03/06 (directions deep-link, WhatsApp share) had no concrete contract:** `findBySlug` doesn't expose lat/lng (ADR 002's raw-SQL boundary), so Task 6 now builds both links from name+district text search directly in `venue-detail.tsx` (Claude-authored, tested, not left for Codex's visual pass to invent).
