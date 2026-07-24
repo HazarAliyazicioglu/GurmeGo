@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 
 export interface FilterState {
   category?: string;
@@ -29,12 +28,22 @@ export function serializeFilters(filters: FilterState, coords?: Coords | null): 
   return out;
 }
 
-export function VenueFilters({ onChange, coordsAvailable }: { onChange: (filters: FilterState) => void; coordsAvailable: boolean }) {
-  const [filters, setFilters] = useState<FilterState>({});
+// Controlled component: `value` is the single source of truth for filter state, owned by the
+// parent (`DiscoveryClient`) so that `CategoryQuickRoute`'s quick-category selection and this
+// component's own controls read/write the SAME `FilterState` instead of racing each other
+// (final-review Finding 3 — the two used to maintain independent state and clobber one another).
+export function VenueFilters({
+  value,
+  onChange,
+  coordsAvailable,
+}: {
+  value: FilterState;
+  onChange: (filters: FilterState) => void;
+  coordsAvailable: boolean;
+}) {
+  const filters = value;
   function update(patch: Partial<FilterState>) {
-    const next = { ...filters, ...patch };
-    setFilters(next);
-    onChange(next);
+    onChange({ ...filters, ...patch });
   }
 
   return (

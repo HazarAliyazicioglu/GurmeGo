@@ -13,25 +13,28 @@ export function toggleViewMode(current: "list" | "map"): "list" | "map" {
 
 export function DiscoveryClient({ districtId, initialVenues }: { districtId: string; initialVenues: VenueListItem[] }) {
   const [venues, setVenues] = useState(initialVenues);
+  const [filters, setFilters] = useState<FilterState>({});
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const coords = useGeolocation();
 
-  async function handleFilterChange(filters: FilterState) {
-    const { data } = await getVenues({ districtId, ...serializeFilters(filters, coords) });
+  // Single refetch path shared by `VenueFilters` and `CategoryQuickRoute` — both write into the
+  // SAME `FilterState` and go through this function, so a quick-category pick composes with an
+  // already-active filter (e.g. "Butik") instead of the two clobbering each other's `venues`
+  // state independently (final-review Finding 3).
+  async function applyFilters(next: FilterState) {
+    setFilters(next);
+    const { data } = await getVenues({ districtId, ...serializeFilters(next, coords) });
     setVenues(data);
   }
 
-  // `CategoryQuickRoute.onSelect` is intentionally typed `(venues: unknown[]) => void` to keep
-  // that component decoupled from the venue list shape; it always calls it with the real
-  // `VenueListItem[]` from `getVenues` internally, so this narrowing is safe.
-  function handleQuickSelect(selected: unknown[]) {
-    setVenues(selected as VenueListItem[]);
+  function handleQuickCategory(category: string) {
+    void applyFilters({ ...filters, category });
   }
 
   return (
     <>
-      <CategoryQuickRoute districtId={districtId} onSelect={handleQuickSelect} />
-      <VenueFilters onChange={handleFilterChange} coordsAvailable={coords !== null} />
+      <CategoryQuickRoute activeCategory={filters.category} onSelectCategory={handleQuickCategory} />
+      <VenueFilters value={filters} onChange={applyFilters} coordsAvailable={coords !== null} />
       <button
         type="button"
         data-testid="view-mode-toggle"

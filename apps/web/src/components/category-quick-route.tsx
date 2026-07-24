@@ -1,18 +1,25 @@
 "use client";
-import { getVenues } from "@/lib/api";
-import { useState } from "react";
+import { CATEGORY_LABELS } from "@/components/venue-card";
 
-const QUICK_CATEGORIES = ["kahve", "tatli", "kahvalti"] as const;
+// Real backend category values only — the API's `category` field is one of
+// "cafe" | "restaurant" | "bakery" | "street-food" (see `apps/api/prisma/seed.ts`,
+// `venue-card.tsx`'s `CATEGORY_LABELS`). There is no "breakfast"/"kahvaltı" category in the real
+// taxonomy, so it's dropped rather than invented (final-review Finding 2 — the old
+// "kahve"/"tatli"/"kahvalti" values never matched any real venue, so every quick-route button
+// silently returned zero results).
+const QUICK_CATEGORIES = ["cafe", "bakery", "restaurant"] as const;
 
-export function CategoryQuickRoute({ districtId, onSelect }: { districtId: string; onSelect: (venues: unknown[]) => void }) {
-  const [active, setActive] = useState<string | null>(null);
-
-  async function handleClick(category: string) {
-    setActive(category);
-    const { data } = await getVenues({ districtId, category, sort: "distance" });
-    onSelect(data);
-  }
-
+// Selection is lifted to the parent (`DiscoveryClient`) instead of this component doing its own
+// `getVenues` call: it now merges into the SAME `FilterState` that `VenueFilters` manages, so an
+// active "Butik" toggle (or any other filter) composes with the quick-category pick rather than
+// being silently discarded (final-review Finding 3).
+export function CategoryQuickRoute({
+  activeCategory,
+  onSelectCategory,
+}: {
+  activeCategory?: string;
+  onSelectCategory: (category: string) => void;
+}) {
   return (
     <div data-testid="category-quick-route" className="mt-8">
       <div className="mb-3 flex items-center justify-between gap-4 px-1">
@@ -27,14 +34,14 @@ export function CategoryQuickRoute({ districtId, onSelect }: { districtId: strin
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {QUICK_CATEGORIES.map((c, index) => {
-          const isActive = active === c;
+          const isActive = activeCategory === c;
 
           return (
             <button
               key={c}
               data-testid={`quick-category-${c}`}
-              aria-pressed={active === c}
-              onClick={() => handleClick(c)}
+              aria-pressed={isActive}
+              onClick={() => onSelectCategory(c)}
               className={[
                 "group relative min-h-[4.75rem] min-w-[9rem] flex-1 overflow-hidden rounded-[1.15rem] border px-4 py-3 text-left transition-all duration-200",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]",
@@ -47,7 +54,7 @@ export function CategoryQuickRoute({ districtId, onSelect }: { districtId: strin
                 0{index + 1}
               </span>
               <span className={["block text-[0.58rem] font-black uppercase tracking-[0.15em]", isActive ? "text-[#e77959]" : "text-[#9e422b]"].join(" ")}>Rota</span>
-              <span className="mt-2 block font-serif text-lg font-semibold capitalize tracking-[-0.02em]">{c}</span>
+              <span className="mt-2 block font-serif text-lg font-semibold tracking-[-0.02em]">{CATEGORY_LABELS[c]}</span>
             </button>
           );
         })}
