@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis(map: "postgis")]
+}
+
+generator json {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum PriceRange {
+  BUDGET
+  MODERATE
+  EXPENSIVE
+  PREMIUM
+}
+
+enum VenueStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum VenueSource {
+  MANUAL
+  USER
+  AUTO
+}
+
+enum ContributionType {
+  REPORT
+  NEW_VENUE
+  EDIT
+  OWNER_VERIFICATION
+}
+
+enum ContributionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum UserRole {
+  USER
+  APPROVED_RATER
+  CURATOR
+  ADMIN
+}
+
+model City {
+  id        String     @id @default(uuid())
+  name      String
+  slug      String     @unique
+  districts District[]
+}
+
+model District {
+  id     String  @id @default(uuid())
+  cityId String
+  city   City    @relation(fields: [cityId], references: [id])
+  name   String
+  slug   String  @unique
+  venues Venue[]
+}
+
+model Venue {
+  id                String              @id @default(uuid())
+  name              String
+  slug              String              @unique
+  districtId        String
+  district          District            @relation(fields: [districtId], references: [id])
+  location          Unsupported("geography(Point,4326)")
+  category          String
+  cuisineType       String?
+  priceRange        PriceRange
+  signatureItems    String[]
+  transportNote     String?
+  openingHours      Json
+  editorialNote     String?
+  isBoutique        Boolean             @default(false)
+  branchCount       Int                 @default(1)
+  franchiseFlag     Boolean             @default(false)
+  source            VenueSource         @default(MANUAL)
+  verifiedAt        DateTime
+  status            VenueStatus         @default(DRAFT)
+  googleRating      Float?
+  googleRatingCount Int?
+  googlePlaceId     String?
+  featured          Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  versions          VenueVersion[]
+  contributions     ContributionQueue[]
+  favorites         Favorite[]
+
+  @@index([districtId])
+  @@index([status])
+}
+
+model VenueVersion {
+  id        String   @id @default(uuid())
+  venueId   String
+  venue     Venue    @relation(fields: [venueId], references: [id])
+  snapshot  Json
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([venueId])
+}
+
+model ContributionQueue {
+  id           String              @id @default(uuid())
+  type         ContributionType
+  venueId      String?
+  venue        Venue?              @relation(fields: [venueId], references: [id])
+  payload      Json
+  submittedBy  String?
+  status       ContributionStatus  @default(PENDING)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime            @default(now())
+
+  @@index([venueId, status])
+  @@index([type, status])
+}
+
+model User {
+  id        String   @id
+  email     String   @unique
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  lists     FavoriteList[]
+}
+
+model FavoriteList {
+  id        String     @id @default(uuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  name      String
+  createdAt DateTime   @default(now())
+  favorites Favorite[]
+}
+
+model Favorite {
+  id        String       @id @default(uuid())
+  listId    String
+  list      FavoriteList @relation(fields: [listId], references: [id])
+  venueId   String
+  venue     Venue        @relation(fields: [venueId], references: [id])
+  createdAt DateTime     @default(now())
+
+  @@unique([listId, venueId])
+}
