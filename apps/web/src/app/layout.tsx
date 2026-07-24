@@ -3,6 +3,7 @@ import Link from "next/link";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { ServiceWorkerRegister } from "@/components/sw-register";
 
 export const metadata: Metadata = {
   title: "GurmeGo — İstanbul'un butik mekan rehberi",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="tr">
       <body className="min-h-dvh bg-[#f4f0e7] text-[#201d18] antialiased selection:bg-[#d75d3b] selection:text-white">
+        <ServiceWorkerRegister />
         <AuthProvider>
           <div className="min-h-dvh">
             <header className="sticky top-0 z-40 h-16 border-b border-[#201d18]/10 bg-[#f4f0e7]/95 backdrop-blur-md">
