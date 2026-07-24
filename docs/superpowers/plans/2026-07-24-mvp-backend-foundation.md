@@ -2308,7 +2308,7 @@ git commit -m "chore(api): add empty AdminModule shell"
 
 **Interfaces:**
 - Consumes: `PrismaService`, `Roles`/`RolesGuard` (Task 10), `getUrgentReportThreshold()` from `apps/api/src/common/rule-config.ts` (Task 12 — same function, not a re-read of the env var)
-- Produces: `AdminQueueService.list(type?, status?)`, `.approve(id, reviewerId)`, `.reject(id, reviewerId, reason)` — writes `VenueVersion` snapshot + updates `verified_at` on approve (`architecture.md §5`)
+- Produces: `AdminQueueService.list(type?, status?)`, `.approve(id, reviewerId)`, `.reject(id, reviewerId)` (no `reason` param — `ContributionQueue` has no field to store one, per Task 2's schema) — writes `VenueVersion` snapshot + updates `verified_at` on approve (`architecture.md §5`)
 
 - [ ] **Step 1: Write the failing test**
 
