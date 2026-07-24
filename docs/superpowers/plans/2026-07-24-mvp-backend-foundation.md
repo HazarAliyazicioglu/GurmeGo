@@ -563,18 +563,14 @@ RULES_MOD_AUTO_HIDE_REPORTS=3
 
 ```prisma
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   extensions = [postgis(map: "postgis")]
-}
-
-generator json {
-  provider = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
 }
 
 enum PriceRange {
