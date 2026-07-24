@@ -66,3 +66,6 @@ aynı worktree'de `subagent-driven-development` ile yürütülecek. Kullanıcıy
 - React Native mobil (MVP'de): ELENDİ (round 3) → web/PWA ile pilot. KOŞULLU — retention kanıtlanırsa aç.
 - Gurme Puanı/yorum-puanlama (MVP'de): ELENDİ (round 3, 4 ajan+Codex mutabakatı). KALICI, Faz 2'ye kadar.
 - Landing page ön-testi: ELENDİ (kullanıcı kararı). KOŞULLU — pilot sonrası Codex'in eşikleri uygulanacak.
+- Plan 2 Task 9: FavoriteButton'da double-click guard yok — hizli art arda tiklama
+  getFavoriteLists/createFavoriteList'i eszamanli iki kez tetikleyip iki "Favorilerim" listesi
+  olusturabilir. Kucuk iş: handleClick'e bir pending/disabled state eklemek.
