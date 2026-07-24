@@ -9,6 +9,7 @@ describe("FavoritesService", () => {
 
     expect(prisma.favoriteList.create).toHaveBeenCalledWith({
       data: { userId: "user-1", name: "Kadıköy turu" },
+      include: { favorites: { include: { venue: { select: expect.any(Object) } } } },
     });
     expect(result).toEqual({ id: "l1", name: "Kadıköy turu" });
   });

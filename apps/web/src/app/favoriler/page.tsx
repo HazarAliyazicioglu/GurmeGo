@@ -17,7 +17,9 @@ export default function FavorilerPage() {
       return;
     }
     if (session?.access_token) {
-      getFavoriteLists(session.access_token).then(setLists);
+      getFavoriteLists(session.access_token)
+        .then(setLists)
+        .catch(() => router.push("/giris"));
     }
   }, [user, session, loading, router]);
 
@@ -113,9 +115,24 @@ export default function FavorilerPage() {
                 <h2 className="mt-5 font-serif text-[1.75rem] font-semibold leading-tight tracking-[-0.035em] text-[#201d18] transition-colors group-hover:text-[#9e422b]">
                   {list.name}
                 </h2>
-                <p className="mt-auto pt-5 text-[0.65rem] font-black uppercase tracking-[0.15em] text-[#201d18]/38">
-                  Kişisel mekan listen
-                </p>
+                {list.favorites.length > 0 ? (
+                  <ul className="mt-3 flex flex-col gap-1.5">
+                    {list.favorites.map((favorite) => (
+                      <li key={favorite.id}>
+                        <Link
+                          href={`/mekan/${favorite.venue.slug}`}
+                          className="text-sm font-semibold text-[#201d18]/70 underline decoration-[#d75d3b]/40 underline-offset-2 hover:text-[#9e422b]"
+                        >
+                          {favorite.venue.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-auto pt-5 text-[0.65rem] font-black uppercase tracking-[0.15em] text-[#201d18]/38">
+                    Kişisel mekan listen
+                  </p>
+                )}
               </div>
             </article>
           ))}

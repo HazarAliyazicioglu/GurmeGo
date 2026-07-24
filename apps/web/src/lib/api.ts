@@ -1,5 +1,5 @@
 import { createApiClient } from "@gurmego/api-client";
-import { VenueSchema, VenueDetailSchema, DistrictSchema, FavoriteListSchema, type VenueDetail, type District } from "@gurmego/shared";
+import { VenueSchema, VenueDetailSchema, DistrictSchema, FavoriteListSchema, FavoriteSchema, type VenueDetail, type District } from "@gurmego/shared";
 import { z } from "zod";
 
 export class ApiValidationError extends Error {
@@ -102,11 +102,12 @@ export async function createFavoriteList(token: string, name: string) {
 }
 
 // `POST /me/lists/:id/venues` (apps/api's `FavoritesController.addVenue` -> `FavoritesService.addVenue`)
-// — response shape isn't consumed by callers (FavoriteButton only awaits completion), so no schema
-// validation here, matching `reportVenue`'s treatment of its non-critical response.
+// returns the upserted Prisma `Favorite` row — validated like every other response in this file.
 export async function addFavoriteVenue(token: string, listId: string, venueId: string): Promise<void> {
   const authedClient = createApiClient(API_BASE, () => token);
-  await authedClient.post<unknown>(`/me/lists/${listId}/venues`, { venueId });
+  const raw = await authedClient.post<unknown>(`/me/lists/${listId}/venues`, { venueId });
+  const result = FavoriteSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError(`/me/lists/${listId}/venues`, result.error.issues);
 }
 
 const ReportResponseSchema = z.object({ urgent: z.boolean() });

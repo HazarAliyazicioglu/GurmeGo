@@ -20,6 +20,7 @@ import {
   getNearestDistrict,
   getFavoriteLists,
   createFavoriteList,
+  addFavoriteVenue,
   reportVenue,
   ApiValidationError,
 } from "./api";
@@ -67,6 +68,28 @@ const VALID_FAVORITE_LIST = {
   id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   userId: "3fa85f64-5717-4562-b3fc-2c963f66afa7",
   name: "My List",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  favorites: [
+    {
+      id: "3fa85f64-5717-4562-b3fc-2c963f66afa8",
+      venueId: "3fa85f64-5717-4562-b3fc-2c963f66afa9",
+      venue: {
+        id: "3fa85f64-5717-4562-b3fc-2c963f66afa9",
+        name: "Kadıköy Kahvecisi",
+        slug: "kadikoy-kahvecisi",
+        category: "cafe",
+        priceRange: "MODERATE",
+        isBoutique: true,
+      },
+    },
+  ],
+};
+
+const VALID_FAVORITE = {
+  id: "3fa85f64-5717-4562-b3fc-2c963f66afa8",
+  listId: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  venueId: "3fa85f64-5717-4562-b3fc-2c963f66afa9",
+  createdAt: "2026-01-01T00:00:00.000Z",
 };
 
 beforeEach(() => {
@@ -183,6 +206,18 @@ describe("createFavoriteList", () => {
   it("throws ApiValidationError on an invalid response", async () => {
     mockPost.mockResolvedValue({ id: "not-a-uuid" });
     await expect(createFavoriteList("token", "My List")).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("addFavoriteVenue", () => {
+  it("resolves without throwing on a valid response", async () => {
+    mockPost.mockResolvedValue(VALID_FAVORITE);
+    await expect(addFavoriteVenue("token", "list1", "venue1")).resolves.toBeUndefined();
+  });
+
+  it("throws ApiValidationError on an invalid response", async () => {
+    mockPost.mockResolvedValue({ id: "not-a-uuid" });
+    await expect(addFavoriteVenue("token", "list1", "venue1")).rejects.toThrow(ApiValidationError);
   });
 });
 
