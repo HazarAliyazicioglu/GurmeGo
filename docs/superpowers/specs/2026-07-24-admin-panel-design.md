@@ -109,8 +109,12 @@ tüketici yüzeyine odaklı, admin panel için ayrı bir E2E gereksinimi yok, bi
 ## Self-review
 
 - Placeholder/TBD yok.
-- İç tutarlılık: her iki sayfa da Plan 1'in GERÇEK, halihazırda test edilmiş admin endpoint'lerine
-  karşılık geliyor — yeni backend işi gerektirmiyor.
+- İç tutarlılık: her iki sayfa da Plan 1'in GERÇEK admin endpoint'lerine karşılık geliyor. **Düzeltme
+  (plan-red-team sonrası):** bu satır ilk yazıldığında "yeni backend işi gerektirmiyor" diyordu —
+  yanlıştı. `POST /admin/import` yalnızca CSV'yi valide ediyor, hiç kalıcı yazmıyordu (doğrudan kod
+  okuyarak doğrulandı, bkz. implementasyon planının Task 2'si) — bu, CSV import sayfasının var olma
+  sebebinin kendisini çürüten bir backend boşluğuydu, küçük bir detay değil. Plan artık bunu Task 2
+  olarak (UI task'larından önce) kapsıyor.
 - Kapsam: tek bir alt-sistem (`apps/admin`), red-team sonrası KASITLI OLARAK küçük — 2 sayfa +
   giriş, Plan 2'nin 1/3'ünden az. Bu, "az kod" değil "az risk, az bakım yükü" hedefliyor — Codex'in
   NO-GO gerekçesi (6 sayfalık ayrı uygulamanın operasyon yükü, çözdüğü yükten pahalı) bu haliyle
