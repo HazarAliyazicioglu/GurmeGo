@@ -1,5 +1,6 @@
 import type { VenueDetail as VenueDetailType } from "@gurmego/shared";
 import { PRICE_RANGE_LABELS } from "@gurmego/shared";
+import { ReportForm } from "./report-form";
 import { WhatsappShareButton } from "./whatsapp-share-button";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -130,7 +131,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
             <div className="mt-4"><WhatsappShareButton venue={venue} /></div>
           </section>
 
-          {/* Task 7: "Bilgi yanlış" bildirim formu burada, paylaşım kartının altında yer alacak. */}
+          <ReportForm venueId={venue.id} />
 
           <section className="rounded-[1.5rem] border border-[#201d18]/12 bg-[#faf7f0] p-5 sm:p-6">
             <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#201d18]/42">Ziyaret bilgisi</p>
