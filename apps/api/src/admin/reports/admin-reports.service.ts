@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { VenueSource } from "@prisma/client";
+import { stringify } from "csv-stringify/sync";
 import { PrismaService } from "../../prisma/prisma.service";
 
 type DistrictGroupResult = {
@@ -34,5 +35,11 @@ export class AdminReportsService {
       staleCount,
       bySource: bySourceRaw.map((row: SourceGroupResult) => ({ source: row.source, count: row._count })),
     };
+  }
+
+  async exportVenues(format: "json" | "csv"): Promise<string> {
+    const venues = await this.prisma.venue.findMany({ where: { status: "PUBLISHED" } });
+    if (format === "json") return JSON.stringify(venues);
+    return stringify(venues, { header: true });
   }
 }
