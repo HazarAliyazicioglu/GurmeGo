@@ -1,7 +1,9 @@
-import { Body, Controller, Param, Post, Put, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
+import { BadRequestException, Body, Controller, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { FastifyRequest } from "fastify";
+import { AdminVenueCreateSchema, AdminVenueUpdateSchema } from "@gurmego/shared";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
+import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { AdminVenuesService } from "./admin-venues.service";
 import { CsvImportService } from "./csv-import.service";
 
@@ -12,12 +14,15 @@ export class AdminVenuesController {
   constructor(private venues: AdminVenuesService, private csvImport: CsvImportService) {}
 
   @Post("venues")
-  create(@Body() body: any) {
+  create(@Body(new ZodValidationPipe(AdminVenueCreateSchema)) body: ReturnType<(typeof AdminVenueCreateSchema)["parse"]>) {
     return this.venues.create(body);
   }
 
   @Put("venues/:id")
-  update(@Param("id") id: string, @Body() body: any) {
+  update(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(AdminVenueUpdateSchema)) body: ReturnType<(typeof AdminVenueUpdateSchema)["parse"]>,
+  ) {
     return this.venues.update(id, body);
   }
 
@@ -26,9 +31,16 @@ export class AdminVenuesController {
     return this.venues.revert(id, versionId);
   }
 
+  // Fastify app (see apps/api/src/main.ts) — `@fastify/multipart` is registered globally there, which
+  // adds `req.file()` to the raw Fastify request. `@nestjs/platform-express`'s `FileInterceptor` cannot
+  // be used here: it expects an Express request/response and 415s on every real Fastify multipart POST.
   @Post("import")
-  @UseInterceptors(FileInterceptor("file"))
-  importCsv(@UploadedFile() file: { buffer: Buffer }) {
-    return this.csvImport.parseRows(file.buffer.toString("utf-8"));
+  async importCsv(@Req() req: FastifyRequest) {
+    const data = await req.file();
+    if (!data) {
+      throw new BadRequestException({ error: { code: "VALIDATION_ERROR", message: "file zorunlu" } });
+    }
+    const buffer = await data.toBuffer();
+    return this.csvImport.parseRows(buffer.toString("utf-8"));
   }
 }

@@ -1,32 +1,46 @@
 import { Injectable } from "@nestjs/common";
+import { AdminVenueCreateInput, AdminVenueUpdateInput } from "@gurmego/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { BoutiqueService } from "../../rule-engine/boutique.service";
+import { VenuesRepository } from "../../venues/venues.repository";
 
 @Injectable()
 export class AdminVenuesService {
-  constructor(private prisma: PrismaService, private boutique: BoutiqueService) {}
+  constructor(
+    private prisma: PrismaService,
+    private boutique: BoutiqueService,
+    private venuesRepository: VenuesRepository,
+  ) {}
 
-  create(input: any) {
+  create(input: AdminVenueCreateInput) {
     const isBoutique = this.boutique.evaluate({
       branchCount: input.branchCount,
       franchiseFlag: input.franchiseFlag,
       hasEditorialNote: !!input.editorialNote,
     });
-    // Cast: Venue.location is a required `Unsupported("geography(...)")` field, so Prisma omits
-    // `create`/`upsert` from the generated VenueDelegate typing (no valid input type exists for it).
-    // See admin-venues.service self-review note for the runtime implication (location is not set here).
-    return (this.prisma.venue as any).create({
-      data: { ...input, isBoutique, verifiedAt: new Date(), status: "DRAFT", source: "MANUAL" },
+    // `location` is a required PostGIS column the Prisma client can't write (ADR 002) — delegated to
+    // the repository's raw-SQL insert, which also handles isBoutique/verifiedAt/status/source.
+    return this.venuesRepository.createWithLocation({
+      ...input,
+      isBoutique,
+      verifiedAt: new Date(),
+      status: "DRAFT",
+      source: "MANUAL",
     });
   }
 
-  update(id: string, input: any) {
-    const isBoutique = this.boutique.evaluate({
-      branchCount: input.branchCount,
-      franchiseFlag: input.franchiseFlag,
-      hasEditorialNote: !!input.editorialNote,
-    });
-    return this.prisma.venue.update({ where: { id }, data: { ...input, isBoutique } });
+  update(id: string, input: AdminVenueUpdateInput) {
+    // `update` is a partial patch — only recompute isBoutique when both rule-engine inputs are present
+    // in this request; otherwise leave it untouched (repository skips undefined fields).
+    const isBoutique =
+      input.branchCount !== undefined && input.franchiseFlag !== undefined
+        ? this.boutique.evaluate({
+            branchCount: input.branchCount,
+            franchiseFlag: input.franchiseFlag,
+            hasEditorialNote: !!input.editorialNote,
+          })
+        : undefined;
+    return this.venuesRepository.updateWithLocation(id, { ...input, isBoutique });
   }
 
   async revert(venueId: string, versionId: string) {
