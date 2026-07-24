@@ -1,7 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { VenueDetail as VenueDetailType } from "@gurmego/shared";
 import { VenueDetail } from "./venue-detail";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/lib/auth-context", () => ({ useAuth: () => ({ user: null, session: null, loading: false }) }));
 
 const venue: VenueDetailType = {
   id: "v1", slug: "test-cafe", name: "Test Cafe", category: "cafe", cuisineType: null,

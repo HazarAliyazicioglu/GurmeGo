@@ -101,6 +101,14 @@ export async function createFavoriteList(token: string, name: string) {
   return result.data;
 }
 
+// `POST /me/lists/:id/venues` (apps/api's `FavoritesController.addVenue` -> `FavoritesService.addVenue`)
+// — response shape isn't consumed by callers (FavoriteButton only awaits completion), so no schema
+// validation here, matching `reportVenue`'s treatment of its non-critical response.
+export async function addFavoriteVenue(token: string, listId: string, venueId: string): Promise<void> {
+  const authedClient = createApiClient(API_BASE, () => token);
+  await authedClient.post<unknown>(`/me/lists/${listId}/venues`, { venueId });
+}
+
 const ReportResponseSchema = z.object({ urgent: z.boolean() });
 
 export async function reportVenue(venueId: string, reason: string) {

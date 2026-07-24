@@ -2,6 +2,7 @@ import type { VenueDetail as VenueDetailType } from "@gurmego/shared";
 import { PRICE_RANGE_LABELS } from "@gurmego/shared";
 import { ReportForm } from "./report-form";
 import { WhatsappShareButton } from "./whatsapp-share-button";
+import { FavoriteButton } from "./favorite-button";
 
 const CATEGORY_LABELS: Record<string, string> = {
   bakery: "Fırın",
@@ -125,6 +126,8 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
         </div>
 
         <aside className="space-y-5">
+          <FavoriteButton venueId={venue.id} />
+
           <section className="rounded-[1.5rem] border border-[#201d18]/12 bg-[#faf7f0] p-5 sm:p-6">
             <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#201d18]/42">Birlikte karar ver</p>
             <p className="mt-2 text-sm font-medium leading-relaxed text-[#201d18]/55">Bu mekanı plan yaptığın kişiye gönder.</p>

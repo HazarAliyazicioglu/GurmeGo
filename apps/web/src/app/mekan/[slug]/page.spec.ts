@@ -12,6 +12,11 @@ vi.mock("next/navigation", () => ({
   notFound: vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");
   }),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
+vi.mock("@/lib/auth-context", () => ({
+  useAuth: () => ({ user: null, session: null, loading: false }),
 }));
 
 const venue: VenueDetailType = {
