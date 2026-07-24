@@ -80,4 +80,30 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
     expect(res.statusCode).toBe(403);
     expect(service.assignRole).not.toHaveBeenCalled();
   });
+
+  it("rejects invalid roles and returns clean error envelope (regression: no top-level message field)", async () => {
+    // Simulate the actual BadRequestException from the service: throw with error payload,
+    // not with top-level message. This verifies the HTTP response body is clean.
+    const { BadRequestException } = await import("@nestjs/common");
+    const ex = new BadRequestException({
+      error: { code: "ROLE_NOT_AVAILABLE", message: "Bu rol MVP'de kullanılamaz (Faz 2)" },
+    });
+    ex.message = "Bu rol MVP'de kullanılamaz (Faz 2)";
+    service.assignRole.mockRejectedValueOnce(ex);
+
+    const res = await app.inject({
+      method: "PUT",
+      url: "/admin/users/u1/roles",
+      headers: { "x-test-role": "admin" },
+      payload: { role: "approved_rater" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body);
+    // Verify the envelope is clean: only `error` field, no top-level `message`
+    expect(body).toEqual({
+      error: { code: "ROLE_NOT_AVAILABLE", message: "Bu rol MVP'de kullanılamaz (Faz 2)" },
+    });
+    expect(body.message).toBeUndefined();
+  });
 });

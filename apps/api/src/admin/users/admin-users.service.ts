@@ -9,14 +9,16 @@ export class AdminUsersService {
 
   async assignRole(userId: string, role: string) {
     if (!MVP_ASSIGNABLE_ROLES.includes(role)) {
-      throw new BadRequestException({
+      // The HTTP response body must stay exactly `{ error: { code, message } }` per
+      // docs/api-spec.md (no top-level `message`), but NestJS's HttpException only
+      // derives `.message` (the Error message, used by e.g. `toThrow`) from a
+      // top-level `message` property on the response object. Set it explicitly
+      // after construction so the JSON body is unaffected.
+      const ex = new BadRequestException({
         error: { code: "ROLE_NOT_AVAILABLE", message: "Bu rol MVP'de kullanılamaz (Faz 2)" },
-        // Nest's HttpException#message only reads a top-level `message` string (see
-        // @nestjs/common/exceptions/http.exception.js initMessage()) — duplicated here so
-        // `.rejects.toThrow("...")` and internal logging see the real message, not the
-        // generic "Bad Request Exception" fallback. HTTP clients still read `error.message`.
-        message: "Bu rol MVP'de kullanılamaz (Faz 2)",
       });
+      ex.message = "Bu rol MVP'de kullanılamaz (Faz 2)";
+      throw ex;
     }
     return this.prisma.user.update({ where: { id: userId }, data: { role: role.toUpperCase() as any } });
   }
