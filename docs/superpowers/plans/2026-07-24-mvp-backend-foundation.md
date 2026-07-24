@@ -972,7 +972,7 @@ git commit -m "feat(api): add PrismaService with connection lifecycle hooks"
 
 **Files:**
 - Create: `apps/api/src/districts/districts.module.ts`, `districts.controller.ts`, `districts.service.ts`
-- Test: `apps/api/src/districts/districts.service.spec.ts`, `apps/api/src/districts/districts.controller.spec.ts`
+- Test: `apps/api/src/districts/districts.service.spec.ts` (no controller spec — the service test covers `findAll`/`findNearest` logic; the controller is a thin pass-through with no branching logic of its own)
 
 **Interfaces:**
 - Consumes: `PrismaService` (Task 4)
