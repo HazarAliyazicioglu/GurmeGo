@@ -10,11 +10,12 @@ async function bootstrap() {
   await app.register(fastifyMultipart);
   app.setGlobalPrefix("v1", { exclude: ["health"] });
 
-  // Browser clients (Plan 2's Next.js web/PWA app) need CORS to call this API cross-origin.
-  // No production origin exists yet — Plan 4 (infra) will set the real value via CORS_ORIGIN.
-  // Never use origin:true/"*" here: this API carries authenticated (credentialed) requests.
+  // Browser clients (Plan 2's Next.js web/PWA app, Plan 3's admin panel) need CORS to call this API
+  // cross-origin. No production origin exists yet — Plan 4 (infra) will set the real value via
+  // CORS_ORIGIN. Never use origin:true/"*" here: this API carries authenticated (credentialed) requests.
   const corsOrigins = (
-    process.env.CORS_ORIGIN ?? "http://localhost:3000,http://localhost:3001,http://localhost:3002"
+    process.env.CORS_ORIGIN ??
+    "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003"
   )
     .split(",")
     .map((origin) => origin.trim())
