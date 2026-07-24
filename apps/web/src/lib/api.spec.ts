@@ -15,6 +15,7 @@ vi.mock("@gurmego/api-client", () => ({
 import {
   getVenueBySlug,
   getVenues,
+  getVenuesInBbox,
   getDistricts,
   getNearestDistrict,
   getFavoriteLists,
@@ -114,6 +115,26 @@ describe("getVenues", () => {
       meta: { next_cursor: null, has_more: false },
     });
     await expect(getVenues({})).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("getVenuesInBbox", () => {
+  const VALID_MAP_VENUE = {
+    id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    name: "Kadıköy Kahvecisi",
+    category: "cafe",
+    lat: 40.99,
+    lng: 29.03,
+  };
+
+  it("returns parsed data on a valid response", async () => {
+    mockGet.mockResolvedValue([VALID_MAP_VENUE]);
+    await expect(getVenuesInBbox([29.0, 40.9, 29.1, 41.0])).resolves.toEqual([VALID_MAP_VENUE]);
+  });
+
+  it("throws ApiValidationError on an invalid response", async () => {
+    mockGet.mockResolvedValue([{ id: "not-a-uuid" }]);
+    await expect(getVenuesInBbox([29.0, 40.9, 29.1, 41.0])).rejects.toThrow(ApiValidationError);
   });
 });
 

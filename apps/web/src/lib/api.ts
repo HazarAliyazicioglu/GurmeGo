@@ -55,6 +55,26 @@ export function getVenues(query: Record<string, string>) {
   return fetchValidated(`/venues?${qs}`, VenueListResponseSchema);
 }
 
+// `GET /venues/map` (apps/api's `VenuesController.mapView` -> `VenuesRepository.findInBbox`)
+// returns a plain array (no `data`/`meta` envelope) of `{ id, name, category, lat, lng }` — a raw
+// SQL projection distinct from both `VenueListItemSchema` (no lat/lng) and `VenueSchema` (no
+// lat/lng at all), so it gets its own schema rather than reusing either.
+const MapVenueSchema = z.object({
+  id: VenueSchema.shape.id,
+  name: VenueSchema.shape.name,
+  category: VenueSchema.shape.category,
+  lat: z.number(),
+  lng: z.number(),
+});
+
+export type MapVenue = z.infer<typeof MapVenueSchema>;
+
+const MapVenueListSchema = z.array(MapVenueSchema);
+
+export function getVenuesInBbox(bbox: [number, number, number, number]) {
+  return fetchValidated(`/venues/map?bbox=${bbox.join(",")}`, MapVenueListSchema);
+}
+
 export function getVenueBySlug(slug: string): Promise<VenueDetail> {
   return fetchValidated(`/venues/${slug}`, VenueDetailSchema);
 }
