@@ -2,9 +2,13 @@ import { Body, Controller, Get, Param, Post, Req, UseGuards, UsePipes } from "@n
 import { CreateFavoriteListSchema } from "@gurmego/shared";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { RateLimit, RateLimitGuard } from "../common/rate-limit.guard";
+import { RolesGuard } from "../auth/roles.guard";
+import { Roles } from "../auth/roles.decorator";
 import { FavoritesService } from "./favorites.service";
 
 @Controller("me/lists")
+@UseGuards(RolesGuard)
+@Roles("user", "approved_rater", "curator", "admin")
 export class FavoritesController {
   constructor(private favorites: FavoritesService) {}
 
