@@ -43,6 +43,17 @@ const VALID_VENUE_DETAIL = {
   district: { name: "Kadıköy", slug: "kadikoy" },
 };
 
+const VALID_VENUE_LIST_ITEM = {
+  id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  name: "Kadıköy Kahvecisi",
+  slug: "kadikoy-kahvecisi",
+  priceRange: "MODERATE",
+  isBoutique: true,
+  editorialNote: null,
+  googleRating: 4.5,
+  googleRatingCount: 100,
+};
+
 const VALID_DISTRICT = {
   id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   cityId: "3fa85f64-5717-4562-b3fc-2c963f66afa7",
@@ -79,8 +90,28 @@ describe("getVenues", () => {
     await expect(getVenues({})).resolves.toEqual({ data: [], meta: { next_cursor: null, has_more: false } });
   });
 
+  it("returns parsed data for a valid list item", async () => {
+    mockGet.mockResolvedValue({
+      data: [VALID_VENUE_LIST_ITEM],
+      meta: { next_cursor: null, has_more: false },
+    });
+    await expect(getVenues({})).resolves.toEqual({
+      data: [VALID_VENUE_LIST_ITEM],
+      meta: { next_cursor: null, has_more: false },
+    });
+  });
+
   it("throws ApiValidationError on an invalid list response", async () => {
     mockGet.mockResolvedValue({ data: "not-an-array" });
+    await expect(getVenues({})).rejects.toThrow(ApiValidationError);
+  });
+
+  it("throws ApiValidationError when a list item is missing a required field (id)", async () => {
+    const { id: _id, ...itemMissingId } = VALID_VENUE_LIST_ITEM;
+    mockGet.mockResolvedValue({
+      data: [itemMissingId],
+      meta: { next_cursor: null, has_more: false },
+    });
     await expect(getVenues({})).rejects.toThrow(ApiValidationError);
   });
 });
