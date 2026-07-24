@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { getFavoriteLists } from "@/lib/api";
@@ -8,7 +9,7 @@ import type { FavoriteList } from "@gurmego/shared";
 export default function FavorilerPage() {
   const { user, session, loading } = useAuth();
   const router = useRouter();
-  const [lists, setLists] = useState<FavoriteList[]>([]);
+  const [lists, setLists] = useState<FavoriteList[] | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -23,10 +24,103 @@ export default function FavorilerPage() {
   if (loading || !user) return null;
 
   return (
-    <main data-testid="favoriler-page">
-      {lists.map((list) => (
-        <div key={list.id}>{list.name}</div>
-      ))}
+    <main data-testid="favoriler-page" className="relative overflow-hidden pt-8 sm:pt-12 lg:pt-16">
+      <div className="pointer-events-none absolute -right-32 top-10 -z-10 size-80 rounded-full bg-[#e77959]/10 blur-3xl" aria-hidden="true" />
+
+      <header className="border-b border-[#201d18]/12 pb-6 sm:pb-8">
+        <div className="flex items-center gap-2 text-[0.64rem] font-black uppercase tracking-[0.2em] text-[#9e422b]">
+          <span className="h-px w-6 bg-current" aria-hidden="true" />
+          Kişisel seçkin
+        </div>
+        <div className="mt-3 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <h1 className="font-serif text-[2.7rem] font-semibold leading-[0.95] tracking-[-0.055em] text-[#201d18] sm:text-6xl">
+              Favorilerin
+            </h1>
+            <p className="mt-3 max-w-[44ch] text-sm font-medium leading-relaxed text-[#201d18]/55">
+              Yeniden dönmek istediğin lezzet duraklarını burada bir arada tut.
+            </p>
+          </div>
+          {lists && lists.length > 0 && (
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[#201d18]/12 bg-[#faf7f0] px-3 py-2 text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#201d18]/55">
+              <span className="size-1.5 rounded-full bg-[#d75d3b]" aria-hidden="true" />
+              {lists.length} liste
+            </span>
+          )}
+        </div>
+      </header>
+
+      {lists === null ? (
+        <section className="grid gap-3 py-6 sm:grid-cols-2 sm:gap-4 sm:py-8" aria-label="Favoriler yükleniyor" aria-busy="true">
+          {[0, 1].map((item) => (
+            <div key={item} className="min-h-44 animate-pulse rounded-[1.4rem] border border-[#201d18]/[0.08] bg-[#faf7f0]/70 p-5 sm:p-6">
+              <div className="size-10 rounded-full bg-[#201d18]/[0.07]" />
+              <div className="mt-7 h-6 w-2/3 rounded-full bg-[#201d18]/[0.07]" />
+              <div className="mt-3 h-3 w-1/2 rounded-full bg-[#201d18]/[0.05]" />
+            </div>
+          ))}
+        </section>
+      ) : lists.length === 0 ? (
+        <section className="py-6 sm:py-8" aria-labelledby="empty-favorites-title">
+          <div className="relative overflow-hidden rounded-[1.6rem] bg-[#201d18] px-5 py-8 text-[#f4f0e7] shadow-[0_18px_45px_rgba(32,29,24,0.13)] sm:px-8 sm:py-10">
+            <svg viewBox="0 0 160 160" className="absolute -right-8 -top-10 size-48 text-[#e77959]/15 sm:size-56" aria-hidden="true">
+              <circle cx="80" cy="80" r="59" fill="none" stroke="currentColor" strokeWidth="14" />
+              <path d="M80 117 45 84C22 62 55 32 80 59c25-27 58 3 35 25l-35 33Z" fill="currentColor" />
+            </svg>
+
+            <div className="relative max-w-xl">
+              <span className="grid size-12 place-items-center rounded-full bg-[#d75d3b] text-white shadow-[0_8px_24px_rgba(215,93,59,0.28)]" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="size-5 fill-none">
+                  <path d="M12 20.3 4.6 13.4C-.2 8.9 6.8 2.7 12 8.1c5.2-5.4 12.2.8 7.4 5.3L12 20.3Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <p className="mt-6 text-[0.62rem] font-black uppercase tracking-[0.19em] text-[#e77959]">İlk favorini bekliyor</p>
+              <h2 id="empty-favorites-title" className="mt-2 max-w-[15ch] font-serif text-[2rem] font-semibold leading-[1.05] tracking-[-0.035em] sm:text-[2.5rem]">
+                Henüz favori yok, keşfe başla.
+              </h2>
+              <p className="mt-3 max-w-[42ch] text-sm font-medium leading-relaxed text-[#f4f0e7]/60">
+                Hoşuna giden bir mekanda kalbe dokun; sonraki rotanı hazırlarken burada seni beklesin.
+              </p>
+              <Link
+                href="/"
+                className="group mt-6 inline-flex min-h-12 w-full items-center justify-between gap-4 rounded-full bg-[#d75d3b] px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.28)] transition-all hover:-translate-y-0.5 hover:bg-[#bd4c30] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f4f0e7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#201d18] sm:w-auto"
+              >
+                Mekanları keşfet
+                <svg viewBox="0 0 20 20" className="size-4 fill-none transition-transform group-hover:translate-x-0.5" aria-hidden="true">
+                  <path d="M4 10h11m-4-4 4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="grid gap-3 py-6 sm:grid-cols-2 sm:gap-4 sm:py-8" aria-label="Favori listelerin">
+          {lists.map((list, index) => (
+            <article
+              key={list.id}
+              className="group relative min-h-44 overflow-hidden rounded-[1.4rem] border border-[#201d18]/12 bg-[#faf7f0] p-5 shadow-[0_1px_0_rgba(32,29,24,0.05)] transition-all duration-300 hover:-translate-y-0.5 hover:border-[#201d18]/25 hover:shadow-[0_14px_36px_rgba(71,52,35,0.10)] sm:p-6"
+            >
+              <span className="absolute inset-y-0 left-0 w-1 origin-bottom scale-y-0 bg-[#d75d3b] transition-transform duration-300 group-hover:scale-y-100" aria-hidden="true" />
+              <div className="flex h-full flex-col">
+                <div className="flex items-start justify-between gap-4">
+                  <span className="grid size-10 place-items-center rounded-full bg-[#d75d3b]/10 text-[#9e422b]" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" className="size-4">
+                      <path d="M10 17.2 3.8 11.4C-.2 7.7 5.6 2.5 10 7c4.4-4.5 10.2.7 6.2 4.4L10 17.2Z" fill="currentColor" />
+                    </svg>
+                  </span>
+                  <span className="font-serif text-sm font-semibold tabular-nums text-[#201d18]/35">0{index + 1}</span>
+                </div>
+                <h2 className="mt-5 font-serif text-[1.75rem] font-semibold leading-tight tracking-[-0.035em] text-[#201d18] transition-colors group-hover:text-[#9e422b]">
+                  {list.name}
+                </h2>
+                <p className="mt-auto pt-5 text-[0.65rem] font-black uppercase tracking-[0.15em] text-[#201d18]/38">
+                  Kişisel mekan listen
+                </p>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
     </main>
   );
 }
