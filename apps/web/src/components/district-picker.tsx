@@ -70,7 +70,7 @@ export function DistrictPicker({ districts, current }: { districts: District[]; 
         })}
       </div>
       {suggested && (
-        <details open className="group relative mt-3 overflow-hidden rounded-2xl border border-[#d75d3b]/20 bg-[#eadfce] shadow-[0_8px_24px_rgba(71,52,35,0.08)] [&:not([open])]:hidden">
+        <details open className="group absolute left-4 right-4 top-full mt-2 overflow-hidden rounded-2xl border border-[#d75d3b]/20 bg-[#eadfce] shadow-[0_12px_32px_rgba(71,52,35,0.14)] sm:left-6 sm:right-6 [&:not([open])]:hidden">
           <summary className="absolute right-1.5 top-1.5 z-10 grid size-10 cursor-pointer list-none place-items-center rounded-full text-[#201d18]/45 transition-colors hover:bg-[#201d18]/5 hover:text-[#201d18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#d75d3b] [&::-webkit-details-marker]:hidden">
             <span className="sr-only">{"Konum \u00f6nerisini kapat"}</span>
             <svg viewBox="0 0 20 20" className="size-4" aria-hidden="true">
