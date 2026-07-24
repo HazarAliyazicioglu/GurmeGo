@@ -3,7 +3,7 @@ import { AdminVenueCreateInput, AdminVenueUpdateInput } from "@gurmego/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { BoutiqueService } from "../../rule-engine/boutique.service";
 import { VenuesRepository } from "../../venues/venues.repository";
-import type { CsvRow } from "./csv-import.service";
+import type { CsvImportRow } from "./csv-import.service";
 
 @Injectable()
 export class AdminVenuesService {
@@ -63,21 +63,27 @@ export class AdminVenuesService {
     return this.prisma.venue.update({ where: { id: venueId }, data: version.snapshot as any });
   }
 
-  async importRows(rows: CsvRow[]): Promise<{ created: number; skipped: number; rowErrors: { row: number; message: string }[] }> {
+  async importRows(
+    rows: CsvImportRow[],
+  ): Promise<{ created: number; skipped: number; rowErrors: { row: number; message: string }[] }> {
     let created = 0;
     let skipped = 0;
     const rowErrors: { row: number; message: string }[] = [];
 
-    for (const [index, row] of rows.entries()) {
+    for (const { row: rowNumber, data: row } of rows) {
       try {
-        const district = await this.prisma.district.findUnique({ where: { slug: row.districtSlug } });
-        if (!district) {
-          rowErrors.push({ row: index + 1, message: `'${row.districtSlug}' slug'lı ilçe bulunamadı` });
-          continue;
-        }
+        // Slug-exists is checked BEFORE the district lookup: re-importing the same CSV must be
+        // idempotent (existing-slug rows are skipped), independent of whether that row's
+        // districtSlug happens to be stale/invalid — a district problem on an already-imported row
+        // is not something the caller needs to know about, and must not surface as an error.
         const existing = await this.prisma.venue.findUnique({ where: { slug: row.slug } });
         if (existing) {
           skipped++;
+          continue;
+        }
+        const district = await this.prisma.district.findUnique({ where: { slug: row.districtSlug } });
+        if (!district) {
+          rowErrors.push({ row: rowNumber, message: `'${row.districtSlug}' slug'lı ilçe bulunamadı` });
           continue;
         }
         // Explicit field mapping (not a raw type cast) — AdminVenueCreateSchema's `.default([])`/
@@ -99,7 +105,10 @@ export class AdminVenuesService {
         });
         created++;
       } catch (err) {
-        rowErrors.push({ row: index + 1, message: err instanceof Error ? err.message : "Bilinmeyen hata" });
+        // Prisma/repository error detail (schema/column names, constraint names, ...) must not
+        // leak to the client — log it server-side and return a generic row error instead.
+        console.error(`CSV import row ${rowNumber} failed:`, err);
+        rowErrors.push({ row: rowNumber, message: "Mekan oluşturulamadı: beklenmeyen hata" });
       }
     }
 

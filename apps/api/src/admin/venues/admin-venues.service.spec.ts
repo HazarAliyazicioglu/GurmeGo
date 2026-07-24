@@ -100,9 +100,14 @@ describe("AdminVenuesService.revert", () => {
 });
 
 describe("AdminVenuesService.importRows", () => {
-  it("creates new-slug rows, skips existing-slug rows, and reports district-not-found as a row error", async () => {
+  const csvRow = (row: number, data: Record<string, unknown>) => ({ row, data: data as any });
+
+  it("creates new-slug rows, skips existing-slug rows, and reports district-not-found as a row error, using ORIGINAL CSV row numbers", async () => {
+    // Row numbers are deliberately non-contiguous (5, 9, 12) — as if earlier rows in the original CSV
+    // failed structural validation and were filtered out before reaching importRows. If importRows used
+    // its own loop index instead of the tagged `row` number, these errors would be misreported as 1/2/3.
     const rows = [
-      {
+      csvRow(5, {
         name: "New Cafe",
         slug: "new-cafe",
         districtSlug: "kadikoy",
@@ -113,8 +118,8 @@ describe("AdminVenuesService.importRows", () => {
         lat: 40.99,
         lng: 29.02,
         openingHours: { mon_fri: "09:00-18:00" },
-      },
-      {
+      }),
+      csvRow(9, {
         name: "Existing Cafe",
         slug: "existing-cafe",
         districtSlug: "kadikoy",
@@ -125,8 +130,8 @@ describe("AdminVenuesService.importRows", () => {
         lat: 40.98,
         lng: 29.03,
         openingHours: { mon_fri: "09:00-18:00" },
-      },
-      {
+      }),
+      csvRow(12, {
         name: "Bad District",
         slug: "bad-district-venue",
         districtSlug: "nowhere",
@@ -137,7 +142,7 @@ describe("AdminVenuesService.importRows", () => {
         lat: 40.9,
         lng: 29.0,
         openingHours: { mon_fri: "09:00-18:00" },
-      },
+      }),
     ];
     const prisma = {
       district: {
@@ -149,7 +154,8 @@ describe("AdminVenuesService.importRows", () => {
         findUnique: jest
           .fn()
           .mockResolvedValueOnce(null) // new-cafe: doesn't exist yet
-          .mockResolvedValueOnce({ id: "v-existing" }), // existing-cafe: already exists
+          .mockResolvedValueOnce({ id: "v-existing" }) // existing-cafe: already exists
+          .mockResolvedValueOnce(null), // bad-district-venue: doesn't exist yet, district lookup fails next
       },
     } as any;
     const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
@@ -160,10 +166,81 @@ describe("AdminVenuesService.importRows", () => {
 
     expect(result.created).toBe(1);
     expect(result.skipped).toBe(1);
-    expect(result.rowErrors).toEqual([{ row: 3, message: expect.stringContaining("ilçe") }]);
+    expect(result.rowErrors).toEqual([{ row: 12, message: expect.stringContaining("ilçe") }]);
     expect(venuesRepository.createWithLocation).toHaveBeenCalledTimes(1);
     expect(venuesRepository.createWithLocation).toHaveBeenCalledWith(
       expect.objectContaining({ slug: "new-cafe", districtId: "d1", signatureItems: [] }),
     );
+  });
+
+  it("skips an existing-slug row even when its districtSlug is stale/invalid, instead of reporting it as an error", async () => {
+    // Idempotent-on-slug contract: re-importing a CSV whose district assignments have since changed
+    // (or gone stale) must still cleanly skip already-imported rows, not error on them for unrelated
+    // reasons. This requires checking slug-exists BEFORE the district lookup.
+    const rows = [
+      csvRow(1, {
+        name: "Existing Cafe",
+        slug: "existing-cafe",
+        districtSlug: "no-longer-a-real-district",
+        category: "cafe",
+        priceRange: "MODERATE" as const,
+        branchCount: 1,
+        franchiseFlag: false,
+        lat: 40.98,
+        lng: 29.03,
+        openingHours: { mon_fri: "09:00-18:00" },
+      }),
+    ];
+    const prisma = {
+      district: { findUnique: jest.fn().mockResolvedValue(null) },
+      venue: { findUnique: jest.fn().mockResolvedValue({ id: "v-existing" }) },
+    } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
+    const venuesRepository = { createWithLocation: jest.fn() } as any;
+    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
+
+    const result = await service.importRows(rows);
+
+    expect(result.created).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.rowErrors).toEqual([]);
+    expect(prisma.district.findUnique).not.toHaveBeenCalled();
+    expect(venuesRepository.createWithLocation).not.toHaveBeenCalled();
+  });
+
+  it("reports a generic error message and does not leak internal error detail when create() throws", async () => {
+    const rows = [
+      csvRow(1, {
+        name: "New Cafe",
+        slug: "new-cafe",
+        districtSlug: "kadikoy",
+        category: "cafe",
+        priceRange: "MODERATE" as const,
+        branchCount: 1,
+        franchiseFlag: false,
+        lat: 40.99,
+        lng: 29.02,
+        openingHours: { mon_fri: "09:00-18:00" },
+      }),
+    ];
+    const prisma = {
+      district: { findUnique: jest.fn().mockResolvedValue({ id: "d1", slug: "kadikoy" }) },
+      venue: { findUnique: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
+    const venuesRepository = {
+      createWithLocation: jest.fn().mockRejectedValue(new Error("relation \"venues\" violates constraint fk_district_internal_detail")),
+    } as any;
+    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await service.importRows(rows);
+
+    expect(result.created).toBe(0);
+    expect(result.rowErrors).toEqual([{ row: 1, message: "Mekan oluşturulamadı: beklenmeyen hata" }]);
+    expect(result.rowErrors[0].message).not.toContain("fk_district_internal_detail");
+    expect(consoleErrorSpy).toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
   });
 });
