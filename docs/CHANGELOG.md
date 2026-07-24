@@ -195,3 +195,49 @@ bölümü.
 
 ### Sonraki adım
 Kullanıcıya sonucu sun, yürütme onayı iste.
+
+---
+
+## 2026-07-24 (devam) — Plan 1 yürütüldü: 24/24 task TAMAMLANDI
+
+Kullanıcı isteği: "sormadan devam et, hata varsa düzelt, arayüzlü neredeyse çalışan bir app olana kadar
+bu döngüde devam et." `subagent-driven-development` ile worktree `mvp-backend-foundation`'da yürütüldü:
+her task için taze bir implementer subagent + task-reviewer subagent (spec+quality), bulunan sorunlar
+fix subagent'larla düzeltilip yeniden review edildi.
+
+**Bulunup düzeltilen önemli sorunlar (task sırasına göre):**
+- Task 6: `ORDER BY` GIST index'i kullanmıyordu (Seq Scan + Sort, 157ms) → KNN operatörüne geçirildi
+  (Index Scan, 0.34ms — 5000 satırda ~460x hızlanma, gerçek DB'de doğrulandı).
+- Task 9: `NotFoundException`'ın brief'teki hali kendi testini geçemiyordu (Nest `.message` davranışı) —
+  ilk kez bu hata sınıfı bulundu, güvenli pattern (instance'a post-construction `.message`) kuruldu.
+- Task 12: brief'in kendi test/implementasyon uyuşmazlığı (CacheStore) + method-scoped `@UsePipes`
+  hatası (route param'ı body şemasına karşı doğruluyordu) — ikisi de implementer tarafından bulunup
+  düzeltildi.
+- Task 16 (en riskli task): `POST /admin/venues` Prisma seviyesinde tamamen çöküyordu (`location`
+  PostGIS kolonu Prisma'nın `create`'iyle yazılamıyor) + CSV import Fastify'da hiç çalışmıyordu (Express
+  multer kullanılmıştı). İkisi de gerçek DB'ye/gerçek multipart isteğine karşı doğrulanarak düzeltildi
+  (ADR 002'ye uygun repository-katmanı raw SQL + `@fastify/multipart`).
+- Task 19: aynı `.message` hata sınıfı üçüncü kez bulundu (bu sefer yanlış düzeltilmiş — top-level
+  `message` wire response'a sızıyordu), regresyon testiyle kapatıldı.
+- Task 23: `eslint` hiç kurulu değildi (CI lint adımı asla geçemezdi) + `turbo.json` Turbo 2.x'in
+  `pipeline`→`tasks` rename'ine uymuyordu (root-level `pnpm run test/lint/typecheck` Task 0'dan beri
+  sessizce kırıktı, hiçbir task fark etmedi çünkü hepsi `cd apps/api && npx jest` ile doğrudan test
+  çalıştırıyordu).
+- Task 24 (final review): Claude whole-branch review 4 Important cross-task bulgu buldu (2 envelope
+  hatası daha, `districts.service.ts`'te ADR 002 ihlali, `/me/lists`'in kimliksiz istekte 500 vermesi,
+  eksik CORS) — hepsi düzeltildi. Zorunlu Codex cross-model-review 3 High/Critical bulgu daha buldu:
+  JWT doğrulamasında algorithm/issuer/audience kısıtı yoktu, admin onay kuyruğu (`approve`/`reject`)
+  atomik/idempotent değildi (eşzamanlı çağrı çift snapshot üretebilirdi), `revert()` version'ın gerçekten
+  o mekana ait olup olmadığını kontrol etmiyordu (yanlış mekana snapshot uygulanabilirdi). Üçü de
+  düzeltildi ve gerçek testlerle doğrulandı.
+
+**Sonuç:** 77/77 test geçiyor, `tsc --noEmit` temiz, `eslint` 0 hata (74 önceden var olan `any`
+kullanımı uyarı seviyesinde bırakıldı, bilinçli takas — `docs/STATE.md`'de gerekçeli).
+
+**Ertelenen bulgular** (Plan 4 / gerçek Supabase projesi kurulunca ele alınacak): rol senkronizasyonu
+(DB↔JWT claim), rol string case'i, rate-limit `trustProxy`, `VenueVersion` snapshot kapsamı, `isBoutique`
+staleness, REPORT onayının ürün semantiği. Tam liste: `docs/STATE.md`.
+
+### Sonraki adım
+Plan 2 (Web/PWA client) — `writing-plans` ile yazılacak, `plan-red-team`den geçirilecek, aynı
+worktree'de `subagent-driven-development` ile yürütülecek.
