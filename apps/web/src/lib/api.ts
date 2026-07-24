@@ -1,0 +1,72 @@
+import { createApiClient } from "@gurmego/api-client";
+import { VenueSchema, VenueDetailSchema, DistrictSchema, FavoriteListSchema, type VenueDetail, type District } from "@gurmego/shared";
+import { z } from "zod";
+
+export class ApiValidationError extends Error {
+  constructor(public path: string, public issues: unknown) {
+    super(`API response for ${path} did not match expected schema`);
+    this.name = "ApiValidationError";
+  }
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1";
+const client = createApiClient(API_BASE);
+
+async function fetchValidated<T>(path: string, schema: z.ZodType<T>, token?: string): Promise<T> {
+  const authedClient = token ? createApiClient(API_BASE, () => token) : client;
+  const raw = await authedClient.get<unknown>(path);
+  const result = schema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError(path, result.error.issues);
+  return result.data;
+}
+
+const VenueListResponseSchema = z.object({
+  data: z.array(VenueSchema.partial()), // list endpoint returns a lighter projection than full VenueSchema
+  meta: z.object({ next_cursor: z.string().nullable(), has_more: z.boolean() }),
+});
+
+export function getVenues(query: Record<string, string>) {
+  const qs = new URLSearchParams(query).toString();
+  return fetchValidated(`/venues?${qs}`, VenueListResponseSchema);
+}
+
+export function getVenueBySlug(slug: string): Promise<VenueDetail> {
+  return fetchValidated(`/venues/${slug}`, VenueDetailSchema);
+}
+
+export function getDistricts(): Promise<District[]> {
+  return fetchValidated(`/districts?city=istanbul`, z.array(DistrictSchema));
+}
+
+export function getNearestDistrict(lat: number, lng: number): Promise<District> {
+  return fetchValidated(`/districts/nearest?lat=${lat}&lng=${lng}`, DistrictSchema);
+}
+
+export function getFavoriteLists(token: string) {
+  return fetchValidated(`/me/lists`, z.array(FavoriteListSchema), token);
+}
+
+const CreatedFavoriteListSchema = FavoriteListSchema; // POST /me/lists returns the created list, same shape
+
+export async function createFavoriteList(token: string, name: string) {
+  const authedClient = createApiClient(API_BASE, () => token);
+  const raw = await authedClient.post<unknown>(`/me/lists`, { name });
+  const result = CreatedFavoriteListSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError("/me/lists", result.error.issues);
+  return result.data;
+}
+
+const ReportResponseSchema = z.object({ urgent: z.boolean() });
+
+export async function reportVenue(venueId: string, reason: string) {
+  const res = await fetch(`${API_BASE}/venues/${venueId}/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) throw new Error(`Report failed: ${res.status}`);
+  const raw = await res.json();
+  const result = ReportResponseSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError(`/venues/${venueId}/report`, result.error.issues);
+  return result.data;
+}
