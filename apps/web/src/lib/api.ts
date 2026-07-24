@@ -38,6 +38,12 @@ const VenueListItemSchema = z.object({
   googleRatingCount: z.number().int().min(0).nullable(),
 });
 
+// Real shape returned by `GET /venues` — narrower than `Venue` (see note above) and with
+// `editorialNote`/`googleRating`/`googleRatingCount` as `T | null` rather than `T | undefined`
+// (raw SQL nulls, not omitted keys). Components rendering venue list items should type against
+// this, not `Partial<Venue>`, or `tsc` will (correctly) flag the null/undefined mismatch.
+export type VenueListItem = z.infer<typeof VenueListItemSchema>;
+
 const VenueListResponseSchema = z.object({
   data: z.array(VenueListItemSchema),
   meta: z.object({ next_cursor: z.string().nullable(), has_more: z.boolean() }),
