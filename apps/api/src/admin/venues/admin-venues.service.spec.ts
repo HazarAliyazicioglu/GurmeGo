@@ -68,3 +68,33 @@ describe("AdminVenuesService.update", () => {
     );
   });
 });
+
+describe("AdminVenuesService.revert", () => {
+  it("applies the version snapshot when the version belongs to the venue", async () => {
+    const version = { id: "ver1", venueId: "v1", snapshot: { name: "Old Name" } };
+    const prisma = {
+      venueVersion: { findUniqueOrThrow: jest.fn().mockResolvedValue(version) },
+      venue: { update: jest.fn().mockResolvedValue({ id: "v1", name: "Old Name" }) },
+    } as any;
+    const service = new AdminVenuesService(prisma, {} as any, {} as any);
+
+    await service.revert("v1", "ver1");
+
+    expect(prisma.venue.update).toHaveBeenCalledWith({ where: { id: "v1" }, data: version.snapshot });
+  });
+
+  it("rejects and does not apply the update when the version belongs to a different venue", async () => {
+    const version = { id: "ver1", venueId: "OTHER-VENUE", snapshot: { name: "Old Name" } };
+    const prisma = {
+      venueVersion: { findUniqueOrThrow: jest.fn().mockResolvedValue(version) },
+      venue: { update: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const service = new AdminVenuesService(prisma, {} as any, {} as any);
+
+    await expect(service.revert("v1", "ver1")).rejects.toMatchObject({
+      response: { error: { code: "VENUE_VERSION_NOT_FOUND" } },
+    });
+
+    expect(prisma.venue.update).not.toHaveBeenCalled();
+  });
+});

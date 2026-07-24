@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { AdminVenueCreateInput, AdminVenueUpdateInput } from "@gurmego/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { BoutiqueService } from "../../rule-engine/boutique.service";
@@ -45,6 +45,20 @@ export class AdminVenuesService {
 
   async revert(venueId: string, versionId: string) {
     const version = await this.prisma.venueVersion.findUniqueOrThrow({ where: { id: versionId } });
+    if (version.venueId !== venueId) {
+      // A mismatched venueId/versionId pair is treated as "no such version for this venue" —
+      // same shape as VENUE_NOT_FOUND elsewhere, so callers can't distinguish "wrong venue" from
+      // "wrong id" and use that to probe other venues' version history.
+      // The HTTP response body must stay exactly `{ error: { code, message } }` per
+      // docs/api-spec.md; NestJS's HttpException only derives `.message` from a top-level
+      // `message` property, so set it explicitly after construction (same pattern as
+      // venues.service.ts / admin-users.service.ts).
+      const notFound = new NotFoundException({
+        error: { code: "VENUE_VERSION_NOT_FOUND", message: "Bu mekan için böyle bir versiyon bulunamadı" },
+      });
+      notFound.message = "Bu mekan için böyle bir versiyon bulunamadı";
+      throw notFound;
+    }
     return this.prisma.venue.update({ where: { id: venueId }, data: version.snapshot as any });
   }
 }
