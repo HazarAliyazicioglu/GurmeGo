@@ -6,6 +6,7 @@ import { AuthModule } from "./auth/auth.module";
 import { FavoritesModule } from "./favorites/favorites.module";
 import { ReportsModule } from "./reports/reports.module";
 import { RuleEngineModule } from "./rule-engine/rule-engine.module";
+import { AdminModule } from "./admin/admin.module";
 
 @Controller("health")
 class HealthController {
@@ -16,7 +17,7 @@ class HealthController {
 }
 
 @Module({
-  imports: [PrismaModule, DistrictsModule, VenuesModule, AuthModule, FavoritesModule, ReportsModule, RuleEngineModule],
+  imports: [PrismaModule, DistrictsModule, VenuesModule, AuthModule, FavoritesModule, ReportsModule, RuleEngineModule, AdminModule],
   controllers: [HealthController],
 })
 export class AppModule {}
