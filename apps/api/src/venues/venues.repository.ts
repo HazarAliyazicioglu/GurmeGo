@@ -8,6 +8,7 @@ export interface VenueRow {
   id: string;
   name: string;
   slug: string;
+  category: string;
   distance_m?: number;
 }
 
@@ -107,7 +108,7 @@ export class VenuesRepository {
         : Prisma.sql`ORDER BY v."createdAt" DESC`;
 
     const rows = await this.prisma.$queryRaw<VenueRow[]>(Prisma.sql`
-      SELECT v.id, v.name, v.slug, v."priceRange", v."isBoutique", v."editorialNote",
+      SELECT v.id, v.name, v.slug, v.category, v."priceRange", v."isBoutique", v."editorialNote",
              v."googleRating", v."googleRatingCount"${distanceSelect}
       FROM "Venue" v
       WHERE ${where} ${radiusFilter}

@@ -21,9 +21,9 @@ async function fetchValidated<T>(path: string, schema: z.ZodType<T>, token?: str
 }
 
 // `GET /venues` (apps/api's `VenuesRepository.searchPublished`) SELECTs only
-// `id, name, slug, priceRange, isBoutique, editorialNote, googleRating, googleRatingCount`
+// `id, name, slug, category, priceRange, isBoutique, editorialNote, googleRating, googleRatingCount`
 // (+ `distance_m` when lat/lng given, not surfaced to clients) — a narrower projection than
-// `VenueSchema`, not merely "all fields optional". `id`/`name`/`slug`/`priceRange`/`isBoutique`
+// `VenueSchema`, not merely "all fields optional". `id`/`name`/`slug`/`category`/`priceRange`/`isBoutique`
 // are always present; `editorialNote`/`googleRating`/`googleRatingCount` are genuinely
 // DB-nullable columns (raw SQL returns `null`, not `undefined`), so those stay `.nullable()` here,
 // matching the pattern used by `VenueDetailSchema` above.
@@ -31,6 +31,7 @@ const VenueListItemSchema = z.object({
   id: VenueSchema.shape.id,
   name: VenueSchema.shape.name,
   slug: VenueSchema.shape.slug,
+  category: VenueSchema.shape.category,
   priceRange: VenueSchema.shape.priceRange,
   isBoutique: VenueSchema.shape.isBoutique,
   editorialNote: z.string().max(1000).nullable(),

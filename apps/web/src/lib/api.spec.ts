@@ -47,6 +47,7 @@ const VALID_VENUE_LIST_ITEM = {
   id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   name: "Kadıköy Kahvecisi",
   slug: "kadikoy-kahvecisi",
+  category: "cafe",
   priceRange: "MODERATE",
   isBoutique: true,
   editorialNote: null,
