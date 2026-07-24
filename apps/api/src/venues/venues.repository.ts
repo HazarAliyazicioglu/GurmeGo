@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { VenueListQuery } from "@gurmego/shared";
 
-interface VenueRow {
+export interface VenueRow {
   id: string;
   name: string;
   slug: string;
