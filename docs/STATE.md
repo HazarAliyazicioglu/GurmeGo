@@ -43,6 +43,16 @@ aynı worktree'de `subagent-driven-development` ile yürütülecek. Kullanıcıy
 - Plan 1 yürütme kaydı (task-by-task, bulgular, düzeltmeler): worktree'deki
   `.superpowers/sdd/progress.md` (worktree silinirse kaybolur — git log kalıcı kayıt)
 
+## Acil: production build kırık (Plan 2 Task 11'de keşfedildi)
+`packages/shared`'ın build adımı yok — `apps/api`'nin derlenmiş `dist/main.js`'i Node'un native
+TS type-stripping'i altında extensionless import'lar yüzünden çöküyor. Jest'in in-process
+`TestingModule`'ü bunu maskeler (gerçek process boot'u hiç tetiklemiyor), bu yüzden 77 testin
+hiçbiri yakalamadı — yalnızca Task 11'in gerçek `apps/api` process'ini ayağa kaldırma denemesi
+buldu. Herhangi bir gerçek Docker/production deploy `node dist/main.js` çalıştırırsa aynı anda
+çöker. Plan 4'ten önce (herhangi bir gerçek deploy denemesinden önce) çözülmeli: `packages/shared`'a
+bir build adımı (tsc/tsup) eklenip `apps/api`'nin ona derlenmiş çıktı üzerinden bağımlı olması
+gerekiyor, extensionless import'lara güvenmeden.
+
 ## Ertelenen takip maddeleri (Plan 4 / gerçek Supabase projesi kurulunca)
 - Rol kaynağı kopuk: AdminUsersService DB'ye User.role yazıyor ama JwtAuthMiddleware rolü JWT'nin
   user_role claim'inden okuyor — gerçek senkron için Supabase custom access token hook gerekiyor.
