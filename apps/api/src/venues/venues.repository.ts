@@ -54,4 +54,14 @@ export class VenuesRepository {
 
     return { items, nextCursor };
   }
+
+  async findInBbox([minLng, minLat, maxLng, maxLat]: [number, number, number, number]) {
+    return this.prisma.$queryRaw<Array<{ id: string; name: string; category: string; lat: number; lng: number }>>(Prisma.sql`
+      SELECT v.id, v.name, v.category,
+             ST_Y(v.location::geometry) AS lat, ST_X(v.location::geometry) AS lng
+      FROM "Venue" v
+      WHERE v.status = 'PUBLISHED'
+        AND ST_Intersects(v.location::geometry, ST_MakeEnvelope(${minLng}, ${minLat}, ${maxLng}, ${maxLat}, 4326))
+    `);
+  }
 }

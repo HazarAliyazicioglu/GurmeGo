@@ -7,6 +7,12 @@ import { VenuesService } from "./venues.service";
 export class VenuesController {
   constructor(private venues: VenuesService) {}
 
+  @Get("map")
+  mapView(@Query("bbox") bbox: string) {
+    const parts = bbox.split(",").map(Number) as [number, number, number, number];
+    return this.venues.mapView(parts);
+  }
+
   @Get()
   @UsePipes(new ZodValidationPipe(VenueListQuerySchema))
   list(@Query() query: ReturnType<(typeof VenueListQuerySchema)["parse"]>) {

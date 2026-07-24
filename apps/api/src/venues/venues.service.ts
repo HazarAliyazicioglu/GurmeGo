@@ -13,4 +13,8 @@ export class VenuesService {
       meta: { next_cursor: nextCursor, has_more: nextCursor !== null },
     };
   }
+
+  mapView(bbox: [number, number, number, number]) {
+    return this.repo.findInBbox(bbox);
+  }
 }

@@ -35,3 +35,15 @@ describe("VenuesRepository.searchPublished", () => {
     expect(result.nextCursor).toBeNull();
   });
 });
+
+describe("VenuesRepository.findInBbox", () => {
+  it("queries venues within the bounding box", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1", name: "A", location: {} }]) } as any;
+    const repo = new VenuesRepository(prisma);
+
+    const result = await repo.findInBbox([28.9, 40.9, 29.1, 41.1]);
+
+    expect(prisma.$queryRaw).toHaveBeenCalled();
+    expect(result).toHaveLength(1);
+  });
+});
