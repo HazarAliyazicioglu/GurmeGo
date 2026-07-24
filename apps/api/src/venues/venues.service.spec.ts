@@ -16,3 +16,22 @@ describe("VenuesService.list", () => {
     });
   });
 });
+
+describe("VenuesService.detail", () => {
+  it("throws NotFoundException when venue missing", async () => {
+    const repo = { findBySlug: jest.fn().mockResolvedValue(null) } as unknown as VenuesRepository;
+    const service = new VenuesService(repo);
+
+    await expect(service.detail("missing-slug")).rejects.toThrow("Mekan bulunamadı");
+  });
+
+  it("returns venue detail when found", async () => {
+    const venue = { id: "v1", slug: "a", name: "A" };
+    const repo = { findBySlug: jest.fn().mockResolvedValue(venue) } as unknown as VenuesRepository;
+    const service = new VenuesService(repo);
+
+    const result = await service.detail("a");
+
+    expect(result).toEqual(venue);
+  });
+});

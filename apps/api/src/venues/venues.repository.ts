@@ -55,6 +55,19 @@ export class VenuesRepository {
     return { items, nextCursor };
   }
 
+  findBySlug(slug: string) {
+    return this.prisma.venue.findFirst({
+      where: { slug, status: "PUBLISHED" },
+      select: {
+        id: true, slug: true, name: true, category: true, cuisineType: true,
+        priceRange: true, signatureItems: true, transportNote: true, openingHours: true,
+        editorialNote: true, isBoutique: true, verifiedAt: true, source: true,
+        googleRating: true, googleRatingCount: true, googlePlaceId: true,
+        district: { select: { name: true, slug: true } },
+      },
+    });
+  }
+
   async findInBbox([minLng, minLat, maxLng, maxLat]: [number, number, number, number]) {
     return this.prisma.$queryRaw<Array<{ id: string; name: string; category: string; lat: number; lng: number }>>(Prisma.sql`
       SELECT v.id, v.name, v.category,
