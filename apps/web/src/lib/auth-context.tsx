@@ -9,7 +9,7 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -19,12 +19,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let stateChangeReceived = false;
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
+      if (!stateChangeReceived) {
+        setSession(data.session);
+        setLoading(false);
+      }
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      stateChangeReceived = true;
       setSession(newSession);
+      setLoading(false);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -42,7 +47,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: error?.message ?? null };
     },
     signOut: async () => {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      return { error: error?.message ?? null };
     },
   };
 
