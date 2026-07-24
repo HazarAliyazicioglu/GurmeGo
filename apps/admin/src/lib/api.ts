@@ -1,0 +1,59 @@
+import { createApiClient } from "@gurmego/api-client";
+import {
+  AdminQueueListSchema,
+  AdminQueueMutationResultSchema,
+  CsvImportResultSchema,
+  type AdminQueueItem,
+  type CsvImportResult,
+} from "@gurmego/shared";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1";
+
+export class ApiValidationError extends Error {
+  constructor(public endpoint: string, public issues: unknown) {
+    super(`Validation failed for ${endpoint}`);
+    this.name = "ApiValidationError";
+  }
+}
+
+// `type` is NOT a caller-supplied option — this app only ever displays REPORT items (see the
+// AdminQueueItemSchema comment), so the filter is hardcoded here, structurally, rather than left to
+// every call site to remember. A pending EDIT/re_verify item elsewhere in the real queue must never
+// be able to break this app's one page.
+export async function getQueue(token: string, filters: { status?: string } = {}): Promise<AdminQueueItem[]> {
+  const client = createApiClient(API_BASE, () => token);
+  const params = new URLSearchParams({ type: "REPORT", ...filters }).toString();
+  const raw = await client.get<unknown>(`/admin/queue?${params}`);
+  const result = AdminQueueListSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError("/admin/queue", result.error.issues);
+  return result.data;
+}
+
+export async function approveQueueItem(token: string, id: string): Promise<void> {
+  const client = createApiClient(API_BASE, () => token);
+  const raw = await client.post<unknown>(`/admin/queue/${id}/approve`, {});
+  const result = AdminQueueMutationResultSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError(`/admin/queue/${id}/approve`, result.error.issues);
+}
+
+export async function rejectQueueItem(token: string, id: string): Promise<void> {
+  const client = createApiClient(API_BASE, () => token);
+  const raw = await client.post<unknown>(`/admin/queue/${id}/reject`, {});
+  const result = AdminQueueMutationResultSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError(`/admin/queue/${id}/reject`, result.error.issues);
+}
+
+export async function importCsv(token: string, file: File): Promise<CsvImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/admin/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) throw new Error(`Import failed: ${res.status}`);
+  const raw = await res.json();
+  const result = CsvImportResultSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError("/admin/import", result.error.issues);
+  return result.data;
+}
