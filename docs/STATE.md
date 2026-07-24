@@ -54,6 +54,11 @@ aynı worktree'de `subagent-driven-development` ile yürütülecek. Kullanıcıy
 - isBoutique DRAFT durumunda true olabiliyor (kural PUBLISHED gerektiriyor); kısmi update'lerde bayat kalabiliyor.
 - REPORT onayı hiçbir düzeltme uygulamadan verifiedAt'i yeniliyor — ürün semantiği sorusu, kullanıcıya sorulmalı.
 - eslint no-explicit-any/no-unused-vars "warn" (74 önceden var olan kullanım), "error"a sıkılaştırılmalı.
+- Plan 2 Task 4: açık/kapalı (open-now) filtresi api-spec.md'de var ama Plan 1 hiç implemente etmedi
+  (`VenueListQuerySchema`'da `openNow` yok, repository'de opening-hours karşılaştırması yok) — web UI'da
+  da bilerek eklenmedi (var olmayan filtreyi UI'da göstermek çalışıyormuş gibi görünüp hiçbir şey yapmazdı).
+  Küçük, sınırlı iş: `openNow: z.coerce.boolean().optional()` şemaya + Europe/Istanbul saat dilimi
+  duyarlı SQL karşılaştırması repository'ye.
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar
 - Tam menü, semantic search/pgvector, geniş kullanıcı katkısı (MVP'de): ELENDİ → Faz 2. KALICI.
