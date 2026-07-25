@@ -175,6 +175,23 @@ describe("KuyrukPage", () => {
     await waitFor(() => expect(screen.queryByText("Test Cafe")).not.toBeInTheDocument());
   });
 
+  it("keeps the queue list and action buttons visible/interactive after a mutation failure (round-3 regression: round-2's fix hid the whole page on ANY error, including mutation errors, not just load errors)", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]);
+    approveQueueItem.mockRejectedValueOnce(new Error("network error"));
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    // The already-loaded queue item and its action buttons must still be visible and interactive —
+    // a mutation failure must not hide the list the way a load failure legitimately does.
+    expect(screen.getByText("Test Cafe")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /onayla/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reddet/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("empty-state")).not.toBeInTheDocument();
+  });
+
   it("does not show the empty-state message alongside the error banner when the initial load fails", async () => {
     // Regression test: before the fix, `items.length === 0` alone controlled the empty state, so a
     // rejected initial getQueue() (items stays []) showed BOTH "Kuyruk yüklenemedi" and "Bekleyen
