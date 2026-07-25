@@ -1,13 +1,14 @@
-import { Module, MiddlewareConsumer, NestModule } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
-import { JwtAuthMiddleware } from "./jwt-auth.middleware";
+import { JwtAuthGuard } from "./jwt-auth.guard";
 import { RolesGuard } from "./roles.guard";
 
 @Module({
-  providers: [{ provide: APP_GUARD, useClass: RolesGuard }],
+  providers: [
+    // Registration order matters: NestJS runs multiple APP_GUARD providers in order.
+    // JwtAuthGuard must run first to populate request.user before RolesGuard reads it.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
-export class AuthModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(JwtAuthMiddleware).forRoutes("*");
-  }
-}
+export class AuthModule {}

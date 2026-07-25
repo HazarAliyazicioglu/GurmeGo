@@ -16,7 +16,7 @@ describe("AdminReportsController (e2e) — RolesGuard", () => {
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-    // Test-only stand-in for JwtAuthMiddleware: sets req.user from a header instead of verifying a real JWT.
+    // Test-only stand-in for JwtAuthGuard: sets req.user from a header instead of verifying a real JWT.
     app.getHttpAdapter()
       .getInstance()
       .addHook("onRequest", (req: any, _reply: any, done: () => void) => {
