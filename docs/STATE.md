@@ -22,19 +22,15 @@ Minimuma indirilmiş Plan 4a tasarımını son bir doğrulama red-team turundan 
 `packages/shared`'ın build adımı yok — `dist/main.js` gerçek Node'da çöküyor (Jest/ts-node bunu
 maskeliyor). Geçici çözüm: `npx ts-node -T src/main.ts`. Kalıcı çözüm Plan 4a Bölüm 2'de (düz `tsc`).
 
-## Öncelikli takip: Supabase Auth↔Prisma User senkronizasyonu yok (idea-red-team, 2026-07-25)
-`auth.users`'a kayıt olan bir kullanıcı için Prisma `User` tablosunda otomatik satır oluşturan
-hiçbir trigger/senkronizasyon yok. Favori listesi oluşturma `User` FK'sine dayanıyor — gerçek bir
-kullanıcı kayıt olup ilk favoriyi eklemeye çalıştığında FK hatası alabilir. Pilot açılmadan önce
-düzeltilmeli (muhtemelen bir Supabase DB trigger veya `apps/api`'de ilk-istek-zamanı upsert).
-
 ## Yakın kararlar
 - Round 1/2/3 red-team + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5
 - Plan 1 mimari kararları: docs/adr/001-003
-- Plan 3 red-team + final-review kayıtları: docs/superpowers/plans/2026-07-25-admin-panel.md sonu
-- Plan 4a red-team kayıtları: docs/superpowers/specs/2026-07-25-infra-ci-design.md sonu
+- Plan 3/4a red-team + final-review kayıtları: docs/superpowers/plans/2026-07-25-admin-panel.md ve
+  docs/superpowers/specs/2026-07-25-infra-ci-design.md dosya sonları
 
 ## Ertelenen takip maddeleri (özet — tam liste docs/CHANGELOG.md 2026-07-25 girdisinde)
+- **Öncelikli:** Supabase Auth↔Prisma `User` senkronizasyonu yok (trigger eksik) — kayıt olan
+  kullanıcı ilk favoriyi eklerken FK hatası alabilir. Pilot açılmadan önce düzeltilmeli.
 - Pilot karar metrikleri (Maps/kaydet/paylaş, 4. hafta dönüş) hiçbir yerde ölçülmüyor — ayrı plan.
 - Auth: JWT `user_role` claim'i gerçek projede custom access token hook gerektirir (lokal doğrulandı).
 - RateLimitGuard trustProxy yok, sayaçlar temizlenmiyor; eslint any/unused "warn" kaldı (86 uyarı).
