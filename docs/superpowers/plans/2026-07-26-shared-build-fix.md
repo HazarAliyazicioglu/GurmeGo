@@ -66,8 +66,10 @@ the stack is stopped, run `npx supabase start` first (can take a minute on first
 
 - [ ] **Step 2: Apply migrations so the precondition is real, not assumed**
 
-Run:
+Run — **pass `DATABASE_URL` explicitly**, using your own Step 1 `DB_URL` value, so this genuinely
+targets the stack you just confirmed rather than whatever `apps/api/.env` happens to contain:
 ```bash
+DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54422/postgres" \
 pnpm --filter @gurmego/api exec prisma migrate deploy
 ```
 Expected: `No pending migrations to apply.` or a list of migrations being applied, ending
@@ -444,3 +446,14 @@ kuralı gereği bu durumda ikinci (karşıt pozisyon zorlayan) çağrı atlanır
   komutu repo kökünden çalıştıracak şekilde yazıldı (Step 1), bu belirsizliği pratikte sıfırlıyor.
 
 **Şüpheli mutabakat kontrolü atlandı (round 2):** Verdikt yine DÜZELTİLEBİLİR, ikinci çağrı gerekmedi.
+
+### Round 3 (DÜZELTİLEBİLİR, tek satırlık düzeltme)
+
+**Kabul edildi:** Task 1 Step 2'nin `prisma migrate deploy` çağrısına `DATABASE_URL` açıkça
+verilmiyordu — `apps/api/.env`'in bayat/farklı bir değeri varsa migration'lar Step 1'de doğrulanan
+gerçek DB'ye değil, o bayat hedefe uygulanabilirdi, RED/GREEN kanıtını geçersiz kılabilirdi.
+Düzeltildi: `DATABASE_URL` artık açıkça geçiliyor. Codex'in kendi ifadesiyle: "bu düzeltmeden sonra
+HAZIR."
+
+**Şüpheli mutabakat kontrolü atlandı (round 3):** Tek satırlık, mekanik bir düzeltmeydi; kabul
+edilen bulgu HAZIR'ı doğrudan tetikleyen türden, ikinci bir tur gerekmedi.
