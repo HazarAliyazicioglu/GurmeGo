@@ -6,10 +6,8 @@ review'dan geçti, `master`'a henüz merge edilmedi (kullanıcı kararı: hepsi 
 Detay: `.superpowers/sdd/progress.md` (worktree-lokal, git-ignored, git log'da kalıcı).
 
 ## Şu an ne yapıyoruz
-Plan 4a bitti: `packages/shared` artık `tsc` ile `dist/`'e derleniyor (+`prepare` script, kurulum
-sonrası otomatik), gerçek bir process-boot smoke test (`scripts/smoke-api.sh`) hem lokal hem CI'da
-bu bug'ın regresyonunu yakalıyor. 6 idea-red-team + 3 plan-red-team + final review (Superpowers +
-bağımsız Codex) turundan geçti — hepsi TEMİZ. Detay: `docs/superpowers/plans/2026-07-26-shared-build-fix.md`.
+Plan 4a bitti (`packages/shared` artık `tsc` ile `dist/`'e derleniyor, gerçek process-boot smoke
+test CI'da). Detay: `docs/superpowers/plans/2026-07-26-shared-build-fix.md`.
 
 ## Sıradaki adım
 Plan 4b'den önce kapsamlı bir A-Z ürün+kod denetimi yapıldı: `docs/AUDIT-2026-07-26.md`. Verdikt:
