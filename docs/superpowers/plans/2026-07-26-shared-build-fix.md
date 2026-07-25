@@ -258,12 +258,18 @@ Run:
 ```bash
 rm -rf packages/shared/dist
 pnpm install
-test -f packages/shared/dist/index.js && grep -q "PRICE_RANGE_VALUES" packages/shared/dist/index.js && echo "PREPARE_OK" || echo "PREPARE_MISSING"
+node -e "const s = require('./packages/shared/dist/index.js'); process.exit('PRICE_RANGE_VALUES' in s && Array.isArray(s.PRICE_RANGE_VALUES) ? 0 : 1)" && echo "PREPARE_OK" || echo "PREPARE_MISSING"
 ```
+(Do not `grep` `dist/index.js`'s text for the export name — `tsc` compiles the barrel's `export *
+from "./enums/price-range"` into a runtime `__exportStar(require(...), exports)` copy loop, so the
+literal string `PRICE_RANGE_VALUES` never appears in `index.js`'s source text even when the build
+is completely correct. A real `require()` + property check is the only way to verify this without
+a false negative — this exact mistake was caught during Task 2's execution, not before.)
+
 Expected: `PREPARE_OK` — this proves `pnpm install` alone (not a `turbo run` command) regenerates
-a real, non-empty `dist/index.js` (the `grep` checks for a known real export, not just file
-existence). If `PREPARE_MISSING` is printed instead, stop and report this as a blocker — it means
-the round-4 fix doesn't actually hold in this environment (see Global Constraints' note on
+a real, working `dist/index.js` that genuinely exposes the package's exports at runtime. If
+`PREPARE_MISSING` is printed instead, stop and report this as a blocker — it means the round-4 fix
+doesn't actually hold in this environment (see Global Constraints' note on
 `ignore-scripts` as the one known cause).
 
 - [ ] **Step 5: Confirm nothing downstream broke — existing test suites plus web/admin typecheck**
