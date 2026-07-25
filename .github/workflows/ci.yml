@@ -36,3 +36,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           SUPABASE_JWKS_URL: http://localhost:54321/auth/v1/.well-known/jwks.json
+      - run: pnpm exec turbo run build --filter=@gurmego/api...
+      - run: bash scripts/smoke-api.sh
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          SUPABASE_JWKS_URL: http://localhost:54321/auth/v1/.well-known/jwks.json
