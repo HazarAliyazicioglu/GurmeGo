@@ -60,6 +60,37 @@ describe("ProtectedLayout", () => {
     const { default: Layout } = await import("./layout");
     render(<Layout><div>içerik</div></Layout>);
     fireEvent.click(await screen.findByRole("button", { name: /çıkış/i }));
-    expect(signOut).toHaveBeenCalled();
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/giris"));
+  });
+
+  it("shows a visible error and does NOT redirect when signOut() resolves with an error", async () => {
+    // Regression test: before the fix, the button handler was `signOut().then(() => router.push(...))`
+    // — it never inspected the resolved `{ error }` value, so a sign-out that resolved with an error
+    // (e.g. session already invalid server-side) still redirected to /giris as if it had succeeded,
+    // silently leaving the stale session in place with no feedback to the curator.
+    const signOut = vi.fn().mockResolvedValue({ error: "Oturum zaten geçersiz." });
+    vi.doMock("@/lib/auth-context", () => ({
+      useAuth: () => ({ user: { id: "u1" }, role: "curator", loading: false, signOut }),
+    }));
+    const { default: Layout } = await import("./layout");
+    render(<Layout><div>içerik</div></Layout>);
+    fireEvent.click(await screen.findByRole("button", { name: /çıkış/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
+  it("shows a visible error and does NOT redirect when signOut() rejects outright", async () => {
+    const signOut = vi.fn().mockRejectedValue(new Error("network error"));
+    vi.doMock("@/lib/auth-context", () => ({
+      useAuth: () => ({ user: { id: "u1" }, role: "curator", loading: false, signOut }),
+    }));
+    const { default: Layout } = await import("./layout");
+    render(<Layout><div>içerik</div></Layout>);
+    fireEvent.click(await screen.findByRole("button", { name: /çıkış/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
   });
 });

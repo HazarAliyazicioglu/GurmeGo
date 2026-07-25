@@ -1,11 +1,29 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, role, loading, error, signOut } = useAuth();
   const router = useRouter();
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+
+  async function handleSignOut() {
+    setSignOutError(null);
+    try {
+      const result = await signOut();
+      // Supabase's signOut() resolves with `{ error }` rather than rejecting on failure (e.g. the
+      // session was already invalid server-side) — checking only for a rejected promise would miss
+      // that and redirect as if sign-out succeeded, silently leaving the stale session in place.
+      if (result?.error) {
+        setSignOutError("Çıkış yapılamadı. Tekrar deneyin.");
+        return;
+      }
+      router.push("/giris");
+    } catch {
+      setSignOutError("Çıkış yapılamadı. Tekrar deneyin.");
+    }
+  }
 
   useEffect(() => {
     // `error` means the session state is UNKNOWN (getSession() rejected), not "definitely
@@ -42,10 +60,15 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
   return (
     <>
-      <header className="flex items-center justify-end border-b border-slate-200 bg-white px-4 py-2 sm:px-6 lg:px-8">
+      <header className="flex items-center justify-end gap-3 border-b border-slate-200 bg-white px-4 py-2 sm:px-6 lg:px-8">
+        {signOutError && (
+          <p role="alert" className="text-xs font-semibold text-rose-700">
+            {signOutError}
+          </p>
+        )}
         <button
           type="button"
-          onClick={() => void signOut().then(() => router.push("/giris"))}
+          onClick={() => void handleSignOut()}
           className="text-xs font-semibold text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
         >
           Çıkış yap
