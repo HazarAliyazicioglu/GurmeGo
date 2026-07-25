@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { AdminVenuesService } from "./admin-venues.service";
 
 const VALID_CREATE_INPUT = {
@@ -240,6 +241,53 @@ describe("AdminVenuesService.importRows", () => {
     expect(result.rowErrors).toEqual([{ row: 1, message: "Mekan oluşturulamadı: beklenmeyen hata" }]);
     expect(result.rowErrors[0].message).not.toContain("fk_district_internal_detail");
     expect(consoleErrorSpy).toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("treats a unique-constraint violation on insert as a clean skip, not a row error (concurrent-import race)", async () => {
+    // The pre-check (findUnique by slug) is not atomic with the insert: two concurrent imports of the
+    // same new slug can both pass the pre-check and both attempt to create, so the DB's unique
+    // constraint — not this code — is the real source of truth. This must surface as "skipped,
+    // already exists", the same outcome as the pre-check catching it, not as a row error.
+    const rows = [
+      {
+        row: 1,
+        data: {
+          name: "Race Cafe",
+          slug: "race-cafe",
+          districtSlug: "kadikoy",
+          category: "cafe",
+          priceRange: "MODERATE" as const,
+          branchCount: 1,
+          franchiseFlag: false,
+          lat: 40.99,
+          lng: 29.02,
+          openingHours: { mon_fri: "09:00-18:00" },
+        },
+      },
+    ];
+    const prisma = {
+      district: { findUnique: jest.fn().mockResolvedValue({ id: "d1", slug: "kadikoy" }) },
+      // Pre-check sees "does not exist yet" (a concurrent import hasn't committed when this reads).
+      venue: { findUnique: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
+    const uniqueViolation = new Prisma.PrismaClientKnownRequestError("Raw query failed.", {
+      code: "P2010",
+      clientVersion: "5.22.0",
+      meta: { code: "23505", message: 'duplicate key value violates unique constraint "Venue_slug_key"' },
+    });
+    const venuesRepository = { createWithLocation: jest.fn().mockRejectedValue(uniqueViolation) } as any;
+    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await service.importRows(rows);
+
+    expect(result.created).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.rowErrors).toEqual([]);
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
   });

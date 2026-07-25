@@ -7,7 +7,11 @@ import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
-  await app.register(fastifyMultipart);
+  // CSV import (`POST /admin/import`) is the only multipart consumer — a curator-uploaded venue
+  // list, not a general file-upload feature. Without a limit, `req.file()`/`toBuffer()` buffers an
+  // arbitrarily large upload entirely in memory before any Zod validation runs. 10 MB comfortably
+  // covers this MVP's CSV use case (tens of thousands of rows) with headroom.
+  await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   app.setGlobalPrefix("v1", { exclude: ["health"] });
 
   // Browser clients (Plan 2's Next.js web/PWA app, Plan 3's admin panel) need CORS to call this API

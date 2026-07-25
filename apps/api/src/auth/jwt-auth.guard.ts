@@ -1,5 +1,24 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
-import { createRemoteJWKSet, jwtVerify, JWTVerifyOptions } from "jose";
+import { FastifyRequest } from "fastify";
+import { createRemoteJWKSet, jwtVerify, JWTPayload, JWTVerifyOptions } from "jose";
+
+export interface AuthenticatedUser {
+  id: string;
+  role: string;
+}
+
+// Populated by this guard's `canActivate` (see below) and read by `RolesGuard`/`@Req()` handlers via
+// the SAME `ExecutionContext.switchToHttp().getRequest()` call — see the class-level comment for why
+// that "same object" property matters.
+export interface AuthenticatedRequest extends FastifyRequest {
+  user?: AuthenticatedUser;
+}
+
+// Supabase's custom access token hook nests the app's role claim under `user_role`; everything else
+// on the payload is the standard JWT claim set `jose` already types via `JWTPayload`.
+interface SupabaseJwtPayload extends JWTPayload {
+  user_role?: string;
+}
 
 const JWKS = createRemoteJWKSet(new URL(process.env.SUPABASE_JWKS_URL!));
 
@@ -32,16 +51,16 @@ function buildVerifyOptions(): JWTVerifyOptions {
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const req: any = context.switchToHttp().getRequest();
-    const header = req.headers["authorization"];
+    const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const header = req.headers.authorization;
     if (!header?.startsWith("Bearer ")) {
       req.user = undefined;
       return true;
     }
     try {
       const token = header.slice("Bearer ".length);
-      const { payload } = await jwtVerify(token, JWKS, buildVerifyOptions());
-      req.user = { id: payload.sub, role: (payload as any).user_role ?? "user" };
+      const { payload } = await jwtVerify<SupabaseJwtPayload>(token, JWKS, buildVerifyOptions());
+      req.user = { id: payload.sub ?? "", role: payload.user_role ?? "user" };
     } catch {
       throw new UnauthorizedException({ error: { code: "INVALID_TOKEN", message: "Geçersiz oturum" } });
     }

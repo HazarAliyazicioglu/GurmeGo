@@ -1,9 +1,22 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { AdminVenueCreateInput, AdminVenueUpdateInput } from "@gurmego/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { BoutiqueService } from "../../rule-engine/boutique.service";
 import { VenuesRepository } from "../../venues/venues.repository";
 import type { CsvImportRow } from "./csv-import.service";
+
+// Postgres unique_violation (SQLSTATE 23505). `createWithLocation` inserts via `$queryRaw` (ADR 002 —
+// the `location` PostGIS column forces raw SQL), so a constraint violation surfaces as a Prisma
+// `PrismaClientKnownRequestError` with code P2010 ("raw query failed") and the underlying Postgres
+// error code nested in `meta.code`, NOT as the P2002 code the generated Prisma Client API would use.
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    err.code === "P2010" &&
+    (err.meta as { code?: string } | undefined)?.code === "23505"
+  );
+}
 
 @Injectable()
 export class AdminVenuesService {
@@ -105,6 +118,16 @@ export class AdminVenuesService {
         });
         created++;
       } catch (err) {
+        // The findUnique-by-slug check above is a pre-check, not a lock — two concurrent imports of
+        // the same new slug can both pass it and both attempt to insert, so the DB's unique
+        // constraint (not this code) is the actual source of truth. Given this MVP's real usage
+        // (1-2 curators, not genuine concurrency), we don't need distributed locking: catching the
+        // resulting unique-violation here and treating it as "skip, already exists" reaches the same
+        // outcome as the pre-check catching it, without a 500 or a misleading generic row error.
+        if (isUniqueViolation(err)) {
+          skipped++;
+          continue;
+        }
         // Prisma/repository error detail (schema/column names, constraint names, ...) must not
         // leak to the client — log it server-side and return a generic row error instead.
         console.error(`CSV import row ${rowNumber} failed:`, err);

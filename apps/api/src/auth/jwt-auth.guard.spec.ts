@@ -1,3 +1,6 @@
+import type { ExecutionContext } from "@nestjs/common";
+import type { Reflector } from "@nestjs/core";
+
 const jwtVerifyMock = jest.fn();
 
 jest.mock("jose", () => ({
@@ -81,5 +84,41 @@ describe("JwtAuthGuard", () => {
     expect(req.user).toBeUndefined();
     expect(result).toBe(true);
     expect(jwtVerifyMock).not.toHaveBeenCalled();
+  });
+
+  // Regression test for the 403-always bug (docs/STATE.md "ACİL" entry, fixed by making this a Guard
+  // instead of NestMiddleware): the previous implementation set `req.user` on a request object that
+  // `RolesGuard` never saw, because under @nestjs/platform-fastify, classic NestMiddleware and
+  // `ExecutionContext.switchToHttp().getRequest()` return two DIFFERENT request objects. Every mocked
+  // unit test (including all the ones above) constructs a single object and hands it to both the
+  // guard-under-test and its own assertions, so none of them could ever have caught that class of bug
+  // — they never modeled "does a SECOND consumer, reading via the same ExecutionContext, see the
+  // mutation." This test drives both `JwtAuthGuard` and the real `RolesGuard` off the exact same
+  // `ExecutionContext`, the way Nest's guard chain actually does per-request, and would fail again if
+  // the two guards ever went back to reading from independently-constructed request objects.
+  it("writes req.user somewhere a subsequently-run RolesGuard, reading via the SAME ExecutionContext, can see it", async () => {
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", user_role: "curator" } });
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const { RolesGuard } = await import("./roles.guard");
+
+    const req: { headers: Record<string, string>; user?: { id: string; role: string } } = {
+      headers: { authorization: "Bearer sometoken" },
+    };
+    // A single shared ExecutionContext double whose getRequest() always returns the SAME req
+    // instance — modeling Nest's real per-request ExecutionContext, not two separately-built mocks.
+    const context = {
+      switchToHttp: () => ({ getRequest: () => req }),
+      getHandler: () => ({}),
+      getClass: () => ({}),
+    } as unknown as ExecutionContext;
+    const reflector = { getAllAndOverride: () => ["curator", "admin"] } as unknown as Reflector;
+
+    const jwtGuard = new JwtAuthGuard();
+    const rolesGuard = new RolesGuard(reflector);
+
+    await jwtGuard.canActivate(context);
+    const rolesResult = rolesGuard.canActivate(context);
+
+    expect(rolesResult).toBe(true);
   });
 });
