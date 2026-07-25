@@ -7,7 +7,7 @@
     "build": "next build",
     "generate-icons": "node scripts/generate-icons.mjs",
     "start": "next start -p 3002",
-    "lint": "next lint",
+    "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test"
