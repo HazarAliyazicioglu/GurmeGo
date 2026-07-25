@@ -26,6 +26,12 @@ const BASE_ITEM = {
   venue: { name: "Test Cafe", slug: "test-cafe" }, urgent: false,
 };
 
+const OTHER_ITEM = {
+  ...BASE_ITEM,
+  id: "q2",
+  venue: { name: "Other Cafe", slug: "other-cafe" },
+};
+
 describe("KuyrukPage", () => {
   it("lists pending items and approves one on click", async () => {
     getQueue.mockResolvedValueOnce([BASE_ITEM]).mockResolvedValueOnce([]); // refetch after approve returns empty
@@ -116,5 +122,66 @@ describe("KuyrukPage", () => {
 
     resolveApprove();
     await waitFor(() => expect(approveBtn).not.toBeDisabled());
+  });
+
+  it("tracks in-flight mutations per row: finishing row B's mutation must not re-enable row A's buttons while A is still in flight", async () => {
+    // Regression test for the round-1 bug: a single shared `mutatingId` value meant starting row B's
+    // mutation (mutatingId="q2") while row A's (mutatingId="q1") was still in flight overwrote the
+    // shared id, incorrectly re-enabling row A's buttons mid-flight and allowing a curator to
+    // double-fire row A. This must fail against the pre-fix single-id implementation.
+    getQueue.mockResolvedValueOnce([BASE_ITEM, OTHER_ITEM]);
+    let resolveApproveA: () => void = () => {};
+    let resolveApproveB: () => void = () => {};
+    approveQueueItem.mockReset().mockImplementation((_token: string, id: string) => {
+      if (id === "q1") return new Promise<void>((resolve) => { resolveApproveA = resolve; });
+      return new Promise<void>((resolve) => { resolveApproveB = resolve; });
+    });
+
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Other Cafe")).toBeInTheDocument());
+
+    const approveButtons = screen.getAllByRole("button", { name: /onayla/i });
+    const rejectButtons = screen.getAllByRole("button", { name: /reddet/i });
+    const [approveA, approveB] = approveButtons;
+    const [rejectA, rejectB] = rejectButtons;
+
+    // Start row A's mutation.
+    fireEvent.click(approveA);
+    await waitFor(() => expect(approveA).toBeDisabled());
+    expect(rejectA).toBeDisabled();
+    // Row B is untouched so far.
+    expect(approveB).not.toBeDisabled();
+
+    // Start row B's mutation while A is still in flight.
+    getQueue.mockResolvedValueOnce([BASE_ITEM, OTHER_ITEM]);
+    fireEvent.click(approveB);
+    await waitFor(() => expect(approveB).toBeDisabled());
+    expect(rejectB).toBeDisabled();
+
+    // Row A must STILL be disabled — its own mutation hasn't resolved yet.
+    expect(approveA).toBeDisabled();
+    expect(rejectA).toBeDisabled();
+
+    // Resolve B first; A must remain disabled since only B's mutation completed.
+    resolveApproveB();
+    await waitFor(() => expect(approveB).not.toBeDisabled());
+    expect(approveA).toBeDisabled();
+    expect(rejectA).toBeDisabled();
+
+    // Now resolve A; A's buttons finally re-enable.
+    getQueue.mockResolvedValueOnce([OTHER_ITEM]);
+    resolveApproveA();
+    await waitFor(() => expect(screen.queryByText("Test Cafe")).not.toBeInTheDocument());
+  });
+
+  it("does not show the empty-state message alongside the error banner when the initial load fails", async () => {
+    // Regression test: before the fix, `items.length === 0` alone controlled the empty state, so a
+    // rejected initial getQueue() (items stays []) showed BOTH "Kuyruk yüklenemedi" and "Bekleyen
+    // bildirim yok" at once — a contradictory "failed to load" + "all caught up" message.
+    getQueue.mockRejectedValueOnce(new Error("network error"));
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/yüklenemedi/i));
+    expect(screen.queryByTestId("empty-state")).not.toBeInTheDocument();
   });
 });

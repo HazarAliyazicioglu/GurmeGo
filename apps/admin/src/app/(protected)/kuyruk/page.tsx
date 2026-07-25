@@ -10,10 +10,12 @@ export default function KuyrukPage() {
   const [items, setItems] = useState<AdminQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // The row currently being approved/rejected — its buttons are disabled while this is set so a
-  // double-click (or clicking both approve and reject) can't fire two concurrent mutations against
-  // the same queue item.
-  const [mutatingId, setMutatingId] = useState<string | null>(null);
+  // The set of row ids currently being approved/rejected — a row's buttons are disabled while its own
+  // id is in this set, so a double-click (or clicking both approve and reject) can't fire two
+  // concurrent mutations against the same queue item. This MUST be a set, not a single shared id:
+  // with a single id, starting row B's mutation while row A's is still in flight overwrote the
+  // shared value and re-enabled row A's buttons mid-flight, allowing a double-fire on row A.
+  const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
 
   const token = session?.access_token;
 
@@ -37,9 +39,21 @@ export default function KuyrukPage() {
     void refetch();
   }, [refetch]);
 
+  function addMutatingId(id: string) {
+    setMutatingIds((prev) => new Set(prev).add(id));
+  }
+
+  function removeMutatingId(id: string) {
+    setMutatingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
   async function handleApprove(id: string) {
     if (!token) return;
-    setMutatingId(id);
+    addMutatingId(id);
     setError(null);
     try {
       await approveQueueItem(token, id);
@@ -47,13 +61,13 @@ export default function KuyrukPage() {
     } catch {
       setError("İşlem gerçekleştirilemedi. Tekrar deneyin.");
     } finally {
-      setMutatingId(null);
+      removeMutatingId(id);
     }
   }
 
   async function handleReject(id: string) {
     if (!token) return;
-    setMutatingId(id);
+    addMutatingId(id);
     setError(null);
     try {
       await rejectQueueItem(token, id);
@@ -61,7 +75,7 @@ export default function KuyrukPage() {
     } catch {
       setError("İşlem gerçekleştirilemedi. Tekrar deneyin.");
     } finally {
-      setMutatingId(null);
+      removeMutatingId(id);
     }
   }
 
@@ -120,38 +134,43 @@ export default function KuyrukPage() {
           </div>
         )}
 
-        {items.length === 0 ? (
-          <section className="border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
-            <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-              <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.05l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.815a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <p data-testid="empty-state" className="text-sm font-semibold text-slate-800">
-              Bekleyen bildirim yok.
-            </p>
-            <p className="mt-1 text-xs text-slate-500">Kürasyon kuyruğu güncel.</p>
-          </section>
-        ) : (
-          <section aria-label="Bekleyen bildirimler">
-            <div className="mb-2 hidden grid-cols-[minmax(12rem,0.8fr)_minmax(18rem,1.45fr)_minmax(24rem,1fr)] gap-6 px-5 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-500 lg:grid">
-              <span>Mekan</span>
-              <span className="pl-6">Bildirim</span>
-              <span className="text-right">İşlem</span>
-            </div>
-            <ul className="space-y-2">
-              {items.map((item) => (
-                <QueueItem
-                  key={item.id}
-                  item={item}
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  pending={mutatingId === item.id}
-                />
-              ))}
-            </ul>
-          </section>
-        )}
+        {/* Only show list/empty-state content when the load genuinely succeeded — rendering the
+            "nothing pending, all caught up" empty state alongside the error banner above ("Kuyruk
+            yüklenemedi") would be a contradictory message to a curator, and rendering the list
+            section when the load failed has nothing to show anyway. */}
+        {!error &&
+          (items.length === 0 ? (
+            <section className="border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
+              <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                  <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.05l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.815a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p data-testid="empty-state" className="text-sm font-semibold text-slate-800">
+                Bekleyen bildirim yok.
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Kürasyon kuyruğu güncel.</p>
+            </section>
+          ) : (
+            <section aria-label="Bekleyen bildirimler">
+              <div className="mb-2 hidden grid-cols-[minmax(12rem,0.8fr)_minmax(18rem,1.45fr)_minmax(24rem,1fr)] gap-6 px-5 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-500 lg:grid">
+                <span>Mekan</span>
+                <span className="pl-6">Bildirim</span>
+                <span className="text-right">İşlem</span>
+              </div>
+              <ul className="space-y-2">
+                {items.map((item) => (
+                  <QueueItem
+                    key={item.id}
+                    item={item}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    pending={mutatingIds.has(item.id)}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
       </div>
     </main>
   );
