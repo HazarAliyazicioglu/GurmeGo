@@ -6,14 +6,16 @@ merge edilmedi (kullanıcı kararı: hepsi bitince tek seferde). Detay: `.superp
 (worktree-lokal, git-ignored, git log'da kalıcı).
 
 ## Şu an ne yapıyoruz
-Plan 4a tasarımı 2 idea-red-team turundan NO-GO aldı (1: gereksiz staging/CD koreografisi; 2:
-Railway/Vercel deploy detayları hesapsız yazılamaz + `tsup` gereksiz çıktı). Plan artık yalnızca
-`packages/shared` build fix'ine (düz `tsc`) indirildi — deploy hazırlığı hesaplar açılınca ayrı
-oturumda yazılacak. Tasarım: `docs/superpowers/specs/2026-07-25-infra-ci-design.md`.
+Plan 4a tasarımı 6 idea-red-team turundan geçti (1-2: gereksiz staging/CD koreografisi ve
+Railway/Vercel detayları hesapsız yazılamaz → plan yalnızca `packages/shared` build fix'ine
+indirildi; 3-6: doğrulama/build komutu detayları — `tsup` gereksiz, smoke test yarış durumu,
+`prepare` script gerekliliği, `pnpm exec turbo` gerekliliği — hepsi plana işlendi). Round 5 açıkça
+"düzeltmeden sonra GO" dedi, round 6 timeout aldı ama bulgular zaten mekanik seviyeye inmişti;
+kullanıcı kararıyla burada durulup `writing-plans`'a geçildi. Tasarım:
+`docs/superpowers/specs/2026-07-25-infra-ci-design.md` (6 turun tam kaydı dosya sonunda).
 
 ## Sıradaki adım
-Minimuma indirilmiş Plan 4a tasarımını son bir doğrulama red-team turundan geçir, sonra
-`writing-plans`.
+`writing-plans` ile Plan 4a'nın implementasyon planını yaz, ardından zorunlu `plan-red-team`.
 
 ## Bloke olanlar
 - Yok.
