@@ -6,21 +6,27 @@ merge edilmedi (kullanıcı kararı: hepsi bitince tek seferde). Detay: `.superp
 (worktree-lokal, git-ignored, git log'da kalıcı).
 
 ## Şu an ne yapıyoruz
-Plan 4a (Infra/CI) tasarımı: idea-red-team round 1 **NO-GO** (orijinal tasarım 150 kullanıcılık
-pilotun önüne gereksiz kurumsal staging/prod CI/CD koreografisi koyuyordu). Kapsam küçültüldü:
-yalnızca `packages/shared` build fix + basit Railway/Vercel deploy hazırlığı + provisioning
-runbook. Tasarım: `docs/superpowers/specs/2026-07-25-infra-ci-design.md` (red-team bulguları dosya
-sonunda).
+Plan 4a tasarımı 2 idea-red-team turundan NO-GO aldı (1: gereksiz staging/CD koreografisi; 2:
+Railway/Vercel deploy detayları hesapsız yazılamaz + `tsup` gereksiz çıktı). Plan artık yalnızca
+`packages/shared` build fix'ine (düz `tsc`) indirildi — deploy hazırlığı hesaplar açılınca ayrı
+oturumda yazılacak. Tasarım: `docs/superpowers/specs/2026-07-25-infra-ci-design.md`.
 
 ## Sıradaki adım
-Küçültülmüş Plan 4a tasarımını hızlı bir doğrulama red-team turundan geçir, sonra `writing-plans`.
+Minimuma indirilmiş Plan 4a tasarımını son bir doğrulama red-team turundan geçir, sonra
+`writing-plans`.
 
 ## Bloke olanlar
 - Yok.
 
 ## Acil: production build kırık (Plan 4a'da çözülecek)
 `packages/shared`'ın build adımı yok — `dist/main.js` gerçek Node'da çöküyor (Jest/ts-node bunu
-maskeliyor). Geçici çözüm: `npx ts-node -T src/main.ts`. Kalıcı çözüm Plan 4a Bölüm 2'de (tsup).
+maskeliyor). Geçici çözüm: `npx ts-node -T src/main.ts`. Kalıcı çözüm Plan 4a Bölüm 2'de (düz `tsc`).
+
+## Öncelikli takip: Supabase Auth↔Prisma User senkronizasyonu yok (idea-red-team, 2026-07-25)
+`auth.users`'a kayıt olan bir kullanıcı için Prisma `User` tablosunda otomatik satır oluşturan
+hiçbir trigger/senkronizasyon yok. Favori listesi oluşturma `User` FK'sine dayanıyor — gerçek bir
+kullanıcı kayıt olup ilk favoriyi eklemeye çalıştığında FK hatası alabilir. Pilot açılmadan önce
+düzeltilmeli (muhtemelen bir Supabase DB trigger veya `apps/api`'de ilk-istek-zamanı upsert).
 
 ## Yakın kararlar
 - Round 1/2/3 red-team + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5
