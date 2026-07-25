@@ -6,14 +6,14 @@ merge edilmedi (kullanıcı kararı: hepsi bitince tek seferde). Detay: `.superp
 (worktree-lokal, git-ignored, git log'da kalıcı).
 
 ## Şu an ne yapıyoruz
-Plan 4a tasarımı 6 idea-red-team turundan geçti — plan yalnızca `packages/shared` build fix'ine
-indirildi (Railway/Vercel hesapsız yazılamaz), sonraki turlar `tsup`→düz`tsc`, smoke test yarış
-durumu, `prepare` script, `pnpm exec turbo` gibi mekanik detayları düzeltti. Round 5 "düzeltmeden
-sonra GO" dedi; round 6 timeout aldı ama bulgular zaten mekanikti, burada durulup devam edildi.
-Tasarım: `docs/superpowers/specs/2026-07-25-infra-ci-design.md` (6 turun tam kaydı dosya sonunda).
+Plan 4a tasarımı 6 idea-red-team turundan geçti, plan yazıldı ve 2 plan-red-team turundan geçti
+(DB önkoşulu eksikliği, curl timeout/exact-200, gerçek port uyuşmazlığı — bkz. aşağıdaki madde —
+ve remote'suz repoda push varsayımı gibi gerçek bulgular düzeltildi). Plan:
+`docs/superpowers/plans/2026-07-26-shared-build-fix.md`. Tasarım:
+`docs/superpowers/specs/2026-07-25-infra-ci-design.md`.
 
 ## Sıradaki adım
-`writing-plans` ile Plan 4a'nın implementasyon planını yaz, ardından zorunlu `plan-red-team`.
+Plan 4a'yı yürüt (`subagent-driven-development`), ardından zorunlu final review.
 
 ## Bloke olanlar
 - Yok.
@@ -36,6 +36,8 @@ maskeliyor). Geçici çözüm: `npx ts-node -T src/main.ts`. Kalıcı çözüm P
 - RateLimitGuard trustProxy yok, sayaçlar temizlenmiyor; eslint any/unused "warn" kaldı (86 uyarı).
 - Plan 1: open-now filtresi yok. Plan 2: E2E kapsamı kısmi, birkaç Minor UI bulgusu.
 - Plan 3: birkaç controller'da gereksiz (zararsız) çift guard.
+- `apps/api/.env.example`'daki varsayılan Supabase portları (54321/54322) bu worktree'nin gerçek
+  local stack'iyle (54421/54422) uyuşmuyor, bayat — plan-red-team'de keşfedildi (2026-07-26).
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar (özet — gerekçe git log/CHANGELOG'da)
 - Tam menü, semantic search, geniş kullanıcı katkısı (MVP'de): ELENDİ → Faz 2. KALICI.

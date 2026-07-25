@@ -48,22 +48,34 @@ an exact `200` — proving the fix works outside any TypeScript-aware runtime.
   did not (crashed, wrong status code, timed out, port already occupied, or
   `apps/api/dist/main.js` is missing).
 
-- [ ] **Step 1: Confirm the local Postgres precondition — this task assumes it, does not create it**
+- [ ] **Step 1: Confirm the local Postgres precondition and get the real connection details —
+      this task assumes a running stack, it does not create one**
+
+Run (from the repo root — Supabase CLI walks up to find `supabase/config.toml` regardless of
+which subdirectory you invoke it from, verified empirically both ways in this repo):
+```bash
+npx supabase status
+```
+Expected: output shows the local stack running, including `API_URL` and `DB_URL` lines. **Do not
+assume the ports are `54321`/`54322`** — `apps/api/.env.example`'s defaults are stale for this
+specific project's `supabase/config.toml` (which uses a non-default port range so it can run
+alongside other local Supabase projects on the same machine). Read the actual `API_URL`/`DB_URL`
+from this command's output and use those exact ports in every step below — do not copy the
+example values below verbatim if your `supabase status` output differs. If the command reports
+the stack is stopped, run `npx supabase start` first (can take a minute on first run).
+
+- [ ] **Step 2: Apply migrations so the precondition is real, not assumed**
 
 Run:
 ```bash
-cd apps/api && npx supabase status
-cd -
+pnpm --filter @gurmego/api exec prisma migrate deploy
 ```
-Expected: output shows the local stack is running, including a `DB_URL` /
-`postgresql://postgres:postgres@127.0.0.1:<port>` line. If the command reports the stack is
-stopped, run `cd apps/api && npx supabase start && cd -` first (this can take a minute on first
-run) — do not proceed to Step 4 until `supabase status` shows the stack up. This plan does not
-provision Postgres; it only proves `apps/api` can boot against one that already exists, matching
-how every prior plan's tests in this repo already assume a running local stack (see
-`apps/api/.env.example`'s `DATABASE_URL` default port).
+Expected: `No pending migrations to apply.` or a list of migrations being applied, ending
+successfully — either output means the schema this smoke test's `/health` check depends on
+(Prisma's connection pool, verified at `PrismaService.onModuleInit`) is genuinely in place, not
+merely assumed from a prior session.
 
-- [ ] **Step 2: Create `scripts/smoke-api.sh`**
+- [ ] **Step 3: Create `scripts/smoke-api.sh`**
 
 ```bash
 #!/usr/bin/env bash
@@ -78,7 +90,17 @@ set -uo pipefail
 
 PORT="${PORT:-3000}"
 API_DIST="apps/api/dist/main.js"
+
+# Set up cleanup before any exit path exists, so a temp file never leaks even if we exit early
+# (missing dist, port already occupied) before the API process itself is started.
 LOG_FILE="$(mktemp)"
+PID=""
+cleanup() {
+  [ -n "$PID" ] && kill "$PID" 2>/dev/null || true
+  [ -n "$PID" ] && wait "$PID" 2>/dev/null || true
+  rm -f "$LOG_FILE"
+}
+trap cleanup EXIT
 
 if [ ! -f "$API_DIST" ]; then
   echo "FAIL: $API_DIST does not exist. Build apps/api first (pnpm exec turbo run build --filter=@gurmego/api...)." >&2
@@ -94,13 +116,6 @@ fi
 
 node "$API_DIST" > "$LOG_FILE" 2>&1 &
 PID=$!
-
-cleanup() {
-  kill "$PID" 2>/dev/null || true
-  wait "$PID" 2>/dev/null || true
-  rm -f "$LOG_FILE"
-}
-trap cleanup EXIT
 
 # Bounded to ~10s worst case: 10 attempts * (0.3s sleep + up to 0.7s curl timeout).
 for i in $(seq 1 10); do
@@ -122,7 +137,7 @@ cat "$LOG_FILE" >&2
 exit 1
 ```
 
-- [ ] **Step 3: Make it executable**
+- [ ] **Step 4: Make it executable**
 
 Run: `chmod +x scripts/smoke-api.sh`
 
@@ -130,26 +145,27 @@ Run: `chmod +x scripts/smoke-api.sh`
 — this is not a blocker for this plan, since every invocation in this plan and in CI calls the
 script as `bash scripts/smoke-api.sh` explicitly, which does not require the executable bit.)
 
-- [ ] **Step 4: Build `apps/api` with today's (still-broken) `packages/shared` config, then run the smoke script to confirm it FAILS**
+- [ ] **Step 5: Build `apps/api` with today's (still-broken) `packages/shared` config, then run the smoke script to confirm it FAILS**
 
-Run:
+Run — **substitute the `DATABASE_URL`/`SUPABASE_JWKS_URL` values below with the real `API_URL`/
+`DB_URL` your own Step 1 `npx supabase status` printed** (the values shown here are this plan
+author's actual local values at time of writing, not universal defaults):
 ```bash
 pnpm exec turbo run build --filter=@gurmego/api...
-DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-SUPABASE_JWKS_URL="http://localhost:54321/auth/v1/.well-known/jwks.json" \
+DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54422/postgres" \
+SUPABASE_JWKS_URL="http://127.0.0.1:54421/auth/v1/.well-known/jwks.json" \
 bash scripts/smoke-api.sh
 ```
-(Adjust the `DATABASE_URL` port to match whatever `npx supabase status` printed in Step 1 if it
-differs from `54322`.)
 
 Expected: **FAIL** — the script prints `FAIL: apps/api process exited early...` followed by the
 captured Node error output. Read that captured output: it should show a module-resolution error
 naming `@gurmego/shared` or one of its source files (e.g. `price-range`) — if instead it shows a
-database connection error, **stop**: that means Step 1's precondition wasn't actually satisfied,
-and this FAIL is not proof of the bug this plan fixes. Only proceed once the captured error clearly
-points at `@gurmego/shared`'s module resolution. Exit code must be `1`.
+database connection error, **stop**: that means Step 1/2's precondition wasn't actually satisfied
+(wrong ports substituted, or migrations didn't apply), and this FAIL is not proof of the bug this
+plan fixes. Only proceed once the captured error clearly points at `@gurmego/shared`'s module
+resolution. Exit code must be `1`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add scripts/smoke-api.sh
@@ -222,11 +238,12 @@ exist (along with per-file output for `enums/price-range.js`, `schemas/*.js`, et
 
 - [ ] **Step 3: Rebuild `apps/api` (now depending on the fixed `packages/shared`) and re-run the smoke test — confirm it now PASSES**
 
-Run (same local Postgres precondition as Task 1 Step 1 applies — confirm it's still up):
+Run (same local Postgres precondition as Task 1 Steps 1-2 applies — confirm it's still up; use
+your own `npx supabase status` values, not the example ports below):
 ```bash
 pnpm exec turbo run build --filter=@gurmego/api...
-DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-SUPABASE_JWKS_URL="http://localhost:54321/auth/v1/.well-known/jwks.json" \
+DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54422/postgres" \
+SUPABASE_JWKS_URL="http://127.0.0.1:54421/auth/v1/.well-known/jwks.json" \
 bash scripts/smoke-api.sh
 ```
 Expected: **PASS** — `PASS: /health returned exactly 200`, exit code `0`. If this still fails,
@@ -301,9 +318,12 @@ undetected."
 ```
 
 (Same `DATABASE_URL`/`SUPABASE_JWKS_URL` values already used by the existing `pnpm run test` step
-in this file — reuse them verbatim, do not invent new ones. Note this job's Postgres service
-listens on `localhost:5432`, a different port than the local dev stack's `54322` used in Task 1/2
-— this is expected and already how the existing `pnpm run test` step in this same job is wired.)
+in this file — reuse them verbatim, do not invent new ones. This job's Postgres service listens on
+`localhost:5432`, a fresh ephemeral CI-only database — a different port than the local dev stack's
+real ports used in Task 1/2. This is expected and already how the existing `pnpm run test` step in
+this same job is wired; `SUPABASE_JWKS_URL`'s value never needs to be reachable for `/health` to
+work, since `/health` has no auth guard and the JWKS client is only lazily fetched on an actual
+token verification — it only needs to be a syntactically valid URL.)
 
 - [ ] **Step 3: Sanity-check the edit landed correctly**
 
@@ -315,19 +335,21 @@ filename). If `0`, the edit didn't land — re-check Step 2.
 
 Since this repo has no remote to push to and no way to observe an actual GitHub Actions run, run
 the `quality` job's commands yourself, in the same order as the YAML, against your local Postgres
-(the same one from Task 1 Step 1 — adjust the `DATABASE_URL` port to match your local stack, e.g.
-`54322`, not the CI-only `5432` hardcoded in the YAML for the ephemeral service container):
+(use your own `npx supabase status` values from Task 1 Step 1, not the example ports below — and
+note, unlike the CI job's ephemeral database, your local one needs Step 1's real
+`SUPABASE_JWKS_URL` too, since local dev's `.env` may be read by some of these commands):
 
 ```bash
+DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54422/postgres" \
 pnpm --filter @gurmego/api exec prisma migrate deploy
 pnpm run lint
 pnpm run typecheck
-DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-SUPABASE_JWKS_URL="http://localhost:54321/auth/v1/.well-known/jwks.json" \
+DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54422/postgres" \
+SUPABASE_JWKS_URL="http://127.0.0.1:54421/auth/v1/.well-known/jwks.json" \
 pnpm run test
 pnpm exec turbo run build --filter=@gurmego/api...
-DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-SUPABASE_JWKS_URL="http://localhost:54321/auth/v1/.well-known/jwks.json" \
+DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54422/postgres" \
+SUPABASE_JWKS_URL="http://127.0.0.1:54421/auth/v1/.well-known/jwks.json" \
 bash scripts/smoke-api.sh
 ```
 Expected: every command exits `0`, and the final line is `PASS: /health returned exactly 200`.
@@ -391,6 +413,34 @@ paralel çalıştırılmıyor zaten), ama smoke test'in tanımı birkaç yerde s
 
 **Reddedilenler:** Yok — tüm bulgular kabul edildi.
 
-**Şüpheli mutabakat kontrolü atlandı:** Verdikt DÜZELTİLEBİLİR idi (HAZIR değil), skill kuralı
-gereği bu durumda ikinci (karşıt pozisyon zorlayan) çağrı atlanır — zaten karşı çıkmış bir
-verdikte tekrar karşı çıktırmak token israfı olurdu.
+**Şüpheli mutabakat kontrolü atlandı (round 1):** Verdikt DÜZELTİLEBİLİR idi (HAZIR değil), skill
+kuralı gereği bu durumda ikinci (karşıt pozisyon zorlayan) çağrı atlanır.
+
+### Round 2 (yine DÜZELTİLEBİLİR)
+
+**Kabul edilenler (plana işlendi):**
+- Script'te `mktemp` çağrısı `trap cleanup EXIT` kurulmadan önceydi — dist eksikliği veya port
+  doluluğu gibi erken çıkış yollarında geçici log dosyası hiç silinmiyordu. `trap` artık `mktemp`'ten
+  hemen sonra, ilk `exit` yolundan önce kuruluyor (`PID` boşken `kill`/`wait` no-op olacak şekilde
+  korumalı).
+- **Gerçek port uyuşmazlığı bulundu ve doğrulandı:** Plan ve `apps/api/.env.example`'daki varsayılan
+  portlar (`54321`/`54322`) bu worktree'nin GERÇEK çalışan Supabase stack'iyle (`54421`/`54422`,
+  `npx supabase status` ile bizzat bu oturumda doğrulandı) uyuşmuyordu — `.env.example` bu proje
+  için bayat. Plandaki tüm yerel-Postgres komutları gerçek portlara güncellendi, ayrıca "kendi
+  `supabase status` çıktını kullan, örnek değerleri kopyalama" uyarısı eklendi.
+- "Already-migrated" önkoşulu test edilmiyordu, yalnızca varsayılıyordu — Task 1'e açık bir
+  `prisma migrate deploy` adımı (yeni Step 2) eklendi.
+- Task 3 Step 4'ün yerel CI tekrarında `prisma migrate deploy` çağrısına `DATABASE_URL` açıkça
+  verilmiyordu, geliştiricinin `.env` dosyasına örtük bağımlıydı — artık açıkça veriliyor.
+
+**Reddedilenler (gerekçesiyle):**
+- **Bulgu:** "`cd apps/api && npx supabase status` yanlış çalışma dizininde çalışıyor, Supabase
+  config'i depo kökünde." **Ret gerekçesi:** Bu oturumda bizzat test edildi — hem repo kökünden hem
+  `apps/api` içinden `npx supabase status` çalıştırıldı, ikisi de aynı doğru sonucu (`API_URL:
+  127.0.0.1:54421`) verdi. Supabase CLI, git gibi üst dizinlere doğru `supabase/config.toml`'u arayıp
+  buluyor. **Bu yanlışsa ne olur:** Gelecekte farklı bir Supabase CLI sürümünde bu davranış
+  değişirse, Task 1 Step 1 gerçek dizinden bağımsız çalışmaz hale gelir — düşük olasılık, kolayca
+  fark edilir (komut hiç "running" demez), bu yüzden ayrıca bir savunma eklenmedi. Yine de plan artık
+  komutu repo kökünden çalıştıracak şekilde yazıldı (Step 1), bu belirsizliği pratikte sıfırlıyor.
+
+**Şüpheli mutabakat kontrolü atlandı (round 2):** Verdikt yine DÜZELTİLEBİLİR, ikinci çağrı gerekmedi.
