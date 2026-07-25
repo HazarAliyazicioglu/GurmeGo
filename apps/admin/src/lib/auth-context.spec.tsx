@@ -2,6 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { AuthProvider, useAuth } from "./auth-context";
 
+function AuthProbe() {
+  const { loading, error } = useAuth();
+  if (loading) return <span>yükleniyor</span>;
+  if (error) return <span data-testid="auth-error">{error}</span>;
+  return <span data-testid="auth-ok">ok</span>;
+}
+
 // Minimal helper to build a syntactically-real (unsigned) JWT for tests — base64url header.payload.signature.
 // `decodeRole` only ever reads the payload, so the header/signature contents don't matter here.
 function fakeJwt(claims: Record<string, unknown>): string {
@@ -54,5 +61,19 @@ describe("useAuth role extraction", () => {
     } as never);
     render(<AuthProvider><RoleProbe /></AuthProvider>);
     await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("yok"));
+  });
+});
+
+describe("useAuth getSession() rejection", () => {
+  it("resolves loading to false and sets a terminal error instead of hanging forever when getSession() rejects", async () => {
+    // Without the fix, a rejected getSession() (network error, Supabase down, ...) never calls
+    // setLoading(false) — loading stays true forever, so every protected page stays blank.
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase.auth.getSession).mockRejectedValueOnce(new Error("network error"));
+
+    render(<AuthProvider><AuthProbe /></AuthProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("auth-error")).toBeInTheDocument());
+    expect(screen.queryByText("yükleniyor")).not.toBeInTheDocument();
   });
 });
