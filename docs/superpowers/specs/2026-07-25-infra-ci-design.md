@@ -1,6 +1,6 @@
 # GurmeGo — Plan 4a: `packages/shared` Build Düzeltmesi — Design Doc
 
-**Tarih:** 2026-07-25 · **Durum:** Onaylandı (brainstorming + idea-red-team, 3 tur sonrası), plan yazımına hazır
+**Tarih:** 2026-07-25 · **Durum:** Onaylandı (brainstorming + idea-red-team, 4 tur sonrası), plan yazımına hazır
 
 İlgili: [STATE.md](../../STATE.md), [CHANGELOG.md](../../CHANGELOG.md) (2026-07-25 girdisi — küçültme geçmişi)
 
@@ -36,7 +36,15 @@ gerçek `node dist/main.js` (prod modu) Node'un native TS type-stripping'i altı
 - `main`/`types` alanları `dist/index.js`/`dist/index.d.ts`'e çevrilir.
 - Tüketen paketler (`apps/api`, `apps/web`, `apps/admin`) değişmeden kalır.
 - `turbo.json`'ın `build: { dependsOn: ["^build"] }` ayarı (Task 0'dan beri var) sıralamayı
-  otomatik yapar.
+  otomatik yapar — **ama yalnızca `turbo run` üzerinden çalıştırılan komutlar için.**
+- **Kritik ek adım (round 4 red-team bulgusu):** `dist/` `.gitignore`'da, yani temiz bir
+  `pnpm install` sonrası henüz yok. `packages/shared/package.json`'a **`"prepare": "tsc -p
+  tsconfig.json"`** script'i de eklenir — pnpm, workspace paketlerinde `prepare` lifecycle
+  script'ini `install` sonrası otomatik çalıştırır (kök `pnpm-lock.yaml`'da zaten pnpm 9
+  kullanılıyor, bu davranışı destekler). Bu, turbo'nun dışından çalıştırılan herhangi bir komutun
+  (`cd apps/api && pnpm run start:dev` gibi, doğrudan, `turbo run` olmadan) veya "temiz checkout,
+  ilk komut" senaryosunun `dist/index.js` bulunamadı hatasıyla kırılmasını önler — `dist/` her
+  zaman `pnpm install`'dan hemen sonra var olur.
 
 **Doğrulama (tek geçerli kanıt — `tsc --noEmit` temiz demek YETERLİ DEĞİL):**
 Build komutu **`turbo run build --filter=@gurmego/api...`** olmalı — kök `pnpm run build` DEĞİL,
@@ -67,6 +75,8 @@ muhtemelen hiç ayağa kalkmadan erken çıkacağı için 3. adımın "erken ç�
 - [ ] Post-fix: aynı sözleşme **başarılı** (200, temiz cleanup).
 - [ ] `turbo run build --filter=@gurmego/api...` hem `packages/shared` hem `apps/api`'yi doğru
       sırada build ediyor; `apps/web`/`apps/admin`'e dokunmuyor (Next env gereksinimi yok).
+- [ ] Temiz bir `pnpm install` sonrası (hiçbir `turbo run` komutu çalıştırılmadan)
+      `packages/shared/dist/index.js` dosyasının var olduğu doğrulanır (prepare script kanıtı).
 
 ## Global Constraints (writing-plans için taşınacak)
 
@@ -115,4 +125,12 @@ ilgiliydi:
 readiness polling + erken-exit kontrolü + garantili `trap` cleanup ile tanımlı; build komutu
 `turbo run build --filter=@gurmego/api...`'ye daraltıldı (web/admin'e dokunmuyor).
 
-**Reddedilenler:** Yok — üç turun bulguları da kabul edildi.
+**Tur 4 (NO-GO):** `main`/`types`'ı `dist/index.js`'e çevirmek, `dist/` `.gitignore`'da olduğu
+için temiz bir `pnpm install` sonrası (hiçbir `turbo run` komutu çalışmadan) `@gurmego/shared`'ı
+çözülemez hale getiriyordu — turbo'nun `^build` bağımlılığı yalnızca `turbo run` üzerinden
+çalıştırılan komutları kapsar, doğrudan çalıştırılan paket script'lerini (`cd apps/api && pnpm run
+start:dev` gibi) değil. **Kabul edildi, plana işlendi (Bölüm 2):** `packages/shared/package.json`'a
+`"prepare": "tsc -p tsconfig.json"` eklendi — pnpm bunu `install` sonrası otomatik çalıştırır,
+`dist/` her zaman var olur.
+
+**Reddedilenler:** Yok — dört turun bulguları da kabul edildi.
