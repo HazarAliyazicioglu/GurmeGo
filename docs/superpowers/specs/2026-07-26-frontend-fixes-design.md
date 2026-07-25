@@ -1,138 +1,181 @@
 # GurmeGo — Plan 4c: Frontend/Admin Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming), idea-red-team'e hazır
+**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team PIVOT sonrası tam
+revizyon), idea-red-team round 2'ye hazır
 
-İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (tüm bulguların kaynağı),
-[docs/superpowers/specs/2026-07-26-backend-fixes-design.md](2026-07-26-backend-fixes-design.md) (kardeş plan — bu plan ondan SONRA yürütülmeli, header sözleşmesi ve `open_now`/status filtreleri backend'e bağımlı)
+İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
+[docs/superpowers/specs/2026-07-26-backend-fixes-design.md](2026-07-26-backend-fixes-design.md) (kardeş plan — bu plan ondan SONRA yürütülmeli)
+
+## 0. Round 1'den Round 2'ye — ne değişti
+
+İlk tasarım idea-red-team'den **PIVOT** aldı, kodda doğrulanan bulgular:
+
+1. **Mevcut API client (`packages/api-client`) ve web'in `lib/api.ts`'i özel header göndermeyi
+   desteklemiyor** — "header'a taşı" kararı, gerçek bir implementasyon adımı olmadan yazılmıştı.
+2. **`district`'lerin merkez koordinatı için "Plan 4b migration'ı ekler" dedim ama Plan 4b'de öyle
+   bir migration yoktu** — iki doküman arasında gerçek olmayan bir bağımlılık uydurulmuştu.
+3. **C8'in tarifi mimariyle uyuşmuyordu:** `[district]/page.tsx` bir Next.js Server Component,
+   ilk sayfa yüklemesinde tarayıcı geolocation API'sine erişemez (bu bir bug değil, SSR'ın doğası) —
+   "ilk çağrıda konum varsa distance'a düş" talimatı bu gerçekle çelişiyordu.
+4. **C6 (kategori hızlı rotanın "doğrudan yol tarifi" eksikliği) tasarımdan tamamen düşürülmüştü**
+   — audit'te olan bir bulgu sessizce kayboldu.
+5. **`venue-detail.tsx`'in mekan koordinatına ihtiyacı var ama `findBySlug` bunu döndürmüyordu**
+   (bkz. Plan 4b Bölüm 5 — bu round'da çözüldü).
+6. **`queue-item.tsx`'in onay metni Plan 4b'nin A3 kararıyla artık çelişiyor** — round 1 bunu hiç
+   ele almamıştı.
 
 ## 1. Kapsam ve hedef
 
-`docs/AUDIT-2026-07-26.md`'nin frontend bulgularının (9 HIGH + 18 MEDIUM/LOW) tamamını çözer.
-**Bağımlılık:** Bu plan Plan 4b'den SONRA yürütülmeli — Bölüm 2 (konum header'ı) ve Bölüm 5
-(açık/kapalı filtresi) backend'in yeni davranışına bağımlı.
+`docs/AUDIT-2026-07-26.md`'nin frontend bulgularının tamamını, **gerçek mimariye uygun şekilde**
+çözer. **Sıra bağımlılığı:** Plan 4b tamamlanmadan bu plan başlayamaz (header sözleşmesi, mekan
+koordinatı, `open_now` backend'i, `address`/`photos` alanları — hepsi Plan 4b'nin çıktısı).
 
-**Kapsam dışı:** Backend değişiklikleri (Plan 4b'de), yeni özellik/tasarım, Faz 2 kapsamı.
+## 2. Konum header'a taşınır (A2 frontend tarafı — gerçek implementasyon)
 
-## 2. Konum header'a taşınır (A2 frontend tarafı)
+**`packages/api-client/src/index.ts`'in `createApiClient().get()` metodu genişletilir:**
+```typescript
+async get<T>(path: string, options?: { headers?: Record<string, string> }): Promise<T> {
+  const token = getToken?.();
+  const res = await fetch(`${baseUrl}${path}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options?.headers },
+  });
+  ...
+}
+```
 
-**Sorun:** `apps/web/src/lib/api.ts`, `lat`/`lng`'i GET query string'e ekliyor.
+**`apps/web/src/lib/api.ts`'e bir yardımcı eklenir:**
+```typescript
+function locationHeaders(coords?: { lat: number; lng: number } | null): Record<string, string> {
+  return coords ? { "X-User-Location": `${coords.lat},${coords.lng}` } : {};
+}
+```
+`getVenues`/`getNearestDistrict` çağrıları artık `coords` parametresi alır ve bu header'ı ekler.
+**`serializeFilters` (venue-filters.tsx) artık `lat`/`lng`'i query objesine hiç koymaz** — yalnızca
+`radiusM`'i (coords varsa) tutar; konum tamamen header üzerinden, `getVenues`'in kendi
+sorumluluğunda taşınır. Bu, konumun ST_DWithin filtresi seçilmemiş olsa bile (yalnızca sıralama
+için) her zaman gönderilebilmesini sağlar — bkz. Bölüm 4 (C8).
 
-**Çözüm (Plan 4b ile birebir sözleşme):**
-- `apps/web/src/lib/api.ts`'teki `getVenues`/`getNearestDistrict` fonksiyonları artık `lat`/`lng`'i
-  URL'e eklemek yerine `fetch`'in `headers` objesine `"X-User-Location": "${lat},${lng}"` olarak
-  ekler (konum yoksa header hiç gönderilmez).
-- `discovery-client.tsx`, `district-picker.tsx` bu fonksiyonları zaten çağırdığı için değişiklik
-  gerektirmez — yalnızca `lib/api.ts`'in imzası/implementasyonu değişir.
+## 3. Hata yönetimi ve auth (C1, C2, C11, C12) — değişmedi, round 1'de zaten doğruydu
 
-## 3. Hata yönetimi ve auth (C1, C2, C11, C12)
+**C1:** `auth-context.tsx`'teki `getSession()` zincirine `.catch(() => setLoading(false))` eklenir.
 
-**C1 — `auth-context.tsx`'te `getSession()` reddi yakalanmıyor:**
-- `getSession().then(...)` zincirine `.catch(() => setLoading(false))` eklenir (ya da try/catch'e
-  çevrilir) — reddedilirse `loading` `false` olur, `session` `null` kalır (kullanıcı "giriş yapmamış"
-  gibi davranılır, sonsuz loading yerine).
+**C2:** `discovery-client.tsx`'e `loading`/`error` state'i ve bir `requestId` ref'i eklenir; yanıt
+geldiğinde `if (requestId !== latestRequestId.current) return;` ile eski istekler yok sayılır
+(zaten `venue-map-leaflet.tsx`'te kullanılan desen).
 
-**C2 — `discovery-client.tsx`'te loading/error yok, eski istek race condition'ı:**
-- `useState` ile `loading`/`error` state'i eklenir.
-- Her filtre değişiminde artan bir `requestId` üretilir (`useRef`); yanıt geldiğinde
-  `if (requestId !== latestRequestId.current) return;` ile eski yanıtlar yok sayılır (aynı desen
-  zaten `venue-map-leaflet.tsx`'te var — proje içi tutarlı bir çözüm).
+**C11:** `favorite-button.tsx` mount olduğunda `GET /me/lists` sonucuna karşı mevcut durumu
+kontrol eder (kullanıcı giriş yapmışsa); tıklandığında `disabled` olur, istek bitene kadar kalır.
 
-**C11 — `favorite-button.tsx` sunucu durumunu okumuyor, çift-tık koruması yok:**
-- Bileşen artık prop olarak `initialIsFavorited?: boolean` alır (üst bileşen, mekan detayının
-  zaten çektiği favori listesinden bunu hesaplayıp geçer) VEYA basitçe mount olduğunda
-  `GET /me/lists` sonucuna karşı kontrol eder (kullanıcı giriş yapmışsa). Buton tıklandığında
-  `disabled` state'e geçer, istek bitene kadar tekrar tıklanamaz.
+**C12:** `auth-form.tsx`'e `submitting` state'i eklenir, buton `disabled={submitting}` olur.
 
-**C12 — `auth-form.tsx`'te submitting state yok:**
-- `const [submitting, setSubmitting] = useState(false)`; submit handler'ın başında `true`,
-  `finally`'de `false` yapılır; butona `disabled={submitting}` eklenir.
+## 4. Konum & harita doğruluğu (C3, C8 — mimariyle uyumlu düzeltme)
 
-## 4. Harita/ilçe doğruluğu (C3, C8)
+**C3 — Harita merkezi sabit Kadıköy (düzeltilmiş çözüm — backend migration YOK):**
+MVP'de yalnızca 3 sabit ilçe var (Kadıköy, Beşiktaş, Beyoğlu) — bunlar için ayrı bir veritabanı
+alanı yerine, `apps/web/src/lib/district-centers.ts` adında **statik bir sabit** eklenir:
+```typescript
+export const DISTRICT_CENTERS: Record<string, { lat: number; lng: number }> = {
+  kadikoy: { lat: 40.9906, lng: 29.0274 },
+  besiktas: { lat: 41.0422, lng: 29.0061 },
+  beyoglu: { lat: 41.0370, lng: 28.9850 },
+};
+```
+`venue-map-leaflet.tsx` artık `centerLat`/`centerLng` prop'u alır; `[district]/page.tsx` seçili
+ilçenin slug'ına göre bu sabitten değeri okuyup geçer (bilinmeyen bir slug için İstanbul geneli bir
+varsayılana düşer). Üç ilçe sabit olduğu sürece bu, migration'dan çok daha basit ve doğru bir
+çözüm — dördüncü bir şehre geçilince (Faz 2) bu tablo genişler ya da o zaman gerçek bir DB alanına
+taşınır.
 
-**C3 — Harita merkezi sabit Kadıköy:**
-- `venue-map-leaflet.tsx` artık merkez koordinatını hardcode etmek yerine prop olarak alır
-  (`centerLat`, `centerLng`); `[district]/page.tsx` seçili ilçenin kendi merkezi koordinatını
-  (District modelinde zaten yok — eklenmeli: `District`'e opsiyonel `centerLat`/`centerLng`
-  alanı, Plan 4b'nin migration'ına dahil edilir, seed script'i günceller) bu prop'a geçer.
-
-**C8 — İlk yükleme hep `sort:"newest"`, konum sıralaması çalışmıyor:**
-- `discovery-client.tsx`'in ilk `getVenues` çağrısı, eğer `useGeolocation()` konum vermişse
-  `sort: "distance"` ile başlar (backend `VenueListQuerySchema`'nın zaten yaptığı "konum varsa
-  distance'a düş" mantığıyla tutarlı hale getirilir — frontend bu mantığı override etmemeli).
+**C8 — Konuma göre yakınlık sıralaması fiilen çalışmıyor (mimariyle uyumlu düzeltme):**
+- `[district]/page.tsx` bir Server Component olarak **geolocation'a asla erişemez** — bu bir bug
+  değil. İlk sunucu-taraflı sorgu her zaman `sort: newest` ile kalır (`initialVenues`), bu doğru.
+- Gerçek düzeltme, tarayıcıda (client tarafında) olur: `discovery-client.tsx`'e, `coords`
+  `null`'dan gerçek bir değere geçtiğinde (geolocation ilk kez çözüldüğünde), **kullanıcı henüz
+  hiçbir filtreye dokunmamışsa**, otomatik bir tek seferlik yeniden-sorgu eklenir:
+  ```typescript
+  const autoSortedRef = useRef(false);
+  useEffect(() => {
+    if (coords && !autoSortedRef.current) {
+      autoSortedRef.current = true;
+      void applyFilters(filters);
+    }
+  }, [coords]);
+  ```
+- `serializeFilters`'in artık `lat`/`lng` döndürmemesi (Bölüm 2) sayesinde, `getVenues` çağrısı
+  `coords` mevcut olduğunda **her zaman** `X-User-Location` header'ını gönderir (yalnızca
+  `radiusM` seçiliyken değil) — backend'in `VenueListQuerySchema`'daki mevcut "konum varsa
+  distance'a düş" mantığı (Plan 1'den beri var, değişmiyor) böylece otomatik devreye girer.
 
 ## 5. Mekan detay tamlığı (C4, C9, C10)
 
-**C4 — Adres/harita/galeri eksik:**
-- `venue-detail.tsx`'e: (1) mekanın açık adresi (`Venue.address` — Plan 4b'nin migration'ıyla
-  eklenen yeni alan, bkz. Plan 4b Bölüm 6) gösterilir, (2) gerçek `venue-map-leaflet` komponenti
-  (tek nokta, mekanın kendi konumunda) tekrar kullanılır (zaten var, yalnızca mevcut dekoratif CSS
-  placeholder yerine gerçek komponent monte edilir), (3) fotoğraf galerisi — `Venue.photos`
-  (Plan 4b'nin aynı migration'ıyla eklenen `String[]` alan, bkz. Plan 4b Bölüm 6) `<img>` grid'i
-  olarak render edilir, boşsa "henüz fotoğraf eklenmedi" boş-state.
+**C4 — Adres/harita/galeri eksik (artık gerçek veri mevcut, bkz. Plan 4b Bölüm 5-6):**
+- `venue-detail.tsx`'e: (1) `venue.address` gösterilir (yoksa alan gizlenir, zorunlu değil), (2)
+  `venue-map-leaflet` komponenti artık mevcut dekoratif CSS placeholder yerine gerçek `venue.lat`/
+  `venue.lng` ile tek-nokta modunda monte edilir, (3) `venue.photos` doluysa `<img>` grid'i, boşsa
+  "henüz fotoğraf eklenmedi" boş-state.
 
-*Bağımlılık notu: bu task Plan 4b'nin `address`/`photos` migration'ı bittikten SONRA başlayabilir
-— iki planın tek veri-şeması kesişim noktası, writing-plans'ta task-sırası olarak açıkça
-belirtilecek.*
+**C9 — Platform paylaşım sheet'i yok:** `whatsapp-share-button.tsx`'in yanına `"share" in navigator`
+kontrolüyle korunan bir `navigator.share()` butonu eklenir (desteklenmiyorsa render edilmez).
 
-**C9 — Platform paylaşım sheet'i yok:**
-- `whatsapp-share-button.tsx`'in yanına `navigator.share` kullanan (destekleniyorsa) ikinci bir
-  buton eklenir; desteklenmiyorsa (çoğu masaüstü tarayıcı) buton hiç render edilmez (progressive
-  enhancement — `"share" in navigator` kontrolü).
+**C10 — Google rozetinde atıf yok:** `venue-card.tsx`'teki metin `"4.3 ★ (120)"` → `"4.3 ★ · 120 Google yorumu"`;
+`googleRatingCount` `null`/`undefined` ise "Google yorumu" sayısız gösterilir.
 
-**C10 — Google rozetinde atıf yok:**
-- `venue-card.tsx`'teki rozet metni `"4.3 ★ (120)"` yerine `"4.3 ★ · 120 Google yorumu"` formatına
-  çevrilir (api-spec.md FR-MD-05'in örnek formatıyla birebir).
-- `googleRatingCount` `null` ise (B4 backend fix'i sonrası bu daha az olası ama yine de olabilir)
-  "Google yorumu" ibaresi sayısız gösterilir, `null` yazdırılmaz.
+## 6. Kürasyon bütünlüğü ile senkron (Plan 4b'nin A3 kararı — yeni, round 1'de eksikti)
 
-## 6. Favoriler & filtreler (C5, C7)
+**`apps/admin/src/components/queue-item.tsx`'in onay açıklaması güncellenir:**
+Mevcut metin — "Onayla (yalnızca incelendi olarak işaretler ve mekanın verified_at'ini yeniler)" —
+Plan 4b'nin A3 kararıyla (REPORT onayı artık `verifiedAt`'i güncellemiyor) **yanlış** hale gelir.
+Yeni metin: "Onayla (yalnızca bildirimi incelenmiş olarak işaretler — mekan bilgisini düzeltmek
+için ayrıca admin-venues API'sinden/Prisma Studio'dan güncelleme yapılmalı)". Bu, admin panelin
+2-sayfalık kapsamının (Plan 3) "gerisi Postman/Prisma Studio'ya bırakıldı" felsefesiyle tutarlı —
+manuel düzeltme akışı için ayrı bir UI eklenmiyor, yalnızca metin gerçek davranışı doğru anlatıyor.
 
-**C5 — Koleksiyon oluşturma UI'ı yok:**
-- `favoriler/page.tsx`'e basit bir "Yeni liste oluştur" formu (isim input + buton, `POST /me/lists`)
-  eklenir; kullanıcı birden fazla listesi arasında sekme/dropdown ile geçebilir. Mekan detayındaki
-  "favoriye ekle" akışı da (varsa birden fazla liste) hangi listeye ekleneceğini sorar (tek liste
-  varsa mevcut sessiz davranış korunur — YAGNI, karmaşık bir seçim UI'ı gerekmez).
+## 7. Favoriler & filtreler (C5, C7)
 
-**C7 — Açık/kapalı filtresi yok:**
-- `venue-filters.tsx`'e bir toggle eklenir (`open_now` boolean); `api.ts`'in `getVenues` çağrısına
-  parametre olarak eklenir. Backend tarafı Plan 4b Bölüm 6'da (`openNow` query param'ı) zaten
-  planlanmış durumda — bu task ondan sonra başlar.
+**C5 — Koleksiyon oluşturma UI'ı yok:** `favoriler/page.tsx`'e "Yeni liste oluştur" formu
+(isim input + `POST /me/lists`) eklenir; birden fazla liste arasında geçiş için basit bir sekme/
+dropdown. Tek liste varsa mevcut sessiz davranış korunur (YAGNI).
 
-## 7. Erişilebilirlik (C13, C14)
+**C7 — Açık/kapalı filtresi yok:** `venue-filters.tsx`'e bir toggle eklenir (`openNow: boolean`).
+`getVenues`'e parametre olarak eklenir. Backend Plan 4b Bölüm 6'da hazır olacak; query param
+formatı Plan 4b'nin CSV `franchiseFlag` deseniyle aynı (`"true"` literal, coerce.boolean değil).
 
-**C13 — Yükleme durumunda `null` dönülüyor, ekran okuyucuya bildirim yok:**
-- `favoriler/page.tsx`, `admin`'in korumalı layout'u ve kuyruk sayfası, `null` yerine
-  `<p role="status" aria-live="polite">Yükleniyor…</p>` render eder (görsel olarak gizlenebilir
-  bir spinner ile birlikte, ama DOM'da gerçek bir durum anonsu olarak var olur).
+## 8. Kategori hızlı rota tamamlanır (C6 — round 1'de düşürülmüştü, geri eklendi)
 
-**C14 — Harita marker'ları erişilebilir değil:**
-- `venue-map-leaflet.tsx`'teki her `CircleMarker`'a `alt`/`aria-label` (mekan adı) eklenir; ayrıca
-  harita altına/yanına ekran-okuyucu-dostu bir metin liste alternatifi (zaten `venue-list.tsx`
-  var olduğu için, harita+liste aynı sayfada ise liste zaten bu işlevi görüyor — yalnızca marker'lara
-  `aria-label` eklemek yeterli, ayrı bir liste icat edilmez).
+**Sorun:** Bir kategori seçildiğinde yalnızca liste filtreleniyor; FR-KA-06'nın "doğrudan yol
+tarifi" kısmı yok.
 
-## 8. Kod kalitesi (küçük bulgular, tek task'ta toplanır)
+**Çözüm (yorum: en basit, sınırları net yorum):** `CategoryQuickRoute`, bir kategori seçildiğinde
+ve filtrelenmiş sonuçta en az bir mekan varsa, en yakın (coords mevcutsa distance-sıralı listenin
+ilk öğesi, değilse ilk öğe) mekana **doğrudan** giden bir "En yakın [kategori] mekana git" butonu
+gösterir — bu buton, `venue-detail.tsx`'in zaten kullandığı harici harita deep-link mekanizmasını
+(FR-MD-03) tekrar kullanır, yeni bir deep-link deseni icat edilmez.
 
-- `useGeolocation()`'ın `discovery-client.tsx` ve `district-picker.tsx`'te iki kez çağrılması:
-  bir `LocationProvider` context'i eklenir, ikisi de aynı context'ten okur.
-- `venue-detail.tsx`/`venue-card.tsx`'teki tekrarlanan kategori etiketleri ortak bir dosyaya
-  (`lib/category-labels.ts`) taşınır; kullanılmayan (`kahvalti`, `kahve`, `tatli` gibi gerçek
-  taksonomide olmayan) ölü girişler silinir.
-- `category-quick-route.tsx`'te aktif kategoriye tekrar basmanın seçimi kaldırmaması: toggle
-  davranışı diğer filtrelerle tutarlı hale getirilir.
+## 9. Erişilebilirlik (C13, C14)
 
-## 9. Test/doğrulama planı
+**C13:** Yükleme durumunda `null` yerine `<p role="status" aria-live="polite">Yükleniyor…</p>`.
 
-- [ ] Her düzeltme kendi TDD döngüsünden geçer (writing-plans'ta task bazlı).
-- [ ] Mevcut tüm testler (Plan 2/3'ten kalan) hâlâ geçiyor.
-- [ ] `tsc --noEmit` ve `pnpm run lint` temiz.
-- [ ] En az bir manuel/gerçek tarayıcı doğrulaması: `pnpm run dev` ile açılıp üç ilçe arasında
-      geçiş yapılıp haritanın gerçekten doğru merkezde açıldığı gözle teyit edilir (bu tür bir
-      bug otomatik testte kolayca kaçabilir, Plan 3'ün admin final review'ında olduğu gibi).
+**C14:** `venue-map-leaflet.tsx`'teki her `CircleMarker`'a mekan adını içeren `aria-label` eklenir.
+
+## 10. Kod kalitesi
+
+- `useGeolocation()`'ın iki kez çağrılması: bir `LocationProvider` context'i eklenir.
+- Tekrarlanan/ölü kategori etiketleri `lib/category-labels.ts`'e taşınır, gerçek taksonomide
+  olmayan girişler silinir.
+- `category-quick-route.tsx`'te aktif kategoriye tekrar basmanın seçimi kaldırmaması düzeltilir.
+
+## 11. Test/doğrulama planı
+
+- [ ] Header gönderiminin gerçekten çalıştığı bir entegrasyon testi (mock fetch, header'ın
+      istekte göründüğü doğrulanır).
+- [ ] C8'in otomatik yeniden-sıralamasının gerçekten yalnızca BİR KEZ tetiklendiği (kullanıcı
+      filtre değiştirdikten sonra tekrar tetiklenmediği) testi.
+- [ ] Mevcut tüm testler (Plan 2/3'ten kalan) hâlâ geçiyor. `tsc --noEmit`, `pnpm run lint` temiz.
+- [ ] Gerçek tarayıcıda (`pnpm run dev`) üç ilçe arasında geçiş yapılıp haritanın doğru merkezde
+      açıldığı gözle teyit edilir.
 
 ## Global Constraints (writing-plans için taşınacak)
 
-- İstemcilere iş mantığı eklenmez — yalnızca görüntüleme + istek katmanı (mevcut proje kuralı).
-- `X-User-Location` header formatı: `"<lat>,<lng>"` — Plan 4b ile birebir aynı sözleşme.
-- Konum izni olmadan/reddedilirse manuel ilçe seçimiyle tam işlevsellik korunur (NFR-04/FR-MW-02,
-  bu planın hiçbir task'ı bunu bozmaz — header eklenmiyor demek, endpoint yine çalışır).
+- İstemcilere iş mantığı eklenmez.
+- `X-User-Location` header formatı: `"<lat>,<lng>"` — Plan 4b ile birebir aynı.
+- Konum izni olmadan/reddedilirse manuel ilçe seçimiyle tam işlevsellik korunur.
