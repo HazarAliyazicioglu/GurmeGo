@@ -1,6 +1,6 @@
 # GurmeGo — Plan 4a: `packages/shared` Build Düzeltmesi — Design Doc
 
-**Tarih:** 2026-07-25 · **Durum:** Onaylandı (brainstorming + idea-red-team, 4 tur sonrası), plan yazımına hazır
+**Tarih:** 2026-07-25 · **Durum:** Onaylandı (brainstorming + idea-red-team, 5 tur sonrası), plan yazımına hazır
 
 İlgili: [STATE.md](../../STATE.md), [CHANGELOG.md](../../CHANGELOG.md) (2026-07-25 girdisi — küçültme geçmişi)
 
@@ -47,7 +47,10 @@ gerçek `node dist/main.js` (prod modu) Node'un native TS type-stripping'i altı
   zaman `pnpm install`'dan hemen sonra var olur.
 
 **Doğrulama (tek geçerli kanıt — `tsc --noEmit` temiz demek YETERLİ DEĞİL):**
-Build komutu **`turbo run build --filter=@gurmego/api...`** olmalı — kök `pnpm run build` DEĞİL,
+Build komutu **`pnpm exec turbo run build --filter=@gurmego/api...`** olmalı (`pnpm exec`
+zorunlu — düz `turbo run`, temiz bir CI shell'inde yerel `devDependency` olarak kurulu turbo
+binary'sini `PATH`'te bulamayabilir; `pnpm exec` bunu garantiler, round 5 red-team bulgusu) — kök
+`pnpm run build` de DEĞİL,
 çünkü kök build `apps/web`/`apps/admin`'i de derler ve onlar modül yüklenirken
 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` okur; temiz bir CI ortamında bu
 değişkenler yoksa build gereksiz yere kırılabilir. `--filter=@gurmego/api...` yalnızca API'yi ve
@@ -73,7 +76,7 @@ muhtemelen hiç ayağa kalkmadan erken çıkacağı için 3. adımın "erken ç�
 - [ ] Pre-fix: yukarıdaki smoke sözleşmesi **başarısız** olduğu gösterilir (erken process-exit
       veya timeout — mevcut hatanın gerçekliğinin kanıtı).
 - [ ] Post-fix: aynı sözleşme **başarılı** (200, temiz cleanup).
-- [ ] `turbo run build --filter=@gurmego/api...` hem `packages/shared` hem `apps/api`'yi doğru
+- [ ] `pnpm exec turbo run build --filter=@gurmego/api...` hem `packages/shared` hem `apps/api`'yi doğru
       sırada build ediyor; `apps/web`/`apps/admin`'e dokunmuyor (Next env gereksinimi yok).
 - [ ] Temiz bir `pnpm install` sonrası (hiçbir `turbo run` komutu çalıştırılmadan)
       `packages/shared/dist/index.js` dosyasının var olduğu doğrulanır (prepare script kanıtı).
@@ -133,4 +136,10 @@ start:dev` gibi) değil. **Kabul edildi, plana işlendi (Bölüm 2):** `packages
 `"prepare": "tsc -p tsconfig.json"` eklendi — pnpm bunu `install` sonrası otomatik çalıştırır,
 `dist/` her zaman var olur.
 
-**Reddedilenler:** Yok — dört turun bulguları da kabul edildi.
+**Tur 5 (NO-GO):** Tasarımın mantığı doğrulandı ("tasarım doğru" ifadesiyle), tek engelleyici bulgu
+mekanikti: `turbo run build ...` komutu temiz bir CI shell'inde yerel `devDependency` olarak kurulu
+`turbo` binary'sini `PATH`'te bulamayabilir — `pnpm exec turbo run ...` gerekir. **Kabul edildi,
+plana işlendi** (Bölüm 2/3, tüm `turbo run` komut örnekleri `pnpm exec turbo run`'a çevrildi).
+Red-team'in kendi ifadesiyle: "düzeltme sonrası GO."
+
+**Reddedilenler:** Yok — beş turun bulguları da kabul edildi.
