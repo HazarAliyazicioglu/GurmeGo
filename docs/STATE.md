@@ -14,8 +14,11 @@ henüz `master`'a merge edilmedi (kullanıcı kararı, değişmedi — hepsi bit
 edilip merge edilecek).
 
 ## Sıradaki adım
-Plan 4'e (Infra/CI/KVKK/pilot) geç: `superpowers:brainstorming` ile başla, `idea-red-team`
-çalıştırmayı unutma (önceki planlarda olduğu gibi zorunlu).
+Plan 4a (Infra/CI) yazılıyor: brainstorming + idea-red-team round 1 NO-GO aldı (orijinal tasarım
+150 kullanıcılık pilotun önüne gereksiz kurumsal staging/prod CI/CD koreografisi koyuyordu), kapsam
+küçültüldü (yalnızca packages/shared build fix + basit Railway/Vercel deploy hazırlığı +
+provisioning runbook). Küçültülmüş tasarım: docs/superpowers/specs/2026-07-25-infra-ci-design.md.
+Sıradaki: bu tasarımı hızlı bir doğrulama red-team turundan geçirip writing-plans'a geç.
 
 ## Bloke olanlar
 - Yok.
@@ -50,6 +53,11 @@ ona derlenmiş çıktı üzerinden bağımlı olması gerekiyor. Geçici çözü
 - CSV import (Plan 3): şema kısmen packages/shared'a taşındı ama category/branchCount/
   openingHours validator'ları paylaşılan ortak kaynağa çıkarıldı (2026-07-25 fix'inde çözüldü) —
   bu madde artık kapalı, referans için bırakıldı.
+- **Pilot karar metrikleri ölçülemiyor** (idea-red-team, Plan 4a, 2026-07-25): `prd.md §5`'teki
+  Pilot Karar Sözleşmesi (Maps'e gitme/kaydetme/paylaşma "karar eylemi", 4. hafta geri dönüş
+  kohortu) hiçbir yerde event-capture/analytics ile ölçülmüyor. Sentry (hata) ve pino (sunucu log)
+  bunu karşılamaz. Pilot başlamadan önce kendi planını hak eden ayrı bir iş — infra planına
+  (4a) bilinçli olarak dahil edilmedi.
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar
 - Tam menü, semantic search/pgvector, geniş kullanıcı katkısı (MVP'de): ELENDİ → Faz 2. KALICI.
