@@ -74,6 +74,32 @@ describe("JwtAuthGuard", () => {
     });
   });
 
+  it("rejects with UnauthorizedException when the verified payload has no `sub` claim (runtime validation, not just the jwtVerify<T> compile-time generic)", async () => {
+    // Before the fix, `jwtVerify<SupabaseJwtPayload>` was a TypeScript-only annotation — jose never
+    // validates the decoded payload shape at runtime, so a token that verifies cryptographically but
+    // carries no `sub` claim flowed through `payload.sub ?? ""`, turning a malformed token into a
+    // valid-looking empty-string user id instead of being rejected. This must throw instead.
+    jwtVerifyMock.mockResolvedValue({ payload: { user_role: "curator" } });
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard();
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await expect(guard.canActivate(makeContext(req))).rejects.toMatchObject({
+      response: { error: { code: "INVALID_TOKEN" } },
+    });
+  });
+
+  it("rejects with UnauthorizedException when `user_role` is present but not a string", async () => {
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", user_role: 12345 } });
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard();
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await expect(guard.canActivate(makeContext(req))).rejects.toMatchObject({
+      response: { error: { code: "INVALID_TOKEN" } },
+    });
+  });
+
   it("sets user to undefined and allows through when no Bearer header is present", async () => {
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
     const guard = new JwtAuthGuard();

@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
 import { FastifyRequest } from "fastify";
-import { createRemoteJWKSet, jwtVerify, JWTPayload, JWTVerifyOptions } from "jose";
+import { createRemoteJWKSet, jwtVerify, JWTVerifyOptions } from "jose";
+import { z } from "zod";
 
 export interface AuthenticatedUser {
   id: string;
@@ -14,11 +15,16 @@ export interface AuthenticatedRequest extends FastifyRequest {
   user?: AuthenticatedUser;
 }
 
-// Supabase's custom access token hook nests the app's role claim under `user_role`; everything else
-// on the payload is the standard JWT claim set `jose` already types via `JWTPayload`.
-interface SupabaseJwtPayload extends JWTPayload {
-  user_role?: string;
-}
+// `jwtVerify<T>(...)`'s generic is a compile-time-only annotation — `jose` never validates the
+// decoded payload against it at runtime, it just returns `unknown` cast to `T`. Without this schema,
+// a token whose `sub` claim is missing/non-string would silently become `payload.sub ?? ""` (an
+// empty-string user id treated as a valid identity) instead of being rejected, and a non-string
+// `user_role` would flow through unchecked. Supabase's custom access token hook nests the app's role
+// claim under `user_role`; `sub` is the standard JWT subject claim.
+const SupabaseJwtPayloadSchema = z.object({
+  sub: z.string().min(1),
+  user_role: z.string().optional(),
+});
 
 const JWKS = createRemoteJWKSet(new URL(process.env.SUPABASE_JWKS_URL!));
 
@@ -59,9 +65,14 @@ export class JwtAuthGuard implements CanActivate {
     }
     try {
       const token = header.slice("Bearer ".length);
-      const { payload } = await jwtVerify<SupabaseJwtPayload>(token, JWKS, buildVerifyOptions());
-      req.user = { id: payload.sub ?? "", role: payload.user_role ?? "user" };
-    } catch {
+      const { payload } = await jwtVerify(token, JWKS, buildVerifyOptions());
+      const parsed = SupabaseJwtPayloadSchema.safeParse(payload);
+      if (!parsed.success) {
+        throw new UnauthorizedException({ error: { code: "INVALID_TOKEN", message: "Geçersiz oturum" } });
+      }
+      req.user = { id: parsed.data.sub, role: parsed.data.user_role ?? "user" };
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
       throw new UnauthorizedException({ error: { code: "INVALID_TOKEN", message: "Geçersiz oturum" } });
     }
     return true;
