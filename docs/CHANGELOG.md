@@ -1,7 +1,36 @@
 # GurmeGo — Changelog
 
-Bu dosya spec/karar seviyesindeki değişiklikleri kaydeder (kod değişikliği henüz yok). Her girdi:
-ne değişti, neyle değiştirildi, neden. En yeni en üstte.
+Bu dosya spec/karar seviyesindeki değişiklikleri kaydeder. Her girdi: ne değişti, neyle
+değiştirildi, neden. En yeni en üstte.
+
+---
+
+## 2026-07-25 — Plan 1/2/3 tamamlandı (worktree'de), root/worktree senkronizasyon dersi
+
+### Bağlam
+Bu tarihten itibaren kod ilerlemesi artık bu dosyanın implied ettiği "henüz kod yok" durumundan
+öteye geçti — ama **`master` branch'inde değil**, kilitli bir native worktree'de
+(`.claude/worktrees/mvp-backend-foundation`, branch `worktree-mvp-backend-foundation`). Bir önceki
+oturum session limitine çarpıp Plan 3 Task 7'nin ortasında yarım kesilmişti; root `docs/STATE.md`
+hiç güncellenmemiş kaldı. Bu oturum açıldığında root'tan devam edilmeye çalışılınca bu STATE.md'nin
+"Plan 1 hiç başlamadı" beyanına güvenilip **yanlışlıkla ikinci, gereksiz bir worktree açılıp zaten
+bitmiş Task 0/1 tekrar yürütüldü** — worktree keşfedilince fark edilip geri alındı.
+
+### Durum (bu tarih itibariyle, worktree'de)
+- **Plan 1 (Backend + Data Foundation): 24/24 task ✅**, final review temiz.
+- **Plan 2 (Web/PWA consumer client): 12/12 task ✅**, final review temiz.
+- **Plan 3 (Admin panel): 7/7 task ✅.** Task 7'nin final review'ı 4 fix/re-review turu gerektirdi —
+  her turda bir önceki fix'in kendisi yeni bir regresyon yarattı (JWT guard fix → kuyruk sayfası
+  hata yönetimi → o fix'in kendi regresyonu → CI lint script'i → header metni → test assertion
+  gücü), 5. Codex geçişi TEMİZ verdi. Ayrıntı: worktree'nin `.superpowers/sdd/progress.md`'si.
+- Hiçbir plan henüz `master`'a merge edilmedi (kullanıcı kararı, sabit).
+
+### Değişiklikler / dersler
+| # | Neydi | Ne oldu | Neden |
+|---|---|---|---|
+| 1 | Root `docs/STATE.md`, worktree'de anlamlı ilerleme olsa bile güncellenmiyordu | Root STATE.md artık worktree'nin varlığını ve genel durumunu özetleyen bir işaretçi tutuyor, tam detayı tekrarlamıyor | Senkronizasyon eksikliği bu oturumda gerçek bir iş tekrarına (duplicate worktree + tamamlanmış Task 0/1'in yeniden yürütülmesi) yol açtı |
+| 2 | Final review'da tek fix turuyla "muhtemelen temizdir" varsayımı | Review loop'u Codex gerçekten TEMİZ diyene kadar sürdürme kuralı somut bir örnekle doğrulandı (4 tur) | Her turda önceki fix kendi regresyonunu yarattı — özellikle aynı state/dosya birden fazla kez dokunulduğunda risk artıyor, azalmıyor |
+| 3 | `codex exec`'e büyük diff'i (>150KB) tek komut satırı argümanı olarak verme | Diff stdin'den pipe ediliyor (`codex exec - < prompt.txt`), gerekirse mantıksal parçalara bölünüyor | Argüman limiti aşımı ("Argument list too long") ve/veya süresiz hang riski |
 
 ---
 
