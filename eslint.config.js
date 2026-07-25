@@ -6,6 +6,7 @@ module.exports = tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
+      '**/.next/**',
       '**/.turbo/**',
       '**/build/**',
       '**/generated-types.ts',
