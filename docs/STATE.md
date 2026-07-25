@@ -12,8 +12,10 @@ bu bug'ın regresyonunu yakalıyor. 6 idea-red-team + 3 plan-red-team + final re
 bağımsız Codex) turundan geçti — hepsi TEMİZ. Detay: `docs/superpowers/plans/2026-07-26-shared-build-fix.md`.
 
 ## Sıradaki adım
-Kullanıcıyla: Plan 4b (KVKK metinleri + pilot launch checklist) mi, yoksa öncelikli takip
-maddelerinden biri mi (Supabase Auth↔User senkronizasyonu, pilot analytics) konuşulacak.
+Plan 4b'den önce kapsamlı bir A-Z ürün+kod denetimi yapıldı: `docs/AUDIT-2026-07-26.md`. Verdikt:
+**pilot için hazır değil** — en kritik bulgu, API/admin üzerinden hiçbir mekanın PUBLISHED
+yapılamaması (status alanı create/update şemalarında yok). Kullanıcıyla hangi bulguların ayrı bir
+"düzeltme planı" olarak ele alınacağına karar verilecek.
 
 ## Bloke olanlar
 - Yok.
