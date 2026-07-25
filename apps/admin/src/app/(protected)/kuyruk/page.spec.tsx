@@ -184,11 +184,16 @@ describe("KuyrukPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
-    // The already-loaded queue item and its action buttons must still be visible and interactive —
-    // a mutation failure must not hide the list the way a load failure legitimately does.
+    // The already-loaded queue item and its action buttons must still be visible AND interactive —
+    // a mutation failure must not hide the list the way a load failure legitimately does, and the
+    // `finally`-block lock release must not leave the buttons permanently disabled after an error.
     expect(screen.getByText("Test Cafe")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /onayla/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /reddet/i })).toBeInTheDocument();
+    const approveBtn = screen.getByRole("button", { name: /onayla/i });
+    const rejectBtn = screen.getByRole("button", { name: /reddet/i });
+    expect(approveBtn).toBeInTheDocument();
+    expect(rejectBtn).toBeInTheDocument();
+    expect(approveBtn).not.toBeDisabled();
+    expect(rejectBtn).not.toBeDisabled();
     expect(screen.queryByTestId("empty-state")).not.toBeInTheDocument();
   });
 
@@ -200,5 +205,22 @@ describe("KuyrukPage", () => {
     render(<KuyrukPage />);
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/yüklenemedi/i));
     expect(screen.queryByTestId("empty-state")).not.toBeInTheDocument();
+  });
+
+  it("does not show the pending-count header claiming '0 bildirim' when the initial load fails", async () => {
+    // Regression test: the header count is derived from `items.length`, which stays 0 on a failed
+    // initial load (there's no data at all, not zero pending items). Showing "Bekleyen 0 bildirim"
+    // next to "Kuyruk yüklenemedi" falsely implies the queue is known to be empty.
+    getQueue.mockRejectedValueOnce(new Error("network error"));
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/yüklenemedi/i));
+    expect(screen.queryByText(/0 bildirim/i)).not.toBeInTheDocument();
+  });
+
+  it("still shows the pending-count header on a successful load, including when the queue is empty", async () => {
+    getQueue.mockResolvedValueOnce([]);
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByTestId("empty-state")).toBeInTheDocument());
+    expect(screen.getByText(/0 bildirim/i)).toBeInTheDocument();
   });
 });

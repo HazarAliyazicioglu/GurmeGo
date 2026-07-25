@@ -109,24 +109,30 @@ export default function KuyrukPage() {
                 Bekleyen mekan bildirimlerini inceleyin ve sonuçlandırın.
               </p>
             </div>
-            <div className="flex w-fit items-center gap-3 rounded-md border border-slate-300 bg-white px-3 py-2 shadow-sm">
-              <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-                {items.length > 0 && (
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-30" />
-                )}
-                <span
-                  className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
-                    items.length > 0 ? "bg-blue-600" : "bg-slate-400"
-                  }`}
-                />
-              </span>
-              <div>
-                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-500">
-                  Bekleyen
-                </p>
-                <p className="text-sm font-bold tabular-nums text-slate-900">{items.length} bildirim</p>
+            {/* Gated on !loadError: `items.length` is still 0 while a load failure is showing (there's
+                no data at all, not a known-empty queue), so rendering "Bekleyen 0 bildirim" here would
+                falsely claim the queue is empty at the same time the error banner below says the load
+                failed. */}
+            {!loadError && (
+              <div className="flex w-fit items-center gap-3 rounded-md border border-slate-300 bg-white px-3 py-2 shadow-sm">
+                <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+                  {items.length > 0 && (
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-30" />
+                  )}
+                  <span
+                    className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
+                      items.length > 0 ? "bg-blue-600" : "bg-slate-400"
+                    }`}
+                  />
+                </span>
+                <div>
+                  <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    Bekleyen
+                  </p>
+                  <p className="text-sm font-bold tabular-nums text-slate-900">{items.length} bildirim</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </header>
 
