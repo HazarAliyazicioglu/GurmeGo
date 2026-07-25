@@ -1,6 +1,6 @@
 # GurmeGo — Plan 4a: `packages/shared` Build Düzeltmesi — Design Doc
 
-**Tarih:** 2026-07-25 · **Durum:** Onaylandı (brainstorming + idea-red-team, 2 tur küçültme sonrası), plan yazımına hazır
+**Tarih:** 2026-07-25 · **Durum:** Onaylandı (brainstorming + idea-red-team, 3 tur sonrası), plan yazımına hazır
 
 İlgili: [STATE.md](../../STATE.md), [CHANGELOG.md](../../CHANGELOG.md) (2026-07-25 girdisi — küçültme geçmişi)
 
@@ -39,21 +39,34 @@ gerçek `node dist/main.js` (prod modu) Node'un native TS type-stripping'i altı
   otomatik yapar.
 
 **Doğrulama (tek geçerli kanıt — `tsc --noEmit` temiz demek YETERLİ DEĞİL):**
-`pnpm run build` sonrası `node apps/api/dist/main.js` gerçekten başlatılır (arka planda, kısa
-ömürlü), `/health`'e gerçek bir HTTP isteği atılır, 200 dönmesi beklenir. Bu adım pre-fix haliyle
-**kırmızı düşmeli**, fix sonrası yeşile dönmeli. Smoke test'in çalışması için gerekli tüm env
-değişkenleri (`DATABASE_URL`, `SUPABASE_JWKS_URL` vb. — mevcut `apps/api/.env.example`'daki
-liste) test ortamında tanımlanır; guard'ın `SUPABASE_JWKS_URL`'i başlangıçta parse ettiği ve
-`PrismaService`'in başlangıçta DB'ye bağlandığı göz önüne alınarak, smoke test bu bağımlılıkların
-zaten CI'da var olan (Plan 1 Task 23'ten) PostGIS servis konteynerine ve mevcut env'lere karşı
-çalıştırılır — yeni bir env kümesi icat edilmez.
+Build komutu **`turbo run build --filter=@gurmego/api...`** olmalı — kök `pnpm run build` DEĞİL,
+çünkü kök build `apps/web`/`apps/admin`'i de derler ve onlar modül yüklenirken
+`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` okur; temiz bir CI ortamında bu
+değişkenler yoksa build gereksiz yere kırılabilir. `--filter=@gurmego/api...` yalnızca API'yi ve
+bağımlılığı olan `packages/shared`'ı build eder (Bölüm 2'nin gerçek amacı budur zaten).
+
+Smoke test **deterministik bir sözleşme** olarak tanımlanır (round 3 red-team'in "yarış durumu"
+bulgusuna yanıt):
+1. `DATABASE_URL` ve `SUPABASE_JWKS_URL` bu adıma **açıkça** verilir (önceki adımların env'ine
+   örtük olarak güvenilmez — CI'da her step'in kendi `env:` bloğu vardır, otomatik miras kalmaz).
+2. `node apps/api/dist/main.js` arka planda başlatılır, PID yakalanır.
+3. En fazla 10 saniye boyunca, 500ms aralıklarla `/health`'e istek atılır (readiness polling) —
+   ilk denemede bağlantı reddi normal kabul edilir, timeout'a kadar tekrar dener.
+4. Polling sırasında process'in erken sonlandığı (`kill -0 $PID` başarısız) tespit edilirse hata
+   loglanıp adım başarısız sayılır — sonsuz beklemeye düşülmez.
+5. 200 alındığında veya timeout dolduğunda, `trap`/`finally` ile PID'e **her koşulda** `kill`
+   gönderilir (test başarılı da olsa başarısız da olsa süreç arkada kalmaz).
+
+Bu adım pre-fix haliyle (packages/shared build script'i yokken) **kırmızı düşmeli** — process
+muhtemelen hiç ayağa kalkmadan erken çıkacağı için 3. adımın "erken çıkış" kontrolü bunu yakalar.
 
 ## 3. Test/doğrulama planı
 
-- [ ] Pre-fix: `node apps/api/dist/main.js` + `/health` isteği **başarısız** olduğu gösterilir
-      (mevcut hatanın gerçekliğinin kanıtı).
-- [ ] Post-fix: aynı adım **başarılı** (200).
-- [ ] `pnpm run build` (root) hem `packages/shared` hem `apps/api`'yi doğru sırada build ediyor.
+- [ ] Pre-fix: yukarıdaki smoke sözleşmesi **başarısız** olduğu gösterilir (erken process-exit
+      veya timeout — mevcut hatanın gerçekliğinin kanıtı).
+- [ ] Post-fix: aynı sözleşme **başarılı** (200, temiz cleanup).
+- [ ] `turbo run build --filter=@gurmego/api...` hem `packages/shared` hem `apps/api`'yi doğru
+      sırada build ediyor; `apps/web`/`apps/admin`'e dokunmuyor (Next env gereksinimi yok).
 
 ## Global Constraints (writing-plans için taşınacak)
 
@@ -89,4 +102,17 @@ gerçek platform davranışı (Root Directory semantiği, güncel builder adı, 
 sözleşmeleri) hesap açılmadan, platformla fiilen etkileşime girmeden doğru yazılamıyor. Bu içerik,
 hesaplar açıldığında ayrı bir oturumda, gerçek platform geri bildirimiyle yazılacak.
 
-**Reddedilenler:** Yok — her iki turun bulguları da kabul edildi.
+**Tur 3 (NO-GO):** Çekirdek çözüm (düz `tsc`) doğrulandı ve kabul edildi — Node 22.19.0'da mevcut
+giriş noktasının gerçekten `ERR_MODULE_NOT_FOUND` verdiği, `tsc -p tsconfig.json`'ın doğru
+CommonJS çıktısı ürettiği bizzat teyit edildi. Kalan iki bulgu doğrulama adımının belirsizliğiyle
+ilgiliydi:
+- Smoke test "arka planda başlat, `/health` isteği at" olarak tarif edilmişti — deterministik bir
+  readiness/timeout/cleanup sözleşmesi yoktu, flaky olabilirdi.
+- Kök `pnpm run build`, ilgisiz `apps/web`/`apps/admin`'i de build ediyordu; bunlar `NEXT_PUBLIC_*`
+  env'leri olmadan temiz CI'da gereksiz yere kırılabilirdi.
+
+**Kabul edildi, plana işlendi (Bölüm 2/3):** Smoke test artık PID yakalama + zaman sınırlı
+readiness polling + erken-exit kontrolü + garantili `trap` cleanup ile tanımlı; build komutu
+`turbo run build --filter=@gurmego/api...`'ye daraltıldı (web/admin'e dokunmuyor).
+
+**Reddedilenler:** Yok — üç turun bulguları da kabul edildi.
