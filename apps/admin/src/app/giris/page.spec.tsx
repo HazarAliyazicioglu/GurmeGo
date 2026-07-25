@@ -32,4 +32,18 @@ describe("GirisPage", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Geçersiz kimlik bilgileri"));
     expect(push).not.toHaveBeenCalled();
   });
+
+  it("shows a visible error and re-enables the submit button (instead of hanging forever) when signIn() rejects", async () => {
+    signIn.mockRejectedValue(new Error("network error"));
+    render(<GirisPage />);
+    fireEvent.change(screen.getByLabelText(/e-posta/i), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByLabelText(/şifre/i), { target: { value: "sifre123" } });
+    const submitButton = screen.getByRole("button", { name: /giriş/i });
+
+    fireEvent.click(submitButton);
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(submitButton).not.toBeDisabled();
+    expect(push).not.toHaveBeenCalled();
+  });
 });

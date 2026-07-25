@@ -65,4 +65,56 @@ describe("KuyrukPage", () => {
     render(<KuyrukPage />);
     await waitFor(() => expect(screen.getByTestId("empty-state")).toBeInTheDocument());
   });
+
+  it("shows a visible error and stops loading (instead of hanging forever) when the initial getQueue() call rejects", async () => {
+    getQueue.mockRejectedValueOnce(new Error("network error"));
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/yüklenemedi/i));
+  });
+
+  it("shows a visible error and does not refetch when approveQueueItem rejects", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]);
+    approveQueueItem.mockRejectedValueOnce(new Error("network error"));
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(getQueue).toHaveBeenCalledTimes(1); // no refetch after a failed mutation
+  });
+
+  it("shows a visible error and does not refetch when rejectQueueItem rejects", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]);
+    rejectQueueItem.mockRejectedValueOnce(new Error("network error"));
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /reddet/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(getQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables both buttons for a row while its mutation is in flight, preventing a concurrent double-click", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]).mockResolvedValueOnce([BASE_ITEM]);
+    let resolveApprove: () => void = () => {};
+    approveQueueItem.mockReset().mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveApprove = resolve;
+      }),
+    );
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+    const approveBtn = screen.getByRole("button", { name: /onayla/i });
+    const rejectBtn = screen.getByRole("button", { name: /reddet/i });
+
+    fireEvent.click(approveBtn);
+
+    await waitFor(() => expect(approveBtn).toBeDisabled());
+    expect(rejectBtn).toBeDisabled();
+
+    resolveApprove();
+    await waitFor(() => expect(approveBtn).not.toBeDisabled());
+  });
 });

@@ -5,10 +5,15 @@ export function QueueItem({
   item,
   onApprove,
   onReject,
+  pending = false,
 }: {
   item: AdminQueueItem;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  // True while this item's own approve/reject mutation is in flight. Both buttons are disabled in
+  // that window so a double-click (or clicking both approve and reject) can't fire two concurrent
+  // mutations against the same queue item.
+  pending?: boolean;
 }) {
   const reason = typeof item.payload.reason === "string" ? item.payload.reason : "(neden belirtilmemiş)";
   return (
@@ -64,7 +69,8 @@ export function QueueItem({
         <button
           type="button"
           onClick={() => onApprove(item.id)}
-          className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md bg-blue-700 px-3 py-2 text-center text-xs font-semibold leading-4 text-white shadow-sm transition-colors hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 lg:max-w-64"
+          disabled={pending}
+          className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md bg-blue-700 px-3 py-2 text-center text-xs font-semibold leading-4 text-white shadow-sm transition-colors hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 lg:max-w-64"
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
             <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.05l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.815a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
@@ -74,7 +80,8 @@ export function QueueItem({
         <button
           type="button"
           onClick={() => onReject(item.id)}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-rose-300 bg-white px-4 py-2 text-xs font-semibold text-rose-800 shadow-sm transition-colors hover:border-rose-400 hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+          disabled={pending}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-rose-300 bg-white px-4 py-2 text-xs font-semibold text-rose-800 shadow-sm transition-colors hover:border-rose-400 hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
             <path d="M5.22 5.22a.75.75 0 0 1 1.06 0L10 8.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 0 1 0-1.06Z" />

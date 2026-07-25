@@ -9,14 +9,28 @@ export default function KuyrukPage() {
   const { session } = useAuth();
   const [items, setItems] = useState<AdminQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // The row currently being approved/rejected — its buttons are disabled while this is set so a
+  // double-click (or clicking both approve and reject) can't fire two concurrent mutations against
+  // the same queue item.
+  const [mutatingId, setMutatingId] = useState<string | null>(null);
 
   const token = session?.access_token;
 
   const refetch = useCallback(async () => {
     if (!token) return;
-    const data = await getQueue(token, { status: "PENDING" });
-    setItems(data);
-    setLoading(false);
+    try {
+      const data = await getQueue(token, { status: "PENDING" });
+      setItems(data);
+      setError(null);
+    } catch {
+      // Same pattern as apps/admin/src/app/(protected)/import/page.tsx: without this, a rejected
+      // getQueue() (network error, 401 on token expiry, malformed response) would leave `loading`
+      // true forever — a permanently blank page with no feedback.
+      setError("Kuyruk yüklenemedi. Sayfayı yenileyip tekrar deneyin.");
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
 
   useEffect(() => {
@@ -25,14 +39,30 @@ export default function KuyrukPage() {
 
   async function handleApprove(id: string) {
     if (!token) return;
-    await approveQueueItem(token, id);
-    await refetch();
+    setMutatingId(id);
+    setError(null);
+    try {
+      await approveQueueItem(token, id);
+      await refetch();
+    } catch {
+      setError("İşlem gerçekleştirilemedi. Tekrar deneyin.");
+    } finally {
+      setMutatingId(null);
+    }
   }
 
   async function handleReject(id: string) {
     if (!token) return;
-    await rejectQueueItem(token, id);
-    await refetch();
+    setMutatingId(id);
+    setError(null);
+    try {
+      await rejectQueueItem(token, id);
+      await refetch();
+    } catch {
+      setError("İşlem gerçekleştirilemedi. Tekrar deneyin.");
+    } finally {
+      setMutatingId(null);
+    }
   }
 
   if (loading) return null;
@@ -78,6 +108,18 @@ export default function KuyrukPage() {
           </div>
         </header>
 
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 flex items-start gap-3 border border-rose-300 border-l-4 border-l-rose-600 bg-rose-50 px-4 py-3.5 text-rose-900 shadow-sm"
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-5 w-5 shrink-0 text-rose-700">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l6.518 11.596c.75 1.334-.213 2.982-1.742 2.982H3.48c-1.53 0-2.493-1.648-1.743-2.982L8.257 3.1ZM11 7a1 1 0 1 0-2 0v3a1 1 0 1 0 2 0V7Zm-1 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+            </svg>
+            <p className="text-sm leading-5">{error}</p>
+          </div>
+        )}
+
         {items.length === 0 ? (
           <section className="border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
             <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500">
@@ -104,6 +146,7 @@ export default function KuyrukPage() {
                   item={item}
                   onApprove={handleApprove}
                   onReject={handleReject}
+                  pending={mutatingId === item.id}
                 />
               ))}
             </ul>

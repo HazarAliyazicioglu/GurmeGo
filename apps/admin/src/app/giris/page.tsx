@@ -14,13 +14,21 @@ export default function GirisPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    const { error } = await signIn(email, password);
-    setSubmitting(false);
-    if (error) {
-      setError(error);
-      return;
+    setError(null);
+    try {
+      const { error } = await signIn(email, password);
+      if (error) {
+        setError(error);
+        return;
+      }
+      router.push("/kuyruk");
+    } catch {
+      // Without this, a rejected signIn() (network error, Supabase down, ...) would leave
+      // `submitting` stuck true forever — the button stays permanently disabled with no feedback.
+      setError("Giriş yapılamadı. Bağlantınızı kontrol edip tekrar deneyin.");
+    } finally {
+      setSubmitting(false);
     }
-    router.push("/kuyruk");
   }
 
   return (
