@@ -1,109 +1,99 @@
-# Durum — 2026-07-24
+# Durum — 2026-07-25 (oturum limiti nedeniyle burada durduruldu)
 
-## Aktif plan
-`docs/superpowers/plans/2026-07-24-mvp-backend-foundation.md` — Plan 1/4 (Backend + Data Foundation).
-**TAMAMLANDI: 24/24 task.** `subagent-driven-development` ile yürütüldü (worktree:
-`mvp-backend-foundation`, branch `worktree-mvp-backend-foundation`). Her task TDD + Claude task-reviewer
-(spec+quality) geçti. Sonunda Task 24: Claude whole-branch review (4 Important bulgu, hepsi
-düzeltildi) + zorunlu Codex cross-model-review (3 High/Critical bulgu — JWT alg/issuer/audience
-eksikti, admin queue approve/reject atomik değildi, revert() venue/version eşleşmesi kontrol
-etmiyordu — hepsi düzeltildi ve doğrulandı). Sonuç: 77/77 test geçiyor, tsc temiz, lint 0 hata.
+## Aktif plan: Plan 3/4 (Admin Panel) — Task 7/7'nin ortasında, DEVAM ET
+`docs/superpowers/plans/2026-07-25-admin-panel.md`. Plan 1 ✅ (24/24) ve Plan 2 ✅ (12/12) tamamen
+bitti, ayrıntı için `.superpowers/sdd/progress.md`'ye bak (worktree-lokal, git-ignored).
 
-`docs/superpowers/plans/2026-07-24-web-pwa-client.md` — Plan 2/4 (Web/PWA Client). **TAMAMLANDI:
-12/12 task (0-11).** Plan-red-team (Codex, verdict YENIDEN BOL) fixleri implementasyondan önce
-uygulandı. Her task subagent-driven-development ile (implementer + Claude task-reviewer + Codex
-delegating-ui-work görsel pass, ilgili task'larda). Task 6'da gerçek bir SSR çökme hatası bulundu
-(WhatsappShareButton render sırasında window'a erişiyordu) ve düzeltildi. Task 11'de apps/api'nin
-gerçek process olarak hiç boot olamadığı keşfedildi (@fastify/static eksikti, jest'in in-process
-TestingModule'ü bunu maskeliyordu) + packages/shared'ın build adımı olmadığı için compiled
-dist/main.js'in production'da çökeceği tespit edildi (bkz. "Acil" bölümü). Sonunda: Claude
-whole-branch review + zorunlu Codex cross-model-review (kod-reviewer agent'ı otomatik Codex'e
-delege ediyor) — 0 Critical, 7 Important bulgu (favoriler ucdan uca kirikti: addFavoriteVenue
-validasyonsuzdu, eklenen mekanlar hicbir zaman geri gosterilmiyordu, liste secimi
-deterministik degildi, auth hatasi sonsuz loading'e dusuruyordu; kategori hizli-rota degerleri
-gercek veriyle eslesmiyordu (tum sonuclar bos donuyordu); hizli-rota ve normal filtreler ayni
-state'i coordinasyonsuz eziyordu; .nvmrc Node 20 diyordu ama bir bagimlilik Node >=22 gerektiriyordu)
-— hepsi düzeltildi ve dogrulandi (apps/api 77/77, apps/web 52/52, packages/shared 3/3). Ayrica
-design spec'in "service worker + temel onbellekleme" gereksinimi hicbir task'a donusturulmemis
-bir plan bosluguydu — bulundu, minimal bir service worker eklendi. Henüz master'a merge
-edilmedi — worktree'de duruyor, sıradaki plan(lar) da aynı worktree'de devam edecek, hepsi
-bittiğinde tek seferde review edilip merge edilecek.
+Plan 3: idea-red-team (Codex) orijinal 6 sayfalı admin app'i NO-GO dedi → kullanıcı kararıyla 2
+sayfaya daraltıldı (kürasyon kuyruğu + CSV import, gerisi Postman/Prisma Studio/Supabase
+dashboard'a bırakıldı). plan-red-team YENİDEN BÖL dedi, tüm bulgular düzeltildi. **Task 0-6
+TAMAMLANDI** (hepsi review'dan geçti, ilgili Codex görsel pass'leri dahil). **Task 7 (son task:
+CORS + smoke test + zorunlu final review) YARIM KALDI:**
 
-Yol haritası: 1) Backend+Data ✅ TAMAMLANDI → 2) Web/PWA client ✅ TAMAMLANDI → 3) Admin panel UI (sırada) → 4) Infra/CI/KVKK/pilot.
+- Task 7 Step 1 (CORS'a localhost:3003 ekle): ✅ yapıldı, commit `4b0ebcb`.
+- Task 7 Step 3 (gerçek stack'e karşı smoke test): subagent çalıştırıldı, **KRİTİK bir bug buldu**
+  (aşağıya bak) — rapor: `.superpowers/sdd/task-7-smoke-report.md`.
+- Bug'ın düzeltmesi: subagent dispatch edildi, **oturum limitine çarpıp yarıda kesildi**, ama
+  düzeltmenin kendisi tamamlanmış ve commit edilmiş durumda (`a3e77b0`) — 90/90 test geçiyor, tsc
+  temiz. **Eksik olan: gerçek HTTP ile (curl, gerçek Supabase JWT) doğrulama** — subagent bunu
+  yapıyordu ama kesildi. STATE.md'ye "gerçek-HTTP doğrulaması bekliyor" olarak not düşüldü, kod
+  fix'i commit mesajında da bunu açıkça söylüyor.
+- **Task 7 Step 4 (zorunlu final whole-branch review + Codex cross-model-review) HİÇ
+  BAŞLAMADI.**
 
-**Teknik notlar:**
-- Codex CLI sandbox'ı proje dizini dışındaki dosyaları okuyamıyor — süresiz takılıyor, önce proje içine kopyala.
-- Yerel Supabase stack bu worktree'de `npx supabase start` ile ayakta (portlar 54421-54429, `Gastrova`
-  adlı başka bir projeyle çakışmayı önlemek için varsayılan 54321-54329'dan kaydırıldı — bkz.
-  `supabase/config.toml`). DB: `postgresql://postgres:postgres@127.0.0.1:54422/postgres`.
-- Docker Desktop'ın çalışır durumda olması gerekiyor (`npx supabase start` başlatamazsa önce Docker'ı aç).
+## SIRADAKİ ADIM (yeni oturumda buradan devam et)
+1. Gerçek stack'e karşı `a3e77b0`'ın gerçekten 403'ü kapattığını doğrula: Supabase'i ayağa kaldır
+   (`cd apps/api && npx supabase status`, gerekirse `npx supabase start` — Docker açık olmalı),
+   `apps/api`'yi gerçek çalıştır (`pnpm run start:dev` Node 22'de KIRIK, bkz. aşağıdaki "Acil"
+   bölümü — bunun yerine `npx ts-node -T src/main.ts` kullan, `PORT=3001`), gerçek bir curator
+   JWT al (`.superpowers/sdd/task-7-smoke-report.md`'de tam adımlar var: signup → DB'de role yaz →
+   `supabase/config.toml`'daki `[auth.hook.custom_access_token]`'ı GEÇİCİ olarak aç, bir Postgres
+   fonksiyonu yaz, `supabase stop && start`, token al, SONRA `git checkout -- supabase/config.toml`
+   ile geri al — commit ETME). `curl -H "Authorization: Bearer <token>" http://localhost:3001/v1/admin/queue`
+   artık 403 değil 200 dönmeli.
+2. Doğrulandıktan sonra: `.superpowers/sdd/progress.md`'ye Task 7'nin tamamlandığını yaz.
+3. Task 7 Step 4'ü çalıştır: `superpowers:subagent-driven-development`'ın final whole-branch review
+   deseni (Plan 1 Task 24 / Plan 2'nin final review'ıyla AYNI) — `code-reviewer` agent'ını dispatch
+   et (otomatik Codex'e delege ediyor), `scripts/review-package` ile diff paketi hazırla (base:
+   Plan 3'ün başladığı commit, muhtemelen Plan 2'nin bittiği commit — `git log` ile bul), bulguları
+   işle.
+4. Plan 3 bitince: kullanıcıya sormadan Plan 4'e (Infra/CI/KVKK/pilot) geç — `superpowers:brainstorming`
+   ile başla, `idea-red-team` çalıştırmayı unutma (Plan 3'te olduğu gibi zorunlu).
+5. Hiçbir plan henüz master'a merge edilmedi — hepsi bittiğinde tek seferde review edilip
+   merge edilecek (kullanıcı kararı, değişmedi).
 
-## Şu an ne yapıyoruz
-Kullanıcı Plan 1'i uçtan uca otonom yürütmemi istedi ("sormadan devam et, hata varsa düzelt, arayüzlü
-neredeyse çalışan bir app olana kadar bu döngüde devam et"). Plan 1 bu şekilde tamamlandı — 24 task,
-her biri gerçek DB'ye/gerçek HTTP isteğine karşı doğrulanarak. Süreçte bulunup düzeltilen önemli
-hatalar: Task 6 GIST index kullanılmıyordu (~460x yavaş), Task 16 mekan oluşturma DB'de tamamen
-çöküyordu + CSV import Fastify'da hiç çalışmıyordu (ikisi de gerçek DB/HTTP ile doğrulanarak
-düzeltildi), Task 9/12/19'da NestJS exception wire-format hatası (3 kez, aynı hata sınıfı — üçüncüsünde
-regresyon testiyle kapatıldı), Task 23'te eslint hiç kurulu değildi (CI hiç yeşile geçemezdi) +
-turbo.json Turbo 2.x uyumsuzluğu (root-level pnpm run test/lint/typecheck Task 0'dan beri kırıktı).
+## ACİL — KRİTİK, Plan 3 Task 7'de bulundu: RolesGuard/JwtAuthMiddleware Fastify uyumsuzluğu
+**DÜZELTİLDİ (commit `a3e77b0`), ama gerçek-HTTP doğrulaması eksik (yukarıdaki adım 1'e bak).**
+`@nestjs/platform-fastify` altında klasik `NestMiddleware` (eski `JwtAuthMiddleware`,
+`MiddlewareConsumer.forRoutes("*")` ile kayıtlıydı) Fastify'ın ham Node `IncomingMessage`'ını
+alıyordu, ama `RolesGuard`/her `@Req()` `ExecutionContext.switchToHttp().getRequest()` üzerinden
+AYRI bir `FastifyRequest` nesnesi görüyordu. Middleware'in `req.user = ...` ataması hiçbir zaman
+guard'a görünmüyordu — **her `@Roles(...)` korumalı route (tüm admin API'si: kuyruk, CSV import,
+mekan CRUD, kullanıcı rolleri, raporlar, export) geçerli/geçersiz/hiç token olmadan HER ZAMAN 403
+dönüyordu**, 89 mock testin hiçbiri bunu yakalamadı (TestingModule gerçek Fastify request/response
+sarmalamasını hiç tetiklemiyor). Yalnızca gerçek sunucuya karşı gerçek HTTP isteğiyle bulundu.
+Düzeltme: middleware → `JwtAuthGuard` (CanActivate), `APP_GUARD` ile global kayıt, `RolesGuard`'dan
+önce çalışacak sırada. Detay: `.superpowers/sdd/task-7-smoke-report.md` (bulgu) ve commit `a3e77b0`
+mesajı (düzeltme). Bilinen küçük artık: birkaç controller hâlâ yerel `@UseGuards(RolesGuard)`
+taşıyor, artık global de var — iki kez çalışıyor, aynı sonuç, zararsız ama temizlenebilir.
 
-## Sıradaki adım
-Plan 2 (Web/PWA client) — `superpowers:writing-plans` ile yazılacak, sonra `plan-red-team`, sonra
-aynı worktree'de `subagent-driven-development` ile yürütülecek. Kullanıcıya sormadan devam.
-
-## Bloke olanlar
-- Yok.
+## Acil: production build kırık (Plan 2 Task 11'de keşfedildi, hâlâ çözülmedi)
+`packages/shared`'ın build adımı yok — `apps/api`'nin derlenmiş `dist/main.js`'i VE dokümante
+edilmiş `pnpm run start:dev` komutu (Plan 3 Task 7'de AYRICA doğrulandı — `nest start --watch` da
+aynı `dist/`+`require` yoluna çıkıyor) Node'un native TS type-stripping'i altında extensionless
+import'lar yüzünden çöküyor. Jest bunu maskeler (gerçek process boot'u hiç tetiklemiyor). Plan
+4'ten önce çözülmeli: `packages/shared`'a bir build adımı (tsc/tsup) eklenip `apps/api`'nin ona
+derlenmiş çıktı üzerinden bağımlı olması gerekiyor. Geçici çözüm (yalnızca lokal test için):
+`npx ts-node -T src/main.ts`.
 
 ## Yakın kararlar
 - Round 1/2/3 red-team + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5
 - Plan 1 mimari kararları: docs/adr/001-003
-- Plan 1 yürütme kaydı (task-by-task, bulgular, düzeltmeler): worktree'deki
-  `.superpowers/sdd/progress.md` (worktree silinirse kaybolur — git log kalıcı kayıt)
-
-## Acil: production build kırık (Plan 2 Task 11'de keşfedildi)
-`packages/shared`'ın build adımı yok — `apps/api`'nin derlenmiş `dist/main.js`'i Node'un native
-TS type-stripping'i altında extensionless import'lar yüzünden çöküyor. Jest'in in-process
-`TestingModule`'ü bunu maskeler (gerçek process boot'u hiç tetiklemiyor), bu yüzden 77 testin
-hiçbiri yakalamadı — yalnızca Task 11'in gerçek `apps/api` process'ini ayağa kaldırma denemesi
-buldu. Herhangi bir gerçek Docker/production deploy `node dist/main.js` çalıştırırsa aynı anda
-çöker. Plan 4'ten önce (herhangi bir gerçek deploy denemesinden önce) çözülmeli: `packages/shared`'a
-bir build adımı (tsc/tsup) eklenip `apps/api`'nin ona derlenmiş çıktı üzerinden bağımlı olması
-gerekiyor, extensionless import'lara güvenmeden.
+- Plan 3 kapsam daraltması + red-team kayıtları: docs/superpowers/specs/2026-07-24-admin-panel-design.md,
+  docs/superpowers/plans/2026-07-25-admin-panel.md'nin sonundaki "Red-team bulguları" bölümü
+- Yürütme kayıtları (task-by-task): `.superpowers/sdd/progress.md` (worktree-lokal, git log kalıcı)
 
 ## Ertelenen takip maddeleri (Plan 4 / gerçek Supabase projesi kurulunca)
-- Rol kaynağı kopuk: AdminUsersService DB'ye User.role yazıyor ama JwtAuthMiddleware rolü JWT'nin
-  user_role claim'inden okuyor — gerçek senkron için Supabase custom access token hook gerekiyor.
-- Rol string case'i (küçük harf decorator'lar vs. büyük harf Prisma enum) — gerçek JWT claim casing'i
-  Supabase projesi kurulunca doğrulanmalı.
-- RateLimitGuard req.ip kullanıyor, trustProxy yok — gerçek reverse proxy arkasında tüm kullanıcılar
-  aynı IP'yi paylaşabilir. rate_limit_counters satırları hiç temizlenmiyor (yavaş büyüme).
-- VenueVersion snapshot'ı yalnızca admin-queue approve() akışında oluşuyor, doğrudan admin CRUD'da değil.
-- isBoutique DRAFT durumunda true olabiliyor (kural PUBLISHED gerektiriyor); kısmi update'lerde bayat kalabiliyor.
-- REPORT onayı hiçbir düzeltme uygulamadan verifiedAt'i yeniliyor — ürün semantiği sorusu, kullanıcıya sorulmalı.
-- eslint no-explicit-any/no-unused-vars "warn" (74 önceden var olan kullanım), "error"a sıkılaştırılmalı.
-- Plan 2 Task 4: açık/kapalı (open-now) filtresi api-spec.md'de var ama Plan 1 hiç implemente etmedi
-  (`VenueListQuerySchema`'da `openNow` yok, repository'de opening-hours karşılaştırması yok) — web UI'da
-  da bilerek eklenmedi (var olmayan filtreyi UI'da göstermek çalışıyormuş gibi görünüp hiçbir şey yapmazdı).
-  Küçük, sınırlı iş: `openNow: z.coerce.boolean().optional()` şemaya + Europe/Istanbul saat dilimi
-  duyarlı SQL karşılaştırması repository'ye.
-- Plan 2 final whole-branch review'dan Minor bulgular (bloke etmiyor, backlog):
-  - E2E smoke suite 2 senaryo kapsıyor (keşif→detay→bildir, favori-gating→giriş); development-guidelines.md
-    §4'ün hedefi 4-5 senaryo (harita, WhatsApp paylaşım, giriş yapmış favori akışı eksik) — Task 11'in
-    brief'i yalnızca 2 senaryo istemişti, plan metninin kendisi dar kapsamlıydı.
-  - `useGeolocation` hook'u aynı ağaçta iki kez mount ediliyor (`district-picker.tsx` ve
-    `discovery-client.tsx`), bu yüzden `getCurrentPosition` iki kez tetikleniyor — plan tek izin
-    promptu varsaymıştı ama hook paylaşılan state/provider değil, her mount kendi isteğini yapıyor.
-  - `discovery-client.tsx`/`category-quick-route.tsx`'te `setVenues` çağrılarında sıra koruması yok —
-    yavaş/gecikmeli bir yanıt daha yeni bir seçimi ezebilir (haritanın bbox loader'ındaki
-    request-sequence guard pattern'i burada uygulanmadı).
+- Rol kaynağı kopuk: DB'ye User.role yazılıyor ama JWT'nin user_role claim'i gerçek bir custom
+  access token hook gerektiriyor — Plan 3 Task 7'de LOKAL olarak bunu geçici kurup doğruladık,
+  gerçek projede kalıcı kurulması gerekiyor.
+- RateLimitGuard req.ip kullanıyor, trustProxy yok. rate_limit_counters hiç temizlenmiyor.
+- VenueVersion snapshot'ı yalnızca admin-queue approve() akışında oluşuyor.
+- isBoutique DRAFT'ta true olabiliyor, kısmi update'lerde bayat kalabiliyor.
+- REPORT onayı düzeltme uygulamadan verifiedAt'i yeniliyor — ürün semantiği sorusu (Plan 3'te
+  QueueItem'ın buton metnine bunu netleştiren bir not eklendi, davranış değişmedi).
+- eslint no-explicit-any/no-unused-vars "warn", "error"a sıkılaştırılmalı.
+- Plan 1: açık/kapalı (open-now) filtresi hiç implemente edilmedi.
+- Plan 2 final review Minor bulguları: E2E suite 2/4-5 senaryo, useGeolocation iki kez mount
+  oluyor, setVenues'ta sıra koruması yok.
+- Plan 2 Task 9: FavoriteButton'da double-click guard yok.
+- Plan 3: birkaç admin controller'da artık gereksiz `@UseGuards(RolesGuard)` (global guard zaten var).
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar
 - Tam menü, semantic search/pgvector, geniş kullanıcı katkısı (MVP'de): ELENDİ → Faz 2. KALICI.
-- "Butik" tanımı salt DB kuralı: ELENDİ, hâlâ tam ölçülebilir değil — kaynak-linki önerildi (Sorun 3).
-- React Native mobil (MVP'de): ELENDİ (round 3) → web/PWA ile pilot. KOŞULLU — retention kanıtlanırsa aç.
-- Gurme Puanı/yorum-puanlama (MVP'de): ELENDİ (round 3, 4 ajan+Codex mutabakatı). KALICI, Faz 2'ye kadar.
-- Landing page ön-testi: ELENDİ (kullanıcı kararı). KOŞULLU — pilot sonrası Codex'in eşikleri uygulanacak.
-- Plan 2 Task 9: FavoriteButton'da double-click guard yok — hizli art arda tiklama
-  getFavoriteLists/createFavoriteList'i eszamanli iki kez tetikleyip iki "Favorilerim" listesi
-  olusturabilir. Kucuk iş: handleClick'e bir pending/disabled state eklemek.
+- React Native mobil (MVP'de): ELENDİ (round 3) → web/PWA. KOŞULLU — retention kanıtlanırsa aç.
+- Gurme Puanı/yorum-puanlama (MVP'de): ELENDİ (round 3). KALICI, Faz 2'ye kadar.
+- Landing page ön-testi: ELENDİ (kullanıcı kararı).
+- Plan 3'ün orijinal 6 sayfalı admin app kapsamı: ELENDİ (idea-red-team NO-GO + kullanıcı kararı)
+  → 2 sayfaya daraltıldı. KALICI, gerçek kullanım pilot sonrası genişletme ihtiyacı gösterirse
+  yeniden değerlendirilebilir.
