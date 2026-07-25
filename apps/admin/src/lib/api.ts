@@ -20,6 +20,11 @@ export class ApiValidationError extends Error {
 // AdminQueueItemSchema comment), so the filter is hardcoded here, structurally, rather than left to
 // every call site to remember. A pending EDIT/re_verify item elsewhere in the real queue must never
 // be able to break this app's one page.
+//
+// This deliberately narrows the plan's Task 3 "Produces" signature (`getQueue(token, {type?,
+// status?})`, docs/superpowers/plans/2026-07-25-admin-panel.md) — `type` was dropped, not left
+// optional, specifically so a caller can never override the REPORT-only lock above. Contract note,
+// not a behavior gap: this signature is final for this app's narrowed 2-page scope.
 export async function getQueue(token: string, filters: { status?: string } = {}): Promise<AdminQueueItem[]> {
   const client = createApiClient(API_BASE, () => token);
   const params = new URLSearchParams({ type: "REPORT", ...filters }).toString();
@@ -52,7 +57,7 @@ export async function importCsv(token: string, file: File): Promise<CsvImportRes
     body: formData,
   });
   if (!res.ok) throw new Error(`Import failed: ${res.status}`);
-  const raw = await res.json();
+  const raw: unknown = await res.json();
   const result = CsvImportResultSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError("/admin/import", result.error.issues);
   return result.data;

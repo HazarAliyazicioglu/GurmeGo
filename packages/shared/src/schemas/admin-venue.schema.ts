@@ -1,14 +1,22 @@
 import { z } from "zod";
 import { PRICE_RANGE_VALUES } from "../enums/price-range";
 
+// Shared field-level constraints — also consumed by `CsvVenueImportRowSchema`
+// (./csv-venue-import.schema.ts) so the two can't silently drift apart. Any admin-facing venue
+// input (JSON body or CSV row) must obey the SAME name/slug/coordinate limits.
+export const VENUE_NAME_MAX_LENGTH = 200;
+export const VENUE_SLUG_MAX_LENGTH = 220;
+export const VENUE_LAT_RANGE = [-90, 90] as const;
+export const VENUE_LNG_RANGE = [-180, 180] as const;
+
 // Admin-only creation/update input for `POST/PUT /admin/venues`. Distinct from `VenueSchema`
 // (packages/shared/src/schemas/venue.schema.ts), which describes the public-facing read shape and
 // has no `lat`/`lng`/`franchiseFlag` — those are inputs the admin supplies so the API can compute
 // `location` (raw SQL, see ADR 002) and `isBoutique` (rule engine), not fields a client ever reads back
 // verbatim in that form.
 export const AdminVenueCreateSchema = z.object({
-  name: z.string().min(1).max(200),
-  slug: z.string().min(1).max(220),
+  name: z.string().min(1).max(VENUE_NAME_MAX_LENGTH),
+  slug: z.string().min(1).max(VENUE_SLUG_MAX_LENGTH),
   districtId: z.string().uuid(),
   category: z.string().min(1),
   cuisineType: z.string().optional(),
@@ -19,8 +27,8 @@ export const AdminVenueCreateSchema = z.object({
   editorialNote: z.string().max(1000).optional(),
   branchCount: z.number().int().min(1),
   franchiseFlag: z.boolean(),
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
+  lat: z.number().min(VENUE_LAT_RANGE[0]).max(VENUE_LAT_RANGE[1]),
+  lng: z.number().min(VENUE_LNG_RANGE[0]).max(VENUE_LNG_RANGE[1]),
   googleRating: z.number().min(0).max(5).optional(),
   googleRatingCount: z.number().int().min(0).optional(),
   googlePlaceId: z.string().optional(),

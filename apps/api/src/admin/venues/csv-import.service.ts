@@ -1,45 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { parse } from "csv-parse/sync";
-import { z } from "zod";
-import { PRICE_RANGE_VALUES } from "@gurmego/shared";
+import { CsvVenueImportRowSchema, type CsvVenueImportRow } from "@gurmego/shared";
 
-const CsvRowSchema = z.object({
-  // `.max(200)`/`.max(220)` mirror AdminVenueCreateSchema (packages/shared/src/schemas/admin-venue.schema.ts)
-  // exactly — CSV import must not be able to persist rows the manual create API would reject.
-  name: z.string().min(1, "name zorunlu").max(200, "name en fazla 200 karakter olabilir"),
-  slug: z.string().min(1, "slug zorunlu").max(220, "slug en fazla 220 karakter olabilir"),
-  districtSlug: z.string().min(1),
-  category: z.string().min(1),
-  priceRange: z.enum(PRICE_RANGE_VALUES),
-  branchCount: z.coerce.number().int().min(1),
-  // `z.coerce.boolean()` is exactly `Boolean(input)` — since any non-empty string is truthy,
-  // the CSV text "false" would coerce to `true`. Explicit enum + transform avoids that footgun.
-  franchiseFlag: z
-    .enum(["true", "false"], { errorMap: () => ({ message: "franchiseFlag 'true' veya 'false' olmalı" }) })
-    .transform((v) => v === "true"),
-  // `z.coerce.number()` on an empty string coerces to `0` (`Number("") === 0`), which is a
-  // legitimately-in-range latitude/longitude — a blank cell would silently become real (bogus)
-  // coordinates instead of failing validation. Require a non-blank string before coercing.
-  lat: z.string().trim().min(1, "lat zorunlu").pipe(z.coerce.number().min(-90).max(90)),
-  lng: z.string().trim().min(1, "lng zorunlu").pipe(z.coerce.number().min(-180).max(180)),
-  openingHours: z.string().transform((s, ctx) => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(s);
-    } catch {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "openingHours geçerli JSON olmalı" });
-      return z.NEVER;
-    }
-    const shape = z.record(z.string(), z.string()).safeParse(parsed);
-    if (!shape.success) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "openingHours düz bir { gün: saat } string haritası olmalı" });
-      return z.NEVER;
-    }
-    return shape.data;
-  }),
-});
-
-export type CsvRow = z.infer<typeof CsvRowSchema>;
+export type CsvRow = CsvVenueImportRow;
 
 // Each valid row is tagged with its ORIGINAL 1-based CSV line number. `importRows` reports its own
 // errors (district-not-found, create-failure) against a subset of these rows (structurally-invalid
@@ -52,13 +15,20 @@ export class CsvImportService {
   parseRows(csv: string): { valid: CsvImportRow[]; errors: { row: number; message: string }[] } {
     let records: Record<string, string>[];
     try {
-      records = parse(csv, { columns: true, skip_empty_lines: true });
+      // `bom: true` strips a leading UTF-8 BOM before the header row is parsed. Excel's "CSV UTF-8"
+      // export commonly prepends one; without this option the first column's key becomes the literal
+      // "﻿name" instead of "name", so every row in an otherwise-valid Excel export fails
+      // validation with a spurious "name zorunlu" error.
+      records = parse(csv, { columns: true, skip_empty_lines: true, bom: true });
     } catch (err) {
       // A malformed file (bad quoting, inconsistent column counts, ...) makes csv-parse throw
       // synchronously — surface it as a single file-level row error instead of a 500 that discards
-      // even the valid rows in an otherwise-fine file.
-      const message = err instanceof Error ? err.message : "Bilinmeyen CSV ayrıştırma hatası";
-      return { valid: [], errors: [{ row: 0, message: `CSV dosyası ayrıştırılamadı: ${message}` }] };
+      // even the valid rows in an otherwise-fine file. The raw csv-parse message (internal parser
+      // state, sometimes fragments of file content) is logged server-side only, same pattern as
+      // admin-venues.service.ts's importRows create()-failure handling — the client gets a generic
+      // message.
+      console.error("CSV parse failed:", err);
+      return { valid: [], errors: [{ row: 0, message: "CSV dosyası ayrıştırılamadı: dosya biçimi geçersiz" }] };
     }
 
     const valid: CsvImportRow[] = [];
@@ -66,7 +36,7 @@ export class CsvImportService {
 
     records.forEach((record, index) => {
       const row = index + 1;
-      const result = CsvRowSchema.safeParse(record);
+      const result = CsvVenueImportRowSchema.safeParse(record);
       if (result.success) {
         valid.push({ row, data: result.data });
       } else {

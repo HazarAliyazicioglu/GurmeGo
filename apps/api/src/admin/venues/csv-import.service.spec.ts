@@ -86,16 +86,33 @@ Test Cafe,${longSlug},kadikoy,cafe,MODERATE,1,false,40.99,29.02,"{}"`;
     expect(errors).toEqual([{ row: 1, message: expect.stringContaining("slug") }]);
   });
 
-  it("returns a single file-level error instead of throwing when the CSV is malformed", () => {
+  it("returns a single generic file-level error instead of throwing or leaking csv-parse's raw message when the CSV is malformed", () => {
     // Unterminated quoted field — csv-parse/sync throws synchronously on this instead of returning
-    // partial records.
+    // partial records. The raw csv-parse exception message must never reach the client (it can
+    // contain internal parser/dependency detail) — only a generic message, logged server-side.
     const csv = `name,slug,districtSlug,category,priceRange,branchCount,franchiseFlag,lat,lng,openingHours
 "Unterminated quote,test-cafe,kadikoy,cafe,MODERATE,1,false,40.99,29.02,"{}"`;
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
     const result = service.parseRows(csv);
+
     expect(result.valid).toEqual([]);
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0].row).toBe(0);
-    expect(result.errors[0].message).toEqual(expect.any(String));
+    expect(result.errors).toEqual([{ row: 0, message: "CSV dosyası ayrıştırılamadı: dosya biçimi geçersiz" }]);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("strips a leading UTF-8 BOM so the header row parses correctly (Excel 'CSV UTF-8' export)", () => {
+    // Without `bom: true` in the csv-parse options, this leading BOM makes the first column's key
+    // literally "﻿name" instead of "name" — the row would fail with a spurious "name zorunlu"
+    // error even though the file is otherwise perfectly valid.
+    const csv = `﻿name,slug,districtSlug,category,priceRange,branchCount,franchiseFlag,lat,lng,openingHours
+Test Cafe,test-cafe,kadikoy,cafe,MODERATE,1,false,40.99,29.02,"{}"`;
+    const { valid, errors } = service.parseRows(csv);
+    expect(errors).toEqual([]);
+    expect(valid).toHaveLength(1);
+    expect(valid[0].data.name).toBe("Test Cafe");
   });
 
   it("reports a row-level error for malformed openingHours JSON", () => {
