@@ -21,8 +21,8 @@ yapılamaması (status alanı create/update şemalarında yok). Kullanıcıyla h
 - Yok.
 
 ## Yakın kararlar
-- Round 1/2/3 red-team + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5
-- Plan 1 mimari kararları: docs/adr/001-003
+- Round 1/2/3 red-team + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5. Plan 1 mimari
+  kararları: docs/adr/001-003.
 - Plan 3/4a red-team + final-review kayıtları: docs/superpowers/plans/2026-07-25-admin-panel.md,
   docs/superpowers/specs/2026-07-25-infra-ci-design.md, docs/superpowers/plans/2026-07-26-shared-build-fix.md
 
