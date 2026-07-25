@@ -39,14 +39,12 @@ maddelerinden biri mi (Supabase Auth↔User senkronizasyonu, pilot analytics) ko
 ## Denenmiş ve ELENMİŞ yaklaşımlar (özet — gerekçe git log/CHANGELOG'da)
 - Tam menü, semantic search, geniş kullanıcı katkısı (MVP'de): ELENDİ → Faz 2. KALICI.
 - React Native (MVP'de), Gurme Puanı/yorum (MVP'de), landing page ön-testi: ELENDİ (round 3 kararları).
-- Final review'u/plan-red-team'i tek turda bitirmeyi ummak: ELENDİ — Plan 3 final review 4 tur,
-  Plan 4a plan-red-team 3 tur gerektirdi, her seferinde küçülen ama gerçek bulgular çıktı. KALICI
-  ders: Codex gerçekten TEMİZ/HAZIR diyene kadar review loop'unu kesme.
-- `codex exec`'e büyük diff'i (>150KB) komut satırı argümanı olarak verme: ELENDİ ("Argument list
-  too long" / hang riski). KALICI çözüm: stdin'den pipe et, gerekirse parçalara böl.
-- Plan 4a'nın orijinal (staging+manuel gate+Sentry/pino bir arada) tasarımı: ELENDİ (idea-red-team
-  NO-GO). KALICI ders: bu ölçekte (150 kullanıcı/6 hafta) kurumsal CD koreografisi yerine
-  platformların native git-deploy'una güven.
-- Derlenmiş çıktıda (barrel export) string arayan `grep` ile doğrulama: ELENDİ (Plan 4a Task 2'de
-  false-negative verdi — `export *` runtime'da `__exportStar` loop'una derleniyor, statik metin
-  değil). KALICI çözüm: gerçek `require()` + property-check kullan.
+- Review/red-team'i tek turda bitirmeyi ummak: ELENDİ — Plan 3 final review 4 tur, Plan 4a
+  plan-red-team 3 tur gerektirdi, her seferinde küçülen ama gerçek bulgular çıktı. KALICI ders:
+  Codex gerçekten TEMİZ/HAZIR diyene kadar kesme.
+- `codex exec`'e büyük diff'i (>150KB) argüman olarak verme: ELENDİ (hang/"too long" riski).
+  KALICI çözüm: stdin'den pipe et, gerekirse parçalara böl.
+- Plan 4a'nın orijinal (staging+manuel gate+Sentry/pino) tasarımı: ELENDİ (idea-red-team NO-GO).
+  KALICI ders: bu ölçekte kurumsal CD koreografisi yerine native git-deploy'a güven.
+- Derlenmiş barrel export'ta string arayan `grep` ile doğrulama: ELENDİ (false-negative — `export *`
+  runtime'da `__exportStar` loop'una derleniyor). KALICI çözüm: gerçek `require()`+property-check.
