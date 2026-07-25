@@ -1,7 +1,70 @@
 # GurmeGo — Changelog
 
-Bu dosya spec/karar seviyesindeki değişiklikleri kaydeder (kod değişikliği henüz yok). Her girdi:
-ne değişti, neyle değiştirildi, neden. En yeni en üstte.
+Bu dosya spec/karar seviyesindeki değişiklikleri kaydeder. Her girdi: ne değişti, neyle
+değiştirildi, neden. En yeni en üstte.
+
+---
+
+## 2026-07-25 — Plan 1/2/3 tamamlandı, Plan 4a red-team NO-GO + küçültme
+
+### Durum
+Plan 1 (Backend+Data, 24/24), Plan 2 (Web/PWA, 12/12), Plan 3 (Admin panel, 7/7) tamamlandı — hepsi
+final review'dan (Superpowers + zorunlu Codex cross-model) geçti. Plan 3'ün final review'ı 4
+fix/re-review turu gerektirdi: her turda bir önceki fix'in kendisi yeni bir regresyon yarattı (JWT
+guard fix → kuyruk sayfası hata yönetimi → o fix'in kendi regresyonu → CI lint script'i → header
+metni → test assertion gücü), 5. Codex geçişi TEMİZ verdi. Hiçbir plan `master`'a merge edilmedi
+(kullanıcı kararı, sabit).
+
+### Plan 4a (Infra/CI) — idea-red-team NO-GO ve kapsam küçültme
+Orijinal tasarım (staging ortamı + GitHub Environments manuel onay gate'i + otomatik
+migration→deploy sıralaması + Sentry/pino aynı planda) Codex'ten **NO-GO** aldı. Gerekçe özet:
+150 kullanıcılık/6 haftalık bir pilotun önüne henüz hiçbir hesabı olmayan bir kurumsal CI/CD
+koreografisi konuyordu; ayrıca birkaç gerçek teknik hata vardı (GitHub Environments job-ortasında
+beklemez, Vercel git-push'ta otomatik deploy edip gate'i beklemez, tanımsız secret "temiz hata"
+değil boş string üretir, multi-stage Dockerfile'ın pnpm monorepo pruning'i muhtemelen kırık,
+`.nvmrc`'nin gerçek içeriği (22.19.0) tasarım dokümanındaki varsayılan sürümle (20) uyuşmuyordu).
+
+**Kabul edilenler (plana işlendi):** Deploy job'unun tamamı çıkarıldı; Railway/Vercel'in kendi
+native git-push deploy'una güvenme kararına dönüştü; Dockerfile varsayılan değil, Nixpacks
+yetmezse geri düşülecek seçenek oldu; Sentry+pino bu plandan çıkarıldı; `.nvmrc` sürümüne dokümanda
+sabit numara yazılmaması kuralına çevrildi.
+
+**Ayrıca bulunan, bu plana dahil edilmeyen gerçek boşluk:** `prd.md §5`'teki Pilot Karar
+Sözleşmesi'nin metrikleri (Maps'e gitme/kaydetme/paylaşma "karar eylemi", 4. hafta geri dönüş
+kohortu) hiçbir yerde event-capture/analytics ile ölçülmüyor — Sentry/pino bunu karşılamaz. Kendi
+planını hak eden ayrı bir iş, `docs/STATE.md`'ye takip maddesi olarak düşüldü.
+
+**Reddedilenler:** Yok — round 1 raporu tamamen kabul edildi.
+
+### Ertelenen takip maddeleri (tam liste)
+- Pilot karar metrikleri ölçülemiyor (yukarıda).
+- Auth: JWT `user_role` claim'i gerçek projede kalıcı bir custom access token hook gerektirir —
+  Plan 3 Task 7'de lokal olarak geçici kurulup doğrulandı (2026-07-25'te tekrar doğrulandı).
+- `RateLimitGuard` `req.ip` kullanıyor, `trustProxy` yok; `rate_limit_counters` hiç temizlenmiyor.
+- `VenueVersion` snapshot'ı yalnızca admin-queue approve() akışında oluşuyor.
+- `isBoutique` DRAFT'ta true olabiliyor, kısmi update'lerde bayat kalabiliyor.
+- REPORT onayı düzeltme uygulamadan `verifiedAt`'i yeniliyor — ürün semantiği sorusu.
+- eslint `no-explicit-any`/`no-unused-vars` "warn", "error"a sıkılaştırılmalı (86 pre-existing warning).
+- Plan 1: açık/kapalı (open-now) filtresi hiç implemente edilmedi.
+- Plan 2 final review Minor bulguları: E2E suite 2/4-5 senaryo, `useGeolocation` iki kez mount
+  oluyor, `setVenues`'ta sıra koruması yok. Plan 2 Task 9: `FavoriteButton`'da double-click guard yok.
+- Plan 3: birkaç admin controller'da artık gereksiz (zararsız) çift `@UseGuards(RolesGuard)`.
+
+### Dersler (KALICI)
+- **Review loop'u erken kesme:** final review'da "muhtemelen temizdir" varsayımıyla tek fix
+  turunda bitirmeyi ummak yanlıştı — 4 tur gerekti, her turda önceki fix kendi regresyonunu
+  yarattı. Codex gerçekten TEMİZ diyene kadar devam et; aynı dosya/state mantığı birden fazla kez
+  düzeltiliyorsa bu regresyon riskinin arttığının işaretidir, azaldığının değil.
+- **`codex exec`'e büyük diff verme:** >150KB diff'i komut satırı argümanı olarak embed etmek
+  "Argument list too long" veya süresiz hang'e yol açıyor. Çözüm: diff'i stdin'den pipe et
+  (`codex exec --skip-git-repo-check - < prompt.txt`), gerekirse mantıksal parçalara böl.
+- **Root `docs/STATE.md`'yi worktree'deki ilerlemeyle senkronize etmeden bırakmak:** bir önceki
+  oturum session limitine çarptığında root STATE.md güncellenmeden kaldı, bu da bu oturumun
+  başında yanlışlıkla ikinci bir worktree açıp bitmiş işin tekrarlanmasına yol açtı. Artık root
+  STATE.md worktree'nin varlığına işaret ediyor, detayı tekrarlamıyor.
+- **Bu ölçekte (150 kullanıcı/6 hafta) kurumsal CD koreografisi gereksiz:** platformların native
+  git-deploy'una güvenmek yeterli; staging ortamı + manuel onay gate'i pilotu hızlandırmaz,
+  geciktirir.
 
 ---
 
