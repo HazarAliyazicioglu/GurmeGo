@@ -6,15 +6,16 @@ düzeltmeleri)** — hepsi task-review'dan geçti, `master`'a henüz merge edilm
 hepsi bitince tek seferde). Detay: `.superpowers/sdd/progress.md` (worktree-lokal, git-ignored).
 
 ## Şu an ne yapıyoruz
-Plan 4b'nin 16 task'ı `subagent-driven-development` ile tamamlandı (implementer → task reviewer →
-gerekirse fix/re-review döngüsü, birkaç task 2-3 tur gerektirdi — hepsi TEMİZ'e ulaştı). Final
-whole-branch review (Superpowers + zorunlu `cross-model-review`) sırada. Kullanıcının "sormadan
-devam et" talimatı (2026-07-26) uyarınca yürütülüyor, tam kayıt `docs/SESSION-LOG-2026-07-26.md`.
+**Plan 4b TAMAMEN BİTTİ:** 16/16 task + final whole-branch review (Codex, 2 fix turu — round 1'de
+3 gerçek bulgu, round 2'de 1 gerçek regresyon + 2 minor, round 3 TEMİZ). Her `code-reviewer`
+dispatch'i bu ortamda zaten Codex'e yönleniyor, yani "her zaman cross-model-review çalıştır"
+kuralı boyunca zaten sağlanmış — ayrı bir skill çağrısına gerek kalmadı. Tam kayıt
+`docs/SESSION-LOG-2026-07-26.md` + `.superpowers/sdd/progress.md`.
 
 ## Sıradaki adım
-Plan 4b için final whole-branch review'ı çalıştır (Superpowers final code-reviewer + ayrıca
-`cross-model-review` skill'i, ikisi de zorunlu). Sonra Plan 4c (frontend, design doc HAZIR:
-`docs/superpowers/specs/2026-07-26-frontend-fixes-design.md`) aynı süreçle yazılıp yürütülecek.
+Plan 4c (frontend düzeltmeleri, design doc HAZIR: `docs/superpowers/specs/2026-07-26-frontend-fixes-design.md`)
+için `writing-plans` ile implementasyon planı yaz, `plan-red-team`'den geçir, sonra
+`subagent-driven-development` ile yürüt — Plan 4b ile aynı süreç.
 
 ## Bloke olanlar
 - Yok.
