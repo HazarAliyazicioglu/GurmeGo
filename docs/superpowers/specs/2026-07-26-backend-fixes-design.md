@@ -1,7 +1,7 @@
 # GurmeGo — Plan 4b: Backend Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 3 PIVOT sonrası tam
-revizyon), idea-red-team round 4'e hazır
+**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 4 PIVOT sonrası tam
+revizyon), idea-red-team round 5'e hazır
 
 İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
 [docs/superpowers/specs/2026-07-26-frontend-fixes-design.md](2026-07-26-frontend-fixes-design.md) (kardeş plan — Bölüm 2.5'teki header sözleşmesi ortak, Bölüm 6'daki `queue-item.tsx` metin güncellemesi bu planın A3 kararına bağımlı)
@@ -72,6 +72,22 @@ doğrulandı). Round 4 için ele alınanlar:
    korundu.
 6. **`isBoutique` filtresinde de aynı `z.coerce.boolean()` tuzağı var** (frontend `"false"` string'i
    gönderiyor, `true`'ya coerce oluyor) — `open_now`'a seçilen güvenli desen buna da uygulandı.
+
+**Round 4 idea-red-team yine PIVOT verdi** (5/8 tam, 2/8 kısmi, 1/8 hiç düzeltilmemiş — ama bu son
+madde kendi önerdiğim "düzeltmenin" kendisindeki bir hatanın Codex tarafından bizzat çalıştırılıp
+kanıtlanmasıydı). Round 5 için ele alınanlar:
+1. **`z.literal("true").optional().transform(v => v === "true")` deseninin kendisi hatalıydı** —
+   Codex bunu gerçekten çalıştırıp `undefined` girdiğinde `false` (ne `undefined`) ürettiğini
+   kanıtladı. Doğru `OptionalTrueFlag` deseni eklendi, hem `open_now` hem `isBoutique`'e uygulandı.
+2. **Frontend'in `isBoutique` toggle'ı hâlâ açık `false` gönderiyordu** — yeni şema bunu 400 ile
+   reddederdi. Toggle mantığı `undefined`/`true` arasına çevrildi (Plan 4c'ye de işlendi).
+3. **`VenueDetailSchema` (packages/shared) hiç güncellenmemişti** — `findBySlug`'ın yeni
+   döndüreceği `lat`/`lng`/`address`/`photos`, şema güncellenmezse Zod tarafından sessizce
+   silinir, frontend hiçbir zaman göremez. Bölüm 5'e eklendi.
+4. **Raw SQL'e geçen `findBySlug`'ın nested `district: {name, slug}` şeklini koruması gerekiyor**
+   — `json_build_object` ile çözüldü.
+5. **`AdminQueueService`, `VenuesRepository`'yi hiç enjekte etmiyordu** (`AdminQueueModule`,
+   `VenuesModule`'ü import etmiyor) — DI bağlantısı eklendi.
 
 ## 1. Kapsam ve hedef
 
@@ -194,6 +210,13 @@ güncellenir — writing-plans task'ı bu dosyayı da "Files: Modify" listesine 
   `AdminQueueService.approve()`'un EDIT dalı bugün `tx.venue.findUniqueOrThrow()` (Prisma model
   API) ile snapshot alıyor — Bölüm 3'ün `findRawForSnapshot(client, id)` metodu bu dosyada da
   kullanılır, aynı `AdminVenuesService`'teki gibi.
+- **Round 4 düzeltmesi — DI bağlantısı eksikti:** `AdminQueueService`, `VenuesRepository`'yi
+  şu ana kadar hiç enjekte etmiyordu (`AdminQueueModule`, `VenuesModule`'ü import etmiyor —
+  `venues.module.ts`'in `exports: [VenuesService, VenuesRepository]` listesi var ama
+  `admin-queue.module.ts` bunu hiç `imports` etmiyor). `AdminQueueModule`'e `imports: [VenuesModule]`
+  eklenir, `AdminQueueService`'in constructor'ına `private venuesRepository: VenuesRepository`
+  eklenir — Nest'in modül-kapsamlı DI'ı bu import olmadan `VenuesRepository`'yi çözemez, runtime'da
+  "nedeni belirsiz bir dependency injection hatası" verir.
 - **Not (Plan 4c'ye bağımlılık):** Admin panelinin `queue-item.tsx` bileşenindeki "Onayla (yalnızca
   incelendi olarak işaretler ve mekanın verified_at'ini yeniler)" açıklama metni artık **yanlış**
   olacak — Plan 4c bu metni güncellemeli (bkz. kardeş doküman Bölüm 6). Bu, iki planın senkron
@@ -242,6 +265,29 @@ için zaten bir raw SQL sorgusuna dönüşmesi gerekiyordu, bu değişiklik hem 
 gerektirdiği deseni hem de eksik alanı tek seferde çözer). Yanıta `lat: number`, `lng: number`
 eklenir.
 
+**Round 4 düzeltmesi — nested `district` şeklinin korunması gerekiyor:** Bugünkü
+`prisma.venue.findFirst`, `include: { district: { select: { name, slug } } }` ile iç içe bir
+`district: {name, slug}` objesi üretiyor — `VenueDetailSchema` (packages/shared) tam olarak bunu
+bekliyor. Raw SQL'e geçişte bu şekil **kaybolmamalı**: sorgu `json_build_object('name', d.name,
+'slug', d.slug) AS district` ile aynı iç içe yapıyı üretir (Postgres'in JSON döndürme özelliği),
+`node-postgres`/Prisma bunu otomatik olarak JS objesine çevirir.
+
+**Round 4 düzeltmesi — `VenueDetailSchema`'nın kendisi de güncellenmeli:** `findBySlug`'ın artık
+döndürdüğü `lat`, `lng`, `address`, `photos` alanları, `packages/shared/src/schemas/venue.schema.ts`'teki
+`VenueDetailSchema`'ya da eklenmezse frontend'in `fetchValidated()` fonksiyonu (Zod'un
+`safeParse().data` çıktısını döndürür, şemada olmayan alanlar **sessizce silinir**) bu alanları
+hiçbir zaman frontend'e ulaştırmaz — Plan 4c'nin `venue.lat`/`venue.address`/`venue.photos`
+kullanımları `undefined` alır, hatta `tsc` bile bunu yakalamaz (schema'nın çıkardığı tip zaten bu
+alanları içermeyeceği için derleme zamanında "alan yok" hatası verir, bu da writing-plans'ta bu
+task'ın `VenueDetailSchema` güncellemesini AYNI task'ın bir parçası yapmasını zorunlu kılar, ayrı
+bir task'a bölünmemeli — aksi halde ara adımda derleme kırılır):
+```typescript
+lat: z.number(),
+lng: z.number(),
+address: z.string().nullable(),
+photos: z.array(z.string()),
+```
+
 ## 6. Şema eksikleri: `address`, `photos`, `open_now` (Plan 4c ile kesişim)
 
 **`address` ve `photos` alanları hiç yok:** Tek migration: `Venue.address String?`,
@@ -249,10 +295,21 @@ eklenir.
 opsiyonel `address` kolonu, `photos` CSV'de desteklenmez, yalnızca Postman/Prisma Studio'dan
 girilir, MVP'de fotoğraf yükleme akışı yok) ve `findBySlug`'ın select listesine eklenir.
 
-**`open_now` (round 2'de gerçek veri şekline göre düzeltildi):**
-- `VenueListQuerySchema`'ya `openNow` eklenir — `z.coerce.boolean()` DEĞİL, CSV şemasının
-  `franchiseFlag`'inde zaten kullanılan güvenli desen: query string yoksa `undefined`, varsa
-  yalnızca `"true"` kabul edilir (`z.literal("true").optional().transform(v => v === "true")`).
+**Güvenli opsiyonel-boolean deseni (round 4'te düzeltildi — bu proje genelinde tekrar kullanılacak
+tek doğru desen):** `z.literal("true").optional().transform(v => v === "true")` **hatalıdır** —
+round 4 red-team bunu bizzat çalıştırıp kanıtladı: alan tamamen YOKKEN bile `.transform()` çalışıp
+`undefined === "true"` → `false` üretiyor, `undefined` değil. Bu, "filtre hiç uygulanmasın" ile
+"filtre açıkça false'a ayarlansın" arasındaki farkı yok ediyor — repository'nin `!== undefined`
+kontrolüyle birleşince (bkz. B11) her filtresiz istek yanlışlıkla filtrelenmiş hale geliyor.
+**Doğru desen:** `transform`, `undefined` girdisini `undefined` olarak bırakmalı:
+```typescript
+const OptionalTrueFlag = z.literal("true").optional().transform((v) => (v === undefined ? undefined : true));
+```
+(Yalnızca `"true"` veya hiç yoksa geçerli; başka bir değer Zod'un kendi hata mesajıyla reddedilir
+— zaten literal eşleşme mantığı bunu sağlıyor.)
+
+**`open_now`:** `VenueListQuerySchema`'ya `openNow: OptionalTrueFlag` eklenir — `z.coerce.boolean()`
+DEĞİL, yukarıdaki güvenli desen.
 - `VenuesRepository.searchPublished`'a eklenen SQL koşulu, **gerçek veri şekliyle** çalışır: bugün
   Pazartesi-Cuma mı Cumartesi-Pazar mı olduğunu `EXTRACT(ISODOW FROM now() AT TIME ZONE 'Europe/Istanbul')`
   ile bulur (1-5 → `mon_fri`, 6-7 → `sat_sun` — **round 2 düzeltmesi:** `now()` yerine
@@ -278,14 +335,20 @@ girilir, MVP'de fotoğraf yükleme akışı yok) ve `findBySlug`'ın select list
   malformed olan mekanın sonuçta göründüğü doğrulanır.
 
 **`isBoutique` filtresindeki aynı `z.coerce.boolean()` tuzağı (round 3'te bulundu, `open_now`'dan
-bağımsız, önceden var olan bir bug):** `apps/web/src/components/venue-filters.tsx`'in
-`serializeFilters`'ı, butik filtresi kapatıldığında `isBoutique: "false"` string'ini gönderiyor —
-`VenueListQuerySchema`'daki mevcut `isBoutique: z.coerce.boolean().optional()` bunu `Boolean("false") === true`
-olduğu için **`true`'ya çeviriyor**. `open_now` için seçilen güvenli desen (`z.literal("true").optional().transform(...)`)
-`isBoutique`'e de uygulanır. **Bu bir davranış değişikliği değil, mevcut bir bug'ın düzeltilmesi**
-— "kapalı" durumun query'den hiç gönderilmemesi (frontend zaten `filters.isBoutique !== undefined`
-kontrolüyle bunu büyük ölçüde önlüyordu, ama `false` değeri de açıkça set edilebiliyor) daha
-güvenli, MVP'nin diğer boolean filtrelerinde zaten kullanılan desenle tutarlı.
+bağımsız, önceden var olan bir bug):** `VenueListQuerySchema`'daki mevcut
+`isBoutique: z.coerce.boolean().optional()`, frontend'in gönderdiği `"false"` string'ini
+`Boolean("false") === true` olduğu için **`true`'ya çeviriyor**. `isBoutique: OptionalTrueFlag`
+(yukarıdaki güvenli desen) uygulanır.
+
+**Round 4 düzeltmesi — bu, frontend'in de değişmesini gerektiriyor (Plan 4c'ye task eklendi,
+bkz. kardeş doküman Bölüm 7):** `OptionalTrueFlag` yalnızca literal `"true"` veya hiç yok kabul
+ediyor — `apps/web/src/components/venue-filters.tsx`'in butik toggle'ı bugün `update({ isBoutique:
+!filters.isBoutique })` ile `true`/`false` arasında geçiş yapıyor, kapatıldığında açıkça
+`isBoutique=false` gönderiyor, bu artık **400 ile reddedilir**. Toggle mantığı `undefined`/`true`
+arasında geçecek şekilde değişir: `update({ isBoutique: filters.isBoutique ? undefined : true })`
+— "kapalı" durum artık query'den hiç gönderilmeyen bir alan, `false` değeri değil. Bu, projenin
+diğer opsiyonel filtrelerinin (kategori, fiyat) zaten kullandığı "yoksa filtre yok" deseniyle
+tutarlı hale getiriyor.
 
 ## 7. Diğer veri doğruluğu düzeltmeleri (B4, B5, B6, B9, B10, B11, B12, B13)
 

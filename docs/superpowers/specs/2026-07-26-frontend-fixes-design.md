@@ -1,7 +1,8 @@
 # GurmeGo — Plan 4c: Frontend/Admin Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 3 PIVOT sonrası tam
-revizyon), idea-red-team round 4'e hazır
+**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 4 PIVOT sonrası tam
+revizyon), idea-red-team round 5'e hazır — Plan 4b Bölüm 5'teki `VenueDetailSchema` güncellemesi
+ve Bölüm 6'daki `OptionalTrueFlag` deseni bu plana da yansıtıldı (isBoutique toggle, Bölüm 7)
 
 İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
 [docs/superpowers/specs/2026-07-26-backend-fixes-design.md](2026-07-26-backend-fixes-design.md) (kardeş plan — bu plan ondan SONRA yürütülmeli)
@@ -201,8 +202,19 @@ manuel düzeltme akışı için ayrı bir UI eklenmiyor, yalnızca metin gerçek
 dropdown. Tek liste varsa mevcut sessiz davranış korunur (YAGNI).
 
 **C7 — Açık/kapalı filtresi yok:** `venue-filters.tsx`'e bir toggle eklenir (`openNow: boolean`).
-`getVenues`'e parametre olarak eklenir. Backend Plan 4b Bölüm 6'da hazır olacak; query param
-formatı Plan 4b'nin CSV `franchiseFlag` deseniyle aynı (`"true"` literal, coerce.boolean değil).
+`getVenues`'e parametre olarak eklenir. Backend Plan 4b Bölüm 6'da hazır olacak (`OptionalTrueFlag`
+deseni); query param yalnızca `openNow=true` olarak gönderilir, `false` hiç gönderilmez (kapalı
+= alan yok).
+
+**Round 4 düzeltmesi — `isBoutique` toggle'ının kendisi de değişmeli (Plan 4b'nin backend
+düzeltmesinin ön koşulu):** `venue-filters.tsx`'in butik toggle'ı bugün
+`update({ isBoutique: !filters.isBoutique })` ile `true`/`false` arasında geçiş yapıyor — Plan 4b
+Bölüm 6'nın yeni `OptionalTrueFlag` şeması yalnızca `"true"` veya hiç-yok kabul ettiği için,
+kapatıldığında gönderilen açık `isBoutique=false` artık backend'den `400` alır. Toggle mantığı
+`undefined`/`true` arasında geçecek şekilde değişir:
+`update({ isBoutique: filters.isBoutique ? undefined : true })` — `serializeFilters`'ın mevcut
+`if (filters.isBoutique !== undefined) out.isBoutique = String(filters.isBoutique)` satırı
+değişmeden kalır (artık yalnızca `"true"` değeri üretecek, `"false"` hiç üretilmeyecek).
 
 ## 8. Kategori hızlı rota tamamlanır (C6 — round 2'de veri sözleşmesi düzeltildi)
 
