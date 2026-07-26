@@ -18,6 +18,9 @@ import {
 // reject — the two schemas cannot drift apart on those limits. `branchCount`/`openingHours` still
 // need CSV-specific wrapping here (coercion from a CSV string cell into the shared base schema)
 // since a CSV row is all strings, unlike the JSON body `AdminVenueCreateSchema` validates.
+// Narrower than VenueStatusSchema (no ARCHIVED) -- CSV import only creates new venues.
+export const CsvVenueStatusSchema = z.enum(["DRAFT", "PUBLISHED"]);
+
 export const CsvVenueImportRowSchema = z.object({
   name: z.string().min(1, "name zorunlu").max(VENUE_NAME_MAX_LENGTH, `name en fazla ${VENUE_NAME_MAX_LENGTH} karakter olabilir`),
   slug: z.string().min(1, "slug zorunlu").max(VENUE_SLUG_MAX_LENGTH, `slug en fazla ${VENUE_SLUG_MAX_LENGTH} karakter olabilir`),
@@ -50,6 +53,8 @@ export const CsvVenueImportRowSchema = z.object({
     }
     return shape.data;
   }),
+  status: z.preprocess((v) => (v === "" ? undefined : v), CsvVenueStatusSchema.optional()),
+  address: z.preprocess((v) => (v === "" ? undefined : v), z.string().max(500).optional()),
 });
 
 export type CsvVenueImportRow = z.infer<typeof CsvVenueImportRowSchema>;

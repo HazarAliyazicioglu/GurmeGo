@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PRICE_RANGE_VALUES } from "../enums/price-range";
+import { VenueStatusSchema } from "./venue.schema";
 
 // Shared field-level constraints — also consumed by `CsvVenueImportRowSchema`
 // (./csv-venue-import.schema.ts) so the two can't silently drift apart. Any admin-facing venue
@@ -38,6 +39,9 @@ export const AdminVenueCreateSchema = z.object({
   googleRating: z.number().min(0).max(5).optional(),
   googleRatingCount: z.number().int().min(0).optional(),
   googlePlaceId: z.string().optional(),
+  status: VenueStatusSchema.optional(),
+  address: z.string().max(500).optional(),
+  photos: z.array(z.string().url()).max(20).optional(),
 });
 export type AdminVenueCreateInput = z.infer<typeof AdminVenueCreateSchema>;
 

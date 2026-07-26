@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { VenueSchema, VenueListQuerySchema } from "./venue.schema";
+import { z } from "zod";
+import { VenueSchema, VenueListQuerySchema, OptionalTrueFlag } from "./venue.schema";
 
 describe("VenueSchema", () => {
   it("accepts a valid venue payload", () => {
@@ -49,4 +50,10 @@ describe("VenueSchema", () => {
     expect(result.sort).toBe("distance");
     expect(result.lat).toBe(40.99);
   });
+});
+
+describe("OptionalTrueFlag", () => {
+  it("stays undefined when absent", () => expect(z.object({ flag: OptionalTrueFlag }).parse({}).flag).toBeUndefined());
+  it("parses 'true' as true", () => expect(z.object({ flag: OptionalTrueFlag }).parse({ flag: "true" }).flag).toBe(true));
+  it("rejects 'false'", () => expect(z.object({ flag: OptionalTrueFlag }).safeParse({ flag: "false" }).success).toBe(false));
 });

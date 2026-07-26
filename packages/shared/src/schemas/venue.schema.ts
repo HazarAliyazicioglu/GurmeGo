@@ -4,6 +4,13 @@ import { PRICE_RANGE_VALUES } from "../enums/price-range";
 export const VenueStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]);
 export const VenueSourceSchema = z.enum(["MANUAL", "USER", "AUTO"]);
 
+// z.coerce.boolean() is a footgun: Boolean("false") is true. A naive
+// z.literal("true").optional().transform(v => v === "true") is ALSO wrong -- absent -> v is
+// undefined -> undefined === "true" is false, collapsing "not requested" into "explicitly off".
+// Not yet applied to VenueListQuerySchema here -- see this task's Step 8 note; that happens
+// atomically with its consumer in Task 4.
+export const OptionalTrueFlag = z.literal("true").optional().transform((v) => (v === undefined ? undefined : true));
+
 export const VenueSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(200),
