@@ -134,9 +134,12 @@ git commit -m "feat(api): add Venue.address and Venue.photos columns"
 - Consumes: nothing
 - Produces: `AdminVenueCreateSchema`/`UpdateSchema` with `status`/`address`/`photos`;
   `CsvVenueStatusSchema = z.enum(["DRAFT","PUBLISHED"])` + `address` on `CsvVenueImportRowSchema`;
-  `OptionalTrueFlag`; `VenueListQuerySchema` with `openNow`, corrected `isBoutique`, no `lat`/`lng`;
-  `VenueDetailSchema` with `lat`/`lng`/`address`/`photos`; `AdminQueueItemSchema`/
-  `AdminQueueMutationResultSchema` with `type: "REPORT" | "EDIT"`.
+  `OptionalTrueFlag` helper (defined here, NOT yet applied to `VenueListQuerySchema` — that
+  happens in Task 4, atomically with its consumer `searchPublished`); `AdminQueueItemSchema`/
+  `AdminQueueMutationResultSchema` with `type: "REPORT" | "EDIT"`. This task does NOT touch
+  `VenueListQuerySchema` or `VenueDetailSchema` — see Step 8's note for why (both moved to their
+  actual consumer's task, Task 4 and Task 5 respectively, after two separate rounds of
+  plan-red-team caught the same class of cross-task acceptance-cycle bug on each).
 
 - [ ] **Step 1: Write the failing test — `admin-venue.schema.spec.ts`** (new)
 ```typescript
@@ -250,15 +253,11 @@ describe("OptionalTrueFlag", () => {
 // atomically with its consumer in Task 4.
 export const OptionalTrueFlag = z.literal("true").optional().transform((v) => (v === undefined ? undefined : true));
 ```
-and to `VenueDetailSchema`, after `district`:
-```typescript
-  lat: z.number(),
-  lng: z.number(),
-  address: z.string().nullable(),
-  photos: z.array(z.string()),
-```
-`VenueListQuerySchema` itself is untouched by this task — Task 4 removes its `lat`/`lng`, replaces
-`isBoutique: z.coerce.boolean().optional()` with `OptionalTrueFlag`, and adds `openNow: OptionalTrueFlag`.
+That is the ONLY production-code change in this step. Do not also touch `VenueListQuerySchema`
+(Task 4 removes its `lat`/`lng`, replaces `isBoutique: z.coerce.boolean().optional()` with
+`OptionalTrueFlag`, adds `openNow: OptionalTrueFlag`) or `VenueDetailSchema` (Task 5 adds
+`lat`/`lng`/`address`/`photos`, atomically with `findBySlug`) — both are deliberately deferred to
+their consumer's own task, per Step 8's note above.
 - [ ] **Step 10:** Run — PASS.
 
 - [ ] **Step 11: Write the failing test — `admin-queue.schema.spec.ts`**, matching the REAL
