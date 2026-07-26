@@ -1,7 +1,6 @@
 # GurmeGo — Plan 4b: Backend Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 4 PIVOT sonrası tam
-revizyon), idea-red-team round 5'e hazır
+**Tarih:** 2026-07-26 · **Durum:** HAZIR (idea-red-team round 5 verdikti, 4 PIVOT + 1 HAZIR sonrası), writing-plans'a hazır
 
 İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
 [docs/superpowers/specs/2026-07-26-frontend-fixes-design.md](2026-07-26-frontend-fixes-design.md) (kardeş plan — Bölüm 2.5'teki header sözleşmesi ortak, Bölüm 6'daki `queue-item.tsx` metin güncellemesi bu planın A3 kararına bağımlı)
@@ -89,6 +88,14 @@ kanıtlanmasıydı). Round 5 için ele alınanlar:
 5. **`AdminQueueService`, `VenuesRepository`'yi hiç enjekte etmiyordu** (`AdminQueueModule`,
    `VenuesModule`'ü import etmiyor) — DI bağlantısı eklendi.
 
+**Round 5 idea-red-team: HAZIR.** Önceki 5 bulgunun tamamı kapandı (Codex'in kendi ifadesiyle
+"beşi de tasarım düzeyinde giderilmiş"). Kalan 2 madde mimari PIVOT gerektirmeyen küçük
+implementasyon ayrıntılarıydı, ikisi de uygulandı: (1) `UserLocationParam`'ın boş-string kenar
+durumu (`Number("") === 0` → `","` gibi bozuk bir header yanlışlıkla `{lat:0,lng:0}` olurdu) —
+`parts.length !== 2 || parts.some(trim boş)` kontrolü eklendi; (2) React-Leaflet'in
+`MapContainer.center` prop'unun ilk render'dan sonra immutable olması (Plan 4c'ye `key={districtSlug}`
+eklendi). **Bu planın idea-red-team süreci burada sona eriyor, sıradaki adım `writing-plans`.**
+
 ## 1. Kapsam ve hedef
 
 `docs/AUDIT-2026-07-26.md`'nin backend bulgularının tamamını, **gerçek mimariye uygun şekilde**
@@ -135,7 +142,13 @@ export const UserLocationParam = createParamDecorator(
     const req = ctx.switchToHttp().getRequest();
     const header = req.headers["x-user-location"];
     if (typeof header !== "string") return undefined;
-    const [latStr, lngStr] = header.split(",");
+    const parts = header.split(",");
+    // Round 5 red-team: `Number("")` is `0`, a technically-in-range latitude/longitude — without
+    // this guard, a malformed header like "," or "40.99," would silently become {lat:0,lng:0}
+    // instead of being rejected as malformed (same class of bug as B11's lat=0 fix, applied here
+    // to the header parser too).
+    if (parts.length !== 2 || parts.some((p) => p.trim() === "")) return undefined;
+    const [latStr, lngStr] = parts;
     const lat = Number(latStr);
     const lng = Number(lngStr);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {

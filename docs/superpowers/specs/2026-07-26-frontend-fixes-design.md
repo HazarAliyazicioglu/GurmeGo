@@ -1,8 +1,6 @@
 # GurmeGo — Plan 4c: Frontend/Admin Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 4 PIVOT sonrası tam
-revizyon), idea-red-team round 5'e hazır — Plan 4b Bölüm 5'teki `VenueDetailSchema` güncellemesi
-ve Bölüm 6'daki `OptionalTrueFlag` deseni bu plana da yansıtıldı (isBoutique toggle, Bölüm 7)
+**Tarih:** 2026-07-26 · **Durum:** HAZIR (idea-red-team round 5 verdikti, 4 PIVOT + 1 HAZIR sonrası), writing-plans'a hazır
 
 İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
 [docs/superpowers/specs/2026-07-26-backend-fixes-design.md](2026-07-26-backend-fixes-design.md) (kardeş plan — bu plan ondan SONRA yürütülmeli)
@@ -121,6 +119,17 @@ ilçenin slug'ına göre bu sabitten değeri okuyup geçer (bilinmeyen bir slug 
 varsayılana düşer). Üç ilçe sabit olduğu sürece bu, migration'dan çok daha basit ve doğru bir
 çözüm — dördüncü bir şehre geçilince (Faz 2) bu tablo genişler ya da o zaman gerçek bir DB alanına
 taşınır.
+
+**Round 5 düzeltmesi — React-Leaflet'in `MapContainer.center` prop'u ilk render'dan sonra
+immutable'dır:** Yalnızca `center={[centerLat, centerLng]}` prop'unu değiştirmek, kullanıcı aynı
+sayfada ilçe değiştirdiğinde (client-side navigation, component yeniden mount olmadan) haritanın
+merkezini GÜNCELLEMEZ — React-Leaflet bu prop'u yalnızca ilk mount'ta okur. İki seçenekten biri
+kullanılır: (a) `<MapContainer key={districtSlug} center={...}>` — ilçe değişince `key` değişir,
+React bileşeni sıfırdan mount eder (basit, bu ölçekte performans sorunu yaratmaz); (b) bir alt
+bileşende `useMap().setView([lat, lng])` çağıran bir `useEffect`. Bu MVP'nin sayfa yapısı zaten
+`[district]/page.tsx`'in her ilçe için ayrı bir route olması nedeniyle **tam sayfa navigasyonu**
+gerektiriyor (Next.js App Router link geçişi), yani component muhtemelen zaten yeniden mount
+oluyor — ama bunu varsaymak yerine `key={districtSlug}` ile garanti altına alınır (ucuz, kesin).
 
 **C8 — Konuma göre yakınlık sıralaması fiilen çalışmıyor (mimariyle uyumlu düzeltme):**
 - `[district]/page.tsx` bir Server Component olarak **geolocation'a asla erişemez** — bu bir bug
