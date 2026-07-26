@@ -1,12 +1,14 @@
-import { NestFactory } from "@nestjs/core";
+import { HttpAdapterHost, NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import fastifyMultipart from "@fastify/multipart";
 import { writeFileSync } from "fs";
 import { AppModule } from "./app.module";
+import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 
 export async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
   // CSV import (`POST /admin/import`) is the only multipart consumer — a curator-uploaded venue
   // list, not a general file-upload feature. Without a limit, `req.file()`/`toBuffer()` buffers an
   // arbitrarily large upload entirely in memory before any Zod validation runs. 10 MB comfortably
