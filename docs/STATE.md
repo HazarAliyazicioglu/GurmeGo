@@ -6,17 +6,14 @@ review'dan geçti, `master`'a henüz merge edilmedi (kullanıcı kararı: hepsi 
 Detay: `.superpowers/sdd/progress.md` (worktree-lokal, git-ignored, git log'da kalıcı).
 
 ## Şu an ne yapıyoruz
-Plan 4a bitti. Plan 4b (backend düzeltmeleri, `docs/superpowers/plans/2026-07-26-backend-fixes.md`,
-16 task) yazıldı ve plan-red-team'den 6 tur sonunda geçti (Codex, `docs/SESSION-LOG-2026-07-26.md`'de
-tam kayıt) — metin-bazlı red-team döngüsü bilinçli olarak kesildi, kalan küçük sınırlamalar plana
-açıkça yazıldı, implementasyona geçildi. Kullanıcının "sormadan devam et" talimatı (2026-07-26)
-uyarınca `subagent-driven-development` ile yürütülüyor.
+Plan 4b (backend düzeltmeleri, `docs/superpowers/plans/2026-07-26-backend-fixes.md`, 16 task)
+yazıldı, plan-red-team'den 6 tur sonunda geçti (Codex; tam kayıt `docs/SESSION-LOG-2026-07-26.md`).
+Metin-bazlı red-team döngüsü bilinçli kesildi, kalan küçük sınırlamalar plana açıkça yazıldı.
+Kullanıcının "sormadan devam et" talimatı (2026-07-26) uyarınca `subagent-driven-development`'a geçildi.
 
 ## Sıradaki adım
-Plan 4b'yi `subagent-driven-development` ile Task 1'den başlayarak yürüt. Her task: implementer
-subagent → task reviewer (spec+kalite) → gerekirse düzeltme. Bitince final whole-branch review +
-zorunlu `cross-model-review` (Codex). Sonra Plan 4c (frontend düzeltmeleri, design doc zaten HAZIR:
-`docs/superpowers/specs/2026-07-26-frontend-fixes-design.md`) aynı süreçle yazılacak.
+Plan 4b'yi Task 1'den yürüt (implementer → task reviewer → final review + zorunlu
+`cross-model-review`). Sonra Plan 4c (frontend, design doc HAZIR: `docs/superpowers/specs/2026-07-26-frontend-fixes-design.md`).
 
 ## Bloke olanlar
 - Yok.
