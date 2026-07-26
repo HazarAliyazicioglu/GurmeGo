@@ -307,3 +307,49 @@ etmek gerekiyor, sadece mantığın doğruluğunu değil.
 
 **PLAN 4B: 16/16 TAMAMLANDI.** Sıradaki adım: final whole-branch review (Superpowers final
 code-reviewer + ayrıca `cross-model-review` skill'i, ikisi de zorunlu, atlanamaz).
+
+---
+
+## Plan 4b — final whole-branch review (2026-07-26, TAMAMLANDI)
+
+52 commit'lik tam diff'e karşı (2ef1db6..9c6b7e6) Codex ile final review, 2 fix turu:
+
+**Round 1 (0 BLOCKER, 4 MAJOR):**
+1. Yalnızca `lat` veya yalnızca `lng` verilen bir admin update isteği konumu sessizce
+   güncellemiyordu ama yine de `VenueVersion` snapshot alıp `verifiedAt`'i tazeliyordu — sanki
+   konum gerçekten yeniden doğrulanmış gibi. **Gerçek bug.** Düzeltme: `AdminVenueUpdateSchema`'ya
+   `lat`/`lng`'nin ikisi-birlikte-veya-hiçbiri olmasını zorunlu kılan bir `.refine()`.
+2. `X-User-Location` header'ı elle parse ediliyordu, "tüm girdi packages/shared Zod şemasından
+   geçer" kuralını ihlal ediyordu. Düzeltme: `UserLocationHeaderSchema` eklendi, decorator ona
+   delege edecek şekilde yeniden yazıldı (dış davranış/imza aynen korunarak).
+3. Admin kuyruk endpoint'inin `type`/`status` query parametreleri Zod'dan geçmeden Prisma enum'a
+   cast ediliyordu — geçersiz değer 500'e düşüyordu. Düzeltme: `AdminQueueListQuerySchema` eklendi.
+4. Branch genelinde net +55 gerekçesiz `any` (13 dosyada +74/-19) — araştırıldı, TAMAMEN test
+   mock dosyalarında olduğu doğrulandı (üretim kodunda sıfır), hacim artışıyla orantılı (Plan 4b
+   ~40 yeni test dosyası ekledi, hepsi zaten kabul edilmiş Prisma-mock `as any` desenini
+   izliyor) — kod değişikliği değil, `docs/STATE.md`'nin "134 uyarı değişmedi" iddiası
+   düzeltildi (gerçek sayı zaten 86'dan büyümüştü, ama bu beklenen/kabul edilebilir).
+
+Ayrıca Codex'in kendi test koşusu 131 test rapor etmişti (beyan edilen 162'ye karşı) — kontrol
+eden oturum kendi `npx jest` çalıştırmasıyla 162/162'yi doğruladı, fark Codex'in ortamında geçici
+bir sorun olmalı (muhtemelen local Supabase stack o an ayakta değildi).
+
+**Round 2 (round 1'in düzeltmelerinin re-review'ı, 0 BLOCKER, 1 MAJOR + 2 MINOR):**
+- **Gerçek regresyon:** `AdminQueueListQuerySchema.type` yalnızca `REPORT`/`EDIT` kabul ediyordu,
+  ama gerçek `ContributionType` enum'u 4 değer içeriyor (`NEW_VENUE`/`OWNER_VERIFICATION` da var)
+  — önceden çalışan filtreleme artık 400 dönüyordu. `AdminQueueItemSchema`'nın (farklı, bilinçli
+  dar) şemasıyla karıştırılmıştı. Düzeltme: query şeması 4 değere genişletildi, item şeması
+  dokunulmadı.
+- 2 kozmetik MINOR: yanlış yere kaymış bir yorum bloğu, bir fix raporundaki tekrarlanamayan
+  "flaky test" iddiası (araştırıldı, tekrarlanmadı, rapor dürüstçe düzeltildi, silinmedi).
+
+**Round 3 (round 2'nin düzeltmelerinin re-review'ı):** TEMİZ. "İki round'luk final whole-branch
+review + re-review döngüsü burada gerçekten tamamlanmış."
+
+**KALICI DERS:** Final whole-branch review, tek tek TEMİZ geçen 16 task'ın bile kaçırdığı 2 gerçek
+bug buldu (partial-coordinate + false-reverify; query şema karışıklığı) — "her task ayrı ayrı
+temiz" ile "bütün birlikte doğru" arasında fark var, ikisi de ayrı ayrı gerekli.
+
+**PLAN 4B: GERÇEKTEN TAMAMLANDI.** `master`'a henüz merge yok (kullanıcı kararı: her şey bitince
+tek seferde). Sıradaki: Plan 4c (frontend düzeltmeleri) — `writing-plans` → `plan-red-team` →
+`subagent-driven-development`, aynı süreç.
