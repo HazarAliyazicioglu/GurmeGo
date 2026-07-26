@@ -2,6 +2,7 @@ import { Body, Controller, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs
 import { CreateReport, CreateReportSchema } from "@gurmego/shared";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { RateLimit, RateLimitGuard } from "../common/rate-limit.guard";
+import { RATE_LIMITS } from "../common/rate-limit.config";
 import { ReportsService } from "./reports.service";
 
 @Controller("venues")
@@ -10,7 +11,7 @@ export class ReportsController {
 
   @Post(":id/report")
   @UseGuards(RateLimitGuard)
-  @RateLimit(10, 86400)
+  @RateLimit(RATE_LIMITS.report.limit, RATE_LIMITS.report.windowSeconds)
   submit(
     @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) venueId: string,
     @Body(new ZodValidationPipe(CreateReportSchema)) body: CreateReport,

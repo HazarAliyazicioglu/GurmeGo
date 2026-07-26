@@ -14,6 +14,10 @@ async function bootstrap() {
   await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   app.setGlobalPrefix("v1", { exclude: ["health"] });
 
+  if (process.env.NODE_ENV === "production" && (!process.env.RATE_LIMIT_READ_PER_MINUTE || !process.env.RATE_LIMIT_REPORT_PER_DAY)) {
+    console.warn("RATE_LIMIT_* env vars not set in production -- using defaults (100/min, 10/day)");
+  }
+
   // Browser clients (Plan 2's Next.js web/PWA app, Plan 3's admin panel) need CORS to call this API
   // cross-origin. No production origin exists yet — Plan 4 (infra) will set the real value via
   // CORS_ORIGIN. Never use origin:true/"*" here: this API carries authenticated (credentialed) requests.

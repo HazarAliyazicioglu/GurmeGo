@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards, UseP
 import { CreateFavoriteListSchema } from "@gurmego/shared";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { RateLimit, RateLimitGuard } from "../common/rate-limit.guard";
+import { RATE_LIMITS } from "../common/rate-limit.config";
 import { RolesGuard } from "../auth/roles.guard";
 import { Roles } from "../auth/roles.decorator";
 import { FavoritesService } from "./favorites.service";
@@ -14,7 +15,7 @@ export class FavoritesController {
 
   @Get()
   @UseGuards(RateLimitGuard)
-  @RateLimit(100, 60)
+  @RateLimit(RATE_LIMITS.read.limit, RATE_LIMITS.read.windowSeconds)
   list(@Req() req: any) {
     return this.favorites.listLists(req.user.id);
   }
