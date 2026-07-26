@@ -63,14 +63,15 @@ describe("UUID path-param validation — wired at the route level", () => {
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
 
-    // ParseUUIDPipe rejects the id before the handler (and RateLimitGuard) ever run for a
-    // malformed id -- but this exact route (POST /venues/:id/report) shares its rate-limit
-    // counter key (`ReportsController:submit:<ip>`) with every other test in this file and in
-    // reports.controller.spec.ts, via the same real Postgres-backed CacheStore. If an earlier
-    // suite in the same `npx jest` run already pushed that counter past its daily limit,
-    // RateLimitGuard would 429 THIS request before Nest's routing even reaches ParseUUIDPipe --
-    // turning this into a flaky 429-vs-400 failure unrelated to what this test actually checks.
-    // Reset it first, same pattern (and same reasoning) as the Retry-After test below.
+    // NestJS runs guards before pipes (RateLimitGuard, then ParseUUIDPipe), so a saturated
+    // rate-limit counter would 429 this request before ParseUUIDPipe ever gets a chance to
+    // reject the malformed id -- turning this into a flaky 429-vs-400 failure unrelated to what
+    // this test actually checks. This route's counter key (`ReportsController:submit:<ip>`) is
+    // shared with the other suites in THIS file (via the same real Postgres-backed CacheStore
+    // within a single `npx jest` run) -- reports.controller.spec.ts uses its own mocked
+    // CACHE_STORE, so it isn't part of this particular sharing, but a prior suite here could
+    // still have pushed the counter over. Reset it first, same pattern (and same reasoning) as
+    // the Retry-After test below.
     const methodName = findRateLimitedMethodName(ReportsController);
     const prisma = app.get(PrismaService);
     await prisma.$executeRaw`DELETE FROM rate_limit_counters WHERE key LIKE ${`${ReportsController.name}:${methodName}:%`}`;
