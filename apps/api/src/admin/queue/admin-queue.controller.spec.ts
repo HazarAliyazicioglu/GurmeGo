@@ -1,4 +1,4 @@
-import { ParseUUIDPipe } from "@nestjs/common";
+import { ArgumentMetadata, ParseUUIDPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AdminQueueController } from "./admin-queue.controller";
@@ -13,12 +13,12 @@ describe("UUID path-param validation", () => {
   // controllers below -- this one canonical test is not repeated for each.
   it("ParseUUIDPipe rejects a non-UUID id with a 400-mapped exception", async () => {
     const pipe = new ParseUUIDPipe({ errorHttpStatusCode: 400 });
-    await expect(pipe.transform("not-a-uuid", { type: "param", data: "id" } as any)).rejects.toThrow();
+    await expect(pipe.transform("not-a-uuid", { type: "param", data: "id" } satisfies ArgumentMetadata)).rejects.toThrow();
   });
   it("ParseUUIDPipe accepts a real UUID", async () => {
     const pipe = new ParseUUIDPipe({ errorHttpStatusCode: 400 });
     await expect(
-      pipe.transform("d290f1ee-6c54-4b01-90e6-d701748f0851", { type: "param", data: "id" } as any),
+      pipe.transform("d290f1ee-6c54-4b01-90e6-d701748f0851", { type: "param", data: "id" } satisfies ArgumentMetadata),
     ).resolves.toBe("d290f1ee-6c54-4b01-90e6-d701748f0851");
   });
 });
