@@ -3,17 +3,57 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix every frontend/admin finding from `docs/AUDIT-2026-07-26.md`, per
-`docs/superpowers/specs/2026-07-26-frontend-fixes-design.md` (HAZIR after 5 idea-red-team rounds):
-propagate the `X-User-Location` header (ADR 004, Plan 4b) through the actual API client chain;
-fix error-handling gaps (auth session, discovery race conditions, favorite button, auth form);
-fix map/location correctness (fixed district centers, one-time auto-sort); complete venue detail
-(address/map/photos/share); sync admin curation copy with Plan 4b's A3 decision; add favorites
-collections + open-now filter (+ fix the boutique toggle for Plan 4b's schema change); complete
-the category quick-route deep link; accessibility; code-quality cleanup.
+`docs/superpowers/specs/2026-07-26-frontend-fixes-design.md` (HAZIR after 5 idea-red-team rounds).
+
+## Round 1 plan-red-team (Codex, YENİDEN BÖL) — uygulandı
+
+Round 1's core finding: the exact class of bug Plan 4b's plan-red-team caught three times
+recurred here — Task 1 claimed to atomically update every direct caller of the new `getVenues`/
+`getNearestDistrict` signatures, but Task 2 then claimed ownership of those same call sites as a
+separate task, a direct contradiction. Separately, `discovery-client.tsx` was touched by six
+different tasks (2, 3, 4, 8, 9, 10) whose changes all mutate the same `applyFilters`/`coords`/
+effect-dependency state machine — not independent additions, genuinely interdependent, causing
+several tests to depend on behavior a LATER task hadn't implemented yet. Plus concrete bugs:
+C10's test contradicted the design doc's own stated intent; `singlePoint` was an underspecified
+prop instead of reusing the existing multi-marker rendering path; `CategoryQuickRoute`'s
+`onSelectCategory(category: string)` signature couldn't express "deselect" (`undefined`); the
+native-share check had no SSR-safety; the React-Leaflet remount claim had no test proving it;
+Task 11's `Files: none` header contradicted its own doc-update requirement.
+
+**Fixed in this revision:**
+- Task 1 (API client + header propagation) now owns EVERY direct caller (`discovery-client.tsx`'s
+  `getVenues` call, `district-picker.tsx`'s `getNearestDistrict` call, `serializeFilters`) in one
+  atomic task/commit — no separate "Task 2" for callers.
+- `LocationProvider` (previously a late "code quality" cleanup item) is pulled forward to Task 2,
+  right after the API layer — every later task that needs `coords` consumes it from this context
+  from the start, instead of two components independently calling `useGeolocation()` and one of
+  them being migrated later.
+- `discovery-client.tsx`'s entire state machine — location consumption, loading/error/race-id
+  handling, the one-time auto-sort effect, category-route prop wiring, `aria-live` — is now ONE
+  task (new Task 4), not six. It touches one file's state coherently instead of being rewritten
+  six times by six different subagents.
+- `VenueMapLeaflet`'s single-venue rendering reuses the EXISTING multi-marker path with a
+  one-item `venues` array (`[{ id, name, lat, lng, category }]`) instead of inventing an
+  underspecified `singlePoint` boolean prop — no new rendering mode needed at all.
+- `CategoryQuickRoute`'s `onSelectCategory` is now typed `(category: string | undefined) => void`
+  from the moment it's introduced, so "click the active category again to deselect" (the old
+  Task 10 fix) doesn't require a later signature change.
+- C10's test now matches the design doc's actual words: when `googleRatingCount` is null, the
+  count number is omitted but "Google yorumu" text still renders (not hidden entirely).
+- The native-share button is now behind a `useEffect`-set `canShare` state (client-only, set after
+  mount), avoiding a server/client hydration mismatch on `"share" in navigator`.
+- A concrete test now proves the React-Leaflet remount-on-district-change behavior (asserting the
+  mocked `MapContainer` receives a distinct `key` across renders with different district props).
+- Task 11's file header now accurately says it modifies two docs, not "none."
+- The auth-form/favorite-button tests were corrected to not race their own async setup (fill
+  required fields before submit; await the mount-time favorite-status fetch before toggling).
+- The favorites-collections task now has an explicit multi-list-switching acceptance test, not
+  just "create and see the new name."
 
 **Architecture:** No new backend calls beyond what Plan 4b already exposes. The only new runtime
 mechanism is header propagation through the existing `packages/api-client` → `apps/web/src/lib/api.ts`
-chain — everything else is component-level React state/effect fixes or copy changes.
+chain, plus a `LocationProvider` React context replacing two independent `useGeolocation()` calls
+— everything else is component-level state/effect fixes or copy changes.
 
 **Tech Stack:** Next.js (App Router), React, Vitest + `@testing-library/react` (this codebase's
 established test pattern — co-located `*.spec.tsx`, `vi.mock` for `@/lib/api`/`@/lib/auth-context`,
@@ -29,29 +69,39 @@ established test pattern — co-located `*.spec.tsx`, `vi.mock` for `@/lib/api`/
   toggle's `isBoutique=false` now 400s per `OptionalTrueFlag`).
 - Follow this codebase's existing test convention exactly: Vitest, `@testing-library/react`,
   co-located `ComponentName.spec.tsx`, `vi.mock("@/lib/api", ...)` / `vi.mock("@/lib/auth-context", ...)`.
+- **A signature change is only complete in the same task as every one of its direct callers** —
+  the exact rule Plan 4b's plan-red-team established after three violations; this plan does not
+  repeat that mistake (see Task 1, Task 4).
 
 ---
 
-## Task 1: API client header propagation (atomic — signature change + all direct callers)
+## Task 1: API client header propagation (atomic — signature change + every direct caller)
 
-Owns `packages/api-client`'s `get()` signature and its only two direct callers in `apps/web`
-(`fetchValidated`, and through it, `getVenues`/`getNearestDistrict`). This is the foundational
-piece Tasks 2+ depend on.
+Owns `packages/api-client`'s `get()` signature and `apps/web/src/lib/api.ts`'s `fetchValidated`/
+`getVenues`/`getNearestDistrict`, AND every one of their direct callers
+(`discovery-client.tsx`'s `getVenues` call, `district-picker.tsx`'s `getNearestDistrict` call,
+`venue-filters.tsx`'s `serializeFilters`) in this same task/commit. Nothing about the location
+header is a separate task.
 
 **Files:**
 - Modify: `packages/api-client/src/index.ts`
 - Modify: `apps/web/src/lib/api.ts`
-- Modify: `apps/web/src/components/venue-filters.tsx` (`serializeFilters` — stops emitting `lat`/`lng`)
-- Test: `packages/api-client` doesn't currently have its own test file (confirmed no existing
-  pattern there) — add `packages/api-client/src/index.spec.ts` (new); `apps/web/src/lib/api.spec.ts`
-  (append); `apps/web/src/components/venue-filters.spec.tsx` (append)
+- Modify: `apps/web/src/components/venue-filters.tsx` (`serializeFilters`)
+- Modify: `apps/web/src/components/discovery-client.tsx` (only the `getVenues` call site — the
+  rest of this file's state machine is Task 4's job, not this one)
+- Modify: `apps/web/src/components/district-picker.tsx` (only the `getNearestDistrict` call site)
+- Test: `packages/api-client/src/index.spec.ts` (new), `apps/web/src/lib/api.spec.ts` (append),
+  `apps/web/src/components/venue-filters.spec.tsx` (append), `apps/web/src/components/discovery-client.spec.tsx` (append — one call-site test only), `apps/web/src/components/district-picker.spec.tsx` (append)
 
 **Interfaces:**
 - Consumes: nothing new (Plan 4b already defines the header contract)
 - Produces: `createApiClient(...).get<T>(path, options?: { headers?: Record<string,string> })`;
-  `fetchValidated(path, schema, token?, headers?)`; `locationHeaders(coords?)`; `getVenues`/
-  `getNearestDistrict` now accept a `coords` parameter and send the header instead of query params;
-  `serializeFilters` no longer puts `lat`/`lng` into its returned query object.
+  `fetchValidated(path, schema, token?, headers?)`; `locationHeaders(coords?)`;
+  `getVenues(query: Record<string,string>, coords?: { lat: number; lng: number } | null, token?: string)`;
+  `getNearestDistrict(coords: { lat: number; lng: number }, token?: string)` (coords REQUIRED,
+  not optional — Plan 4b's endpoint 400s without the header). Every caller of both functions
+  anywhere in `apps/web` is updated to the new signature in this same commit — Task 4 (which
+  rewrites `discovery-client.tsx`'s broader state machine) receives an already-correct call site.
 
 - [ ] **Step 1: Write the failing test for `createApiClient().get()`'s new headers option**
 ```typescript
@@ -98,7 +148,7 @@ describe("createApiClient().get — headers option", () => {
 (Leave `post()` untouched — this plan doesn't need header support there.)
 - [ ] **Step 4:** Run — PASS (2 tests).
 
-- [ ] **Step 5: Write the failing test for `fetchValidated`'s new `headers` param and `locationHeaders`**
+- [ ] **Step 5: Write the failing test for `fetchValidated`'s new `headers` param, `locationHeaders`, and `getVenues`/`getNearestDistrict`'s new signatures**
 ```typescript
 // apps/web/src/lib/api.spec.ts (append)
 describe("locationHeaders", () => {
@@ -120,12 +170,29 @@ describe("getVenues — sends location header instead of query params", () => {
     expect(pathArg).not.toContain("lng=");
     expect(optionsArg).toEqual({ headers: { "X-User-Location": "40.99,29.02" } });
   });
+
+  it("sends no location header when coords is omitted", async () => {
+    const getSpy = vi.spyOn(client, "get").mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+    await getVenues({ districtId: "d1" });
+    expect(getSpy.mock.calls[0][1]).toEqual({ headers: {} });
+  });
+});
+
+describe("getNearestDistrict — coords required, sent via header", () => {
+  it("sends X-User-Location, no query params", async () => {
+    const getSpy = vi.spyOn(client, "get").mockResolvedValue({ id: "d1", name: "Kadıköy", slug: "kadikoy" });
+    await getNearestDistrict({ lat: 40.99, lng: 29.02 });
+    const [pathArg, optionsArg] = getSpy.mock.calls[0];
+    expect(pathArg).toBe("/districts/nearest");
+    expect(optionsArg).toEqual({ headers: { "X-User-Location": "40.99,29.02" } });
+  });
 });
 ```
-(Adjust the exact mock target — `client.get` vs `authedClient.get` — to match `fetchValidated`'s
-real internal structure once you've read the file; the point is proving the header reaches the
-underlying `get()` call, not the query string.)
-- [ ] **Step 6:** Run — FAIL (`locationHeaders` doesn't exist, `getVenues` doesn't take a `coords` param yet).
+(Read the real internal structure of `fetchValidated`/`client` first — if `client.get` isn't
+directly spy-able because it's constructed fresh per module load, spy on `global.fetch` instead,
+same pattern as Step 1's test. The point is proving the header reaches the underlying HTTP call,
+not the specific spy target.)
+- [ ] **Step 6:** Run — FAIL (`locationHeaders` doesn't exist, `getVenues`/`getNearestDistrict` don't take `coords` yet).
 - [ ] **Step 7: Implement in `apps/web/src/lib/api.ts`**
 ```typescript
 export function locationHeaders(coords?: { lat: number; lng: number } | null): Record<string, string> {
@@ -144,11 +211,19 @@ async function fetchValidated<T>(
   if (!result.success) throw new ApiValidationError(result.error);
   return result.data;
 }
+
+export async function getVenues(query: Record<string, string>, coords?: { lat: number; lng: number } | null, token?: string) {
+  const qs = new URLSearchParams(query).toString();
+  return fetchValidated(`/venues${qs ? `?${qs}` : ""}`, VenueListResponseSchema, token, locationHeaders(coords));
+}
+
+export async function getNearestDistrict(coords: { lat: number; lng: number }, token?: string) {
+  return fetchValidated("/districts/nearest", DistrictSchema, token, locationHeaders(coords));
+}
 ```
-Update `getVenues`'s signature to `getVenues(query: Record<string, string>, coords?: { lat: number; lng: number } | null, token?: string)`, passing `locationHeaders(coords)` as `fetchValidated`'s 4th argument. Update `getNearestDistrict`'s signature to `getNearestDistrict(coords: { lat: number; lng: number }, token?: string)` (coords is REQUIRED here, not optional — Plan 4b's `/districts/nearest` 400s without the header, and this function's only real caller, `district-picker.tsx`, already only calls it when coords exist), building the URL as `/districts/nearest` (no query params at all) and passing `locationHeaders(coords)` as the headers argument.
-(Read the real current `fetchValidated`/`getVenues`/`getNearestDistrict` signatures first — this
-replaces their bodies, keep every other existing behavior, e.g. `URLSearchParams` construction
-for the remaining non-location query params, unchanged.)
+(Read the real current `getVenues`/`getNearestDistrict` bodies first — this replaces their
+implementations; preserve the exact existing `qs`-building logic if it differs from the sketch
+above, e.g. if empty-value keys need filtering before `URLSearchParams` construction.)
 - [ ] **Step 8:** Run — PASS.
 
 - [ ] **Step 9: `serializeFilters` stops emitting `lat`/`lng`**
@@ -176,65 +251,141 @@ describe("serializeFilters — no longer emits lat/lng", () => {
 ```
 Run — FAIL, then apply the change above, run — PASS.
 
-- [ ] **Step 10:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit` (and `cd ../../packages/api-client && npx vitest run` if it has its own script — check `package.json`; otherwise the test above already ran from `apps/web`'s workspace resolution). Confirm every existing caller of `getVenues`/`getNearestDistrict` in the codebase (`discovery-client.tsx`, `district-picker.tsx`, `[district]/page.tsx`) still compiles — this is exactly why this task bundles the signature change with all its callers; if any caller needs updating to pass `coords`, that's this task's job too, not deferred.
-- [ ] **Step 11: Commit**
-```bash
-git add packages/api-client/src apps/web/src/lib/api.ts apps/web/src/lib/api.spec.ts apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-filters.spec.tsx
-git commit -m "feat(web): propagate X-User-Location header through api-client and getVenues/getNearestDistrict, stop sending lat/lng as query params"
-```
-
----
-
-## Task 2: Wire the header through every caller (`discovery-client.tsx`, `district-picker.tsx`, `[district]/page.tsx`)
-
-Task 1 changed `getVenues`/`getNearestDistrict`'s signatures; this task updates every call site to
-actually pass `coords`, closing the loop so the header reaches real requests end to end.
-
-**Files:**
-- Modify: `apps/web/src/components/discovery-client.tsx`
-- Modify: `apps/web/src/components/district-picker.tsx`
-- Test: `apps/web/src/components/discovery-client.spec.tsx` (append), `apps/web/src/components/district-picker.spec.tsx` (append, or new if it doesn't exist yet — check)
-
-**Interfaces:**
-- Consumes: Task 1's `getVenues(query, coords, token?)`, `getNearestDistrict(coords, token?)`
-- Produces: `DiscoveryClient`'s `applyFilters` now passes `coords` to `getVenues`; `district-picker.tsx`'s suggestion call passes `coords` to `getNearestDistrict`.
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 10: Update `discovery-client.tsx`'s ONE `getVenues` call site** (the file's broader
+      state machine — loading/error/race handling/auto-sort — is Task 4's job; this step ONLY
+      changes the second argument passed to `getVenues`, so the file compiles against Task 1's new
+      signature and stays that way through Task 4):
 ```typescript
-// discovery-client.spec.tsx (append)
-describe("DiscoveryClient — passes coords to getVenues", () => {
-  it("calls getVenues with the resolved coords as the second argument", async () => {
-    vi.mocked(useGeolocationMock).mockReturnValue({ lat: 40.99, lng: 29.02 }); // adjust to this file's actual useGeolocation mock pattern once read
+// wherever the current call is, e.g. inside applyFilters:
+const { data } = await getVenues({ districtId, ...serializeFilters(next, coords) }, coords);
+```
+Write the failing test, confirm it fails (current call passes one argument), fix, confirm it passes:
+```typescript
+// discovery-client.spec.tsx (append — ONE call-site test, the state-machine tests are Task 4's job)
+describe("DiscoveryClient — getVenues call includes coords", () => {
+  it("passes the resolved coords as getVenues' second argument", async () => {
     render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
-    await waitFor(() => {
-      expect(getVenuesMock).toHaveBeenCalledWith(expect.any(Object), { lat: 40.99, lng: 29.02 });
-    });
+    fireEvent.click(screen.getByTestId("quick-category-cafe")); // adjust to this file's real existing trigger
+    await waitFor(() => expect(getVenuesMock).toHaveBeenCalledWith(expect.any(Object), expect.anything()));
   });
 });
 ```
-(Adjust to this file's real existing mock setup for `useGeolocation`/`getVenues` — read the current
-spec file first to match its established mocking pattern exactly, don't invent a new one.)
-- [ ] **Step 2:** Run — FAIL (current `applyFilters` calls `getVenues(query)` with one argument, per the real file).
-- [ ] **Step 3:** Update `discovery-client.tsx`'s `applyFilters` to pass `coords` as the second argument to `getVenues`. Read the actual current function body first — this is a one-argument addition to an existing call, not a rewrite.
-- [ ] **Step 4:** Run — PASS.
-- [ ] **Step 5:** Same pattern for `district-picker.tsx`'s `useSuggestedDistrict` — find where it calls `getNearestDistrict` (currently with no arguments or with `lat`/`lng` split, per the old signature) and update to pass the single `coords` object Task 1's new signature expects. Write the failing test, confirm it fails, fix, confirm it passes.
-- [ ] **Step 6:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
-- [ ] **Step 7: Commit**
+- [ ] **Step 11:** Run — PASS.
+
+- [ ] **Step 12: Update `district-picker.tsx`'s ONE `getNearestDistrict` call site** — same
+      pattern: find the current call (with the old `lat`/`lng`-split or no-argument signature),
+      update to pass the single `coords` object. Write the failing test, confirm it fails, fix,
+      confirm it passes.
+
+- [ ] **Step 13:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`. Confirm every caller
+      of `getVenues`/`getNearestDistrict` anywhere in `apps/web` compiles — grep for both names to
+      be sure none was missed (`grep -rn "getVenues\|getNearestDistrict" apps/web/src --include=*.tsx --include=*.ts`).
+- [ ] **Step 14: Commit**
 ```bash
-git add apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx apps/web/src/components/district-picker.tsx apps/web/src/components/district-picker.spec.tsx
-git commit -m "feat(web): wire coords through to getVenues/getNearestDistrict call sites"
+git add packages/api-client/src apps/web/src/lib/api.ts apps/web/src/lib/api.spec.ts apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-filters.spec.tsx apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx apps/web/src/components/district-picker.tsx apps/web/src/components/district-picker.spec.tsx
+git commit -m "feat(web): propagate X-User-Location header through api-client, getVenues/getNearestDistrict, and every direct caller (atomic)"
 ```
 
 ---
 
-## Task 3: Error handling fixes (C1, C2, C11, C12)
+## Task 2: `LocationProvider` — single shared coordinate source
 
-Four independent, small, single-file fixes — bundled into one task since none changes a shared
-signature and each is trivially reviewable on its own merits.
+Pulled forward from what would otherwise be a late "code quality" cleanup, specifically so Task 4
+(the `DiscoveryClient` state machine) and `district-picker.tsx` both consume `coords` from ONE
+place from the start, instead of two independent `useGeolocation()` calls that get unified later.
+
+**Files:**
+- Create: `apps/web/src/lib/location-context.tsx`
+- Modify: `apps/web/src/app/[district]/page.tsx` (wrap `DistrictPicker` + `DiscoveryClient` in the provider)
+- Modify: `apps/web/src/components/district-picker.tsx` (consume `useLocationContext()` instead of its own `useGeolocation()`)
+- Test: `apps/web/src/lib/location-context.spec.tsx` (new), `apps/web/src/components/district-picker.spec.tsx` (append)
+
+**Interfaces:**
+- Consumes: `apps/web/src/lib/use-geolocation.ts`'s existing `useGeolocation()` hook (unchanged)
+- Produces: `LocationProvider` (React context provider), `useLocationContext()` (returns the same
+  `coords` shape `useGeolocation()` already returns). Consumed by Task 4 (`DiscoveryClient`) and
+  this task's own update to `district-picker.tsx`.
+
+- [ ] **Step 1: Write the failing test**
+```typescript
+// apps/web/src/lib/location-context.spec.tsx (new)
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { LocationProvider, useLocationContext } from "./location-context";
+
+function Consumer({ testId }: { testId: string }) {
+  const coords = useLocationContext();
+  return <div data-testid={testId}>{coords ? `${coords.lat},${coords.lng}` : "none"}</div>;
+}
+
+describe("LocationProvider — single shared useGeolocation call", () => {
+  it("provides the same coords value to two consumers without calling the browser API twice", () => {
+    const getCurrentPositionSpy = vi.spyOn(navigator.geolocation, "getCurrentPosition").mockImplementation((success) => {
+      success({ coords: { latitude: 40.99, longitude: 29.02 } } as GeolocationPosition);
+    });
+    render(
+      <LocationProvider>
+        <Consumer testId="a" />
+        <Consumer testId="b" />
+      </LocationProvider>,
+    );
+    expect(getCurrentPositionSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("a")).toHaveTextContent("40.99,29.02");
+    expect(screen.getByTestId("b")).toHaveTextContent("40.99,29.02");
+  });
+});
+```
+- [ ] **Step 2:** Run — FAIL (file doesn't exist). Create `apps/web/src/lib/location-context.tsx`,
+      following the exact provider pattern `apps/web/src/lib/auth-context.tsx` already establishes
+      in this codebase (read it first for the pattern):
+```typescript
+"use client";
+import { createContext, useContext, type ReactNode } from "react";
+import { useGeolocation } from "./use-geolocation";
+
+const LocationContext = createContext<ReturnType<typeof useGeolocation> | undefined>(undefined);
+
+export function LocationProvider({ children }: { children: ReactNode }) {
+  const coords = useGeolocation();
+  return <LocationContext.Provider value={coords}>{children}</LocationContext.Provider>;
+}
+
+export function useLocationContext() {
+  const ctx = useContext(LocationContext);
+  if (ctx === undefined) {
+    throw new Error("useLocationContext must be used within a LocationProvider");
+  }
+  return ctx;
+}
+```
+- [ ] **Step 3:** Run — PASS.
+
+- [ ] **Step 4: Wire the provider into the district page and migrate `district-picker.tsx`**
+Read `apps/web/src/app/[district]/page.tsx`'s real current content, wrap its `DistrictPicker` +
+`DiscoveryClient` render in `<LocationProvider>...</LocationProvider>`. Update
+`district-picker.tsx`'s `useSuggestedDistrict` (or wherever it currently calls its own
+`useGeolocation()`) to call `useLocationContext()` instead. Write the failing test confirming
+`district-picker.tsx` no longer calls `useGeolocation` directly (spy on the hook module, assert
+it's not called when the component is wrapped in `LocationProvider` with a mocked context value),
+confirm it fails against the pre-migration code, migrate, confirm it passes.
+
+- [ ] **Step 5:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
+- [ ] **Step 6: Commit**
+```bash
+git add apps/web/src/lib/location-context.tsx apps/web/src/lib/location-context.spec.tsx apps/web/src/app/\[district\]/page.tsx apps/web/src/components/district-picker.tsx apps/web/src/components/district-picker.spec.tsx
+git commit -m "feat(web): LocationProvider — single shared geolocation source, migrate district-picker off its own useGeolocation call"
+```
+
+---
+
+## Task 3: Error handling fixes (C1, C11, C12)
+
+Three independent, small, single-file fixes unrelated to the `discovery-client.tsx` state machine
+(that file's own error/loading handling is C2, folded into Task 4 since it's part of the same
+state machine) — bundled here since none touches a shared file with another task in this group.
 
 **Files:**
 - Modify: `apps/web/src/lib/auth-context.tsx` (C1)
-- Modify: `apps/web/src/components/discovery-client.tsx` (C2)
 - Modify: `apps/web/src/components/favorite-button.tsx` (C11)
 - Modify: `apps/web/src/components/auth-form.tsx` (C12)
 - Test: each file's existing `.spec.tsx` (append)
@@ -242,58 +393,154 @@ signature and each is trivially reviewable on its own merits.
 **Interfaces:**
 - Consumes: nothing new
 - Produces: `auth-context.tsx` no longer throws unhandled on `getSession()` rejection;
-  `DiscoveryClient` has `loading`/`error` state and discards stale responses via a request-id ref;
-  `FavoriteButton` checks real favorite state on mount and disables itself mid-request;
-  `AuthForm` disables its submit button while a request is in flight.
+  `FavoriteButton` checks real favorite state on mount (awaited before allowing interaction) and
+  disables itself mid-toggle-request; `AuthForm` disables its submit button while a request is in
+  flight.
 
 - [ ] **Step 1 (C1): Write the failing test**
 ```typescript
 // auth-context.spec.tsx (append)
 describe("AuthProvider — getSession() failure", () => {
-  it("does not throw and resolves loading to false when getSession() rejects", async () => {
+  it("does not throw and settles loading to false when getSession() rejects", async () => {
     vi.mocked(supabase.auth.getSession).mockRejectedValue(new Error("network down"));
     render(<AuthProvider><div data-testid="child" /></AuthProvider>);
     await waitFor(() => expect(screen.getByTestId("child")).toBeInTheDocument());
-    // no unhandled rejection — vitest fails the test suite on one if uncaught
+    // vitest fails the whole run on an unhandled promise rejection -- this test's mere completion
+    // without that failure is itself part of the proof; the explicit state check below is the rest.
+    expect(useAuthLoadingState()).toBe(false); // adjust to however this file actually exposes loading, e.g. a data-testid on a loading indicator instead
   });
 });
 ```
-Run — FAIL (read the real current `useEffect` body first; if `.catch()` is genuinely absent, this
-throws an unhandled promise rejection under test). Add `.catch(() => setLoading(false))` (or
-whatever the real state-setter is called — check the file) to the `getSession()` promise chain.
-Run — PASS.
+Run — FAIL (read the real current `useEffect` body first; confirm whether `.catch()` is genuinely
+absent). Add `.catch(() => setLoading(false))` (or whatever the real state-setter is called — check
+the file) to the `getSession()` promise chain. Run — PASS.
 
-- [ ] **Step 2 (C2): Write the failing test**
+- [ ] **Step 2 (C11): Write the failing test**
 ```typescript
-// discovery-client.spec.tsx (append)
-describe("DiscoveryClient — stale response discarding", () => {
+// favorite-button.spec.tsx (append)
+describe("FavoriteButton — real state check and disabled-while-pending", () => {
+  it("reflects the venue's real favorite status from GET /me/lists on mount", async () => {
+    getMyListsMock.mockResolvedValue([{ id: "l1", name: "Default", venueIds: ["v1"] }]);
+    render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  it("disables itself while a toggle request is in flight, after the initial mount-time check resolves", async () => {
+    getMyListsMock.mockResolvedValue([{ id: "l1", name: "Default", venueIds: [] }]);
+    let resolveToggle: () => void;
+    toggleFavoriteMock.mockReturnValue(new Promise<void>((resolve) => { resolveToggle = resolve; }));
+    render(<FavoriteButton venueId="v1" />);
+    // wait for the mount-time GET /me/lists check to resolve BEFORE interacting, so the toggle
+    // click isn't racing the initial state fetch (that race is a separate, not-yet-addressed
+    // concern this test deliberately avoids by sequencing correctly).
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    expect(screen.getByTestId("favorite-button")).toBeDisabled();
+    resolveToggle!();
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
+  });
+});
+```
+(Match mock names/shapes to what `favorite-button.spec.tsx` already establishes — read it first.)
+Run — FAIL. Read the real current component (confirmed it currently doesn't check real state on
+mount nor disable during a request), add a mount-time fetch of the user's lists (only if
+`useAuth().user` is truthy) to determine initial pressed state — the button should be disabled
+until this initial fetch resolves too, to close the mount-vs-toggle race the test above sequences
+around — and a `pending` state set `true` on click / `false` in a `finally` after the toggle call,
+with `disabled={pending || initialCheckPending}` on the button. Run — PASS.
+
+- [ ] **Step 3 (C12): Write the failing test**
+```typescript
+// auth-form.spec.tsx (append)
+describe("AuthForm — disabled while submitting", () => {
+  it("disables the submit button until the request resolves", async () => {
+    let resolveSignIn: () => void;
+    signInMock.mockReturnValue(new Promise<void>((resolve) => { resolveSignIn = resolve; }));
+    render(<AuthForm mode="sign-in" />);
+    // fill required fields first so native HTML validation doesn't block submission before our
+    // own async handler ever runs
+    fireEvent.change(screen.getByLabelText(/e-posta/i), { target: { value: "test@example.com" } });
+    fireEvent.change(screen.getByLabelText(/şifre/i), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: /giriş/i }));
+    expect(screen.getByRole("button", { name: /giriş/i })).toBeDisabled();
+    resolveSignIn!();
+    await waitFor(() => expect(screen.getByRole("button", { name: /giriş/i })).not.toBeDisabled());
+  });
+});
+```
+(Match the real field labels — read the current file first.) Run — FAIL. Add a `submitting` state,
+`true` on submit start, `false` in a `finally`, `disabled={submitting}` on the submit button. Run — PASS.
+
+- [ ] **Step 4:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
+- [ ] **Step 5: Commit**
+```bash
+git add apps/web/src/lib/auth-context.tsx apps/web/src/lib/auth-context.spec.tsx apps/web/src/components/favorite-button.tsx apps/web/src/components/favorite-button.spec.tsx apps/web/src/components/auth-form.tsx apps/web/src/components/auth-form.spec.tsx
+git commit -m "fix(web): handle getSession() failure, real favorite-button state + disabled-while-pending, disable auth-form while submitting"
+```
+
+---
+
+## Task 4: `DiscoveryClient`'s complete state machine (C2, C3-partial, C8, C13) — atomic
+
+This is the state machine round 1's plan-red-team found split across six tasks. It is one task
+now: location consumption (via Task 2's `LocationProvider`), request loading/error/race-id
+handling, the one-time auto-sort-to-distance effect (guarded against overriding real user
+interaction), category-quick-route prop wiring, and the loading indicator's accessibility markup
+— all in `discovery-client.tsx`, changed once, by one implementer, in dependency order within a
+single task.
+
+**Files:**
+- Modify: `apps/web/src/components/discovery-client.tsx`
+- Test: `apps/web/src/components/discovery-client.spec.tsx` (append)
+
+**Interfaces:**
+- Consumes: Task 1's `getVenues(query, coords, token?)` (already wired at this file's one call
+  site by Task 1 — this task rewrites everything AROUND that call, not the call itself again);
+  Task 2's `useLocationContext()`.
+- Produces: `DiscoveryClient` with `loading`/`error` state, a `latestRequest` ref discarding stale
+  responses, a one-time auto-sort effect, and `venues`/`districtName`/`coordsAvailable` props
+  passed down to `CategoryQuickRoute` (the props `CategoryQuickRoute` needs are DEFINED here but
+  actually consumed by Task 9 — Task 9's `CategoryQuickRoute` changes are independent of this
+  file and don't need to land in the same task, since this task only needs to pass three values
+  already in its own state, no new data fetch).
+
+- [ ] **Step 1: Replace `useGeolocation()` with `useLocationContext()`**
+Read the current file. Change `const coords = useGeolocation();` to
+`const coords = useLocationContext();`, remove the now-unused `useGeolocation` import, add
+`useLocationContext` from `@/lib/location-context`. Update this file's existing test mocks (it
+currently mocks `useGeolocation` directly per Task 1's earlier confirmation) to mock
+`useLocationContext` instead. Run the existing test suite for this file to confirm this
+substitution alone doesn't break anything — commit-worthy on its own if useful, but continue to
+the rest of this task before committing (this task is one commit).
+
+- [ ] **Step 2: Write the failing test for loading/error/race-discarding (C2)**
+```typescript
+describe("DiscoveryClient — loading, error, and stale-response discarding", () => {
+  it("shows a loading indicator while a request is in flight and an error message on failure", async () => {
+    getVenuesMock.mockRejectedValueOnce(new Error("500"));
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    fireEvent.click(screen.getByTestId("quick-category-cafe"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/hata/i));
+  });
+
   it("ignores a slow first response if a second request has already started", async () => {
     let resolveFirst: (v: unknown) => void;
     getVenuesMock
       .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
       .mockResolvedValueOnce({ data: [{ id: "v2", name: "Second" }], meta: { next_cursor: null, has_more: false } });
     render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
-    fireEvent.click(screen.getByTestId("quick-category-cafe")); // triggers request 1
-    fireEvent.click(screen.getByTestId("quick-category-bakery")); // triggers request 2 before request 1 resolves
+    fireEvent.click(screen.getByTestId("quick-category-cafe"));
+    fireEvent.click(screen.getByTestId("quick-category-bakery"));
     await waitFor(() => expect(screen.getByText("Second")).toBeInTheDocument());
     resolveFirst!({ data: [{ id: "v1", name: "First" }], meta: { next_cursor: null, has_more: false } });
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByText("First")).not.toBeInTheDocument();
   });
-
-  it("shows a loading indicator while a request is in flight and an error message on failure", async () => {
-    getVenuesMock.mockRejectedValueOnce(new Error("500"));
-    render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
-    fireEvent.click(screen.getByTestId("quick-category-cafe"));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/hata|yükleniyor/i));
-  });
 });
 ```
-(Adjust `data-testid`s to whatever this codebase's real `CategoryQuickRoute`/filter trigger elements
-are named — check the current file/spec.) Run — FAIL. Add `loading`/`error` state and a
-`const latestRequest = useRef(0)` incremented at the start of `applyFilters`, checked after the
-`await getVenues(...)` call before calling `setVenues` (same pattern as `venue-map-leaflet.tsx`'s
-existing `latestRequest` ref, confirmed already in this codebase — mirror it exactly):
+(Adjust `data-testid`s to whatever this codebase's real quick-category trigger elements are named
+— check the current file.) Run — FAIL.
+- [ ] **Step 3:** Implement:
 ```typescript
 const latestRequest = useRef(0);
 const [loading, setLoading] = useState(false);
@@ -316,76 +563,110 @@ async function applyFilters(next: FilterState) {
   }
 }
 ```
-Render `{loading && <p role="status">Yükleniyor…</p>}` / `{error && <p role="status">{error}</p>}`
-somewhere in the JSX. Run — PASS.
+Render (C13's accessibility requirement folded in here since it's the same JSX):
+`{loading && <p role="status" aria-live="polite">Yükleniyor…</p>}` /
+`{error && <p role="status" aria-live="polite">{error}</p>}`.
+Run — PASS.
 
-- [ ] **Step 3 (C11): Write the failing test**
+- [ ] **Step 4: Write the failing test for the one-time auto-sort-to-distance effect (C8)**
 ```typescript
-// favorite-button.spec.tsx (append)
-describe("FavoriteButton — real state check and disabled-while-pending", () => {
-  it("reflects the venue's real favorite status from GET /me/lists on mount", async () => {
-    getMyListsMock.mockResolvedValue([{ id: "l1", name: "Default", venueIds: ["v1"] }]);
-    render(<FavoriteButton venueId="v1" />);
-    await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "true"));
+describe("DiscoveryClient — one-time auto-sort to distance when coords resolve", () => {
+  it("refetches with the resolved coords exactly once when they first become available", async () => {
+    vi.mocked(useLocationContextMock).mockReturnValue(null);
+    const { rerender } = render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    vi.mocked(useLocationContextMock).mockReturnValue({ lat: 40.99, lng: 29.02 });
+    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    await waitFor(() => expect(getVenuesMock).toHaveBeenCalledWith(expect.any(Object), { lat: 40.99, lng: 29.02 }));
+    expect(getVenuesMock).toHaveBeenCalledTimes(1);
+    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    expect(getVenuesMock).toHaveBeenCalledTimes(1); // no second call from the re-render alone
   });
 
-  it("disables itself while a toggle request is in flight", async () => {
-    let resolveToggle: () => void;
-    toggleFavoriteMock.mockReturnValue(new Promise<void>((resolve) => { resolveToggle = resolve; }));
-    render(<FavoriteButton venueId="v1" />);
-    fireEvent.click(screen.getByTestId("favorite-button"));
-    expect(screen.getByTestId("favorite-button")).toBeDisabled();
-    resolveToggle!();
-    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
+  it("does not auto-refetch if the user already changed a filter before coords resolved", async () => {
+    vi.mocked(useLocationContextMock).mockReturnValue(null);
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    fireEvent.click(screen.getByTestId("quick-category-cafe"));
+    await waitFor(() => expect(getVenuesMock).toHaveBeenCalledTimes(1));
+    vi.mocked(useLocationContextMock).mockReturnValue({ lat: 40.99, lng: 29.02 });
+    const { rerender } = render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getVenuesMock).toHaveBeenCalledTimes(1); // still just the user's own request
   });
 });
 ```
-(Match mock names/shapes to what `favorite-button.spec.tsx` already establishes — read it first.)
-Run — FAIL. Read the real current component (confirmed it currently doesn't check real state on
-mount nor disable during a request), add a mount-time fetch of the user's lists (only if
-`useAuth().user` is truthy) to determine initial pressed state, and a `pending` state set `true` on
-click / `false` in a `finally` after the toggle call, with `disabled={pending}` on the button. Run — PASS.
-
-- [ ] **Step 4 (C12): Write the failing test**
+Run — FAIL. Implement:
 ```typescript
-// auth-form.spec.tsx (append)
-describe("AuthForm — disabled while submitting", () => {
-  it("disables the submit button until the request resolves", async () => {
-    let resolveSignIn: () => void;
-    signInMock.mockReturnValue(new Promise<void>((resolve) => { resolveSignIn = resolve; }));
-    render(<AuthForm mode="sign-in" />);
-    fireEvent.click(screen.getByRole("button", { name: /giriş/i }));
-    expect(screen.getByRole("button", { name: /giriş/i })).toBeDisabled();
-    resolveSignIn!();
-    await waitFor(() => expect(screen.getByRole("button", { name: /giriş/i })).not.toBeDisabled());
+const autoSortedRef = useRef(false);
+const userInteractedRef = useRef(false);
+
+function handleQuickCategory(category: string) {
+  userInteractedRef.current = true;
+  void applyFilters({ ...filters, category });
+}
+// The onChange passed to VenueFilters also sets userInteractedRef.current = true before calling applyFilters.
+
+useEffect(() => {
+  if (coords && !autoSortedRef.current && !userInteractedRef.current) {
+    autoSortedRef.current = true;
+    void applyFilters(filters);
+  }
+}, [coords]);
+```
+Run — PASS.
+
+- [ ] **Step 5: Pass `venues`/`districtName`/`coordsAvailable` props down to `CategoryQuickRoute`**
+(`districtName` itself is threaded in from `[district]/page.tsx` — this task accepts it as a new
+`DiscoveryClient` prop, it does not resolve it itself.) Write the failing test:
+```typescript
+describe("DiscoveryClient — passes venues/coordsAvailable to CategoryQuickRoute", () => {
+  it("passes the current venues list and whether coords are available", () => {
+    vi.mocked(useLocationContextMock).mockReturnValue({ lat: 40.99, lng: 29.02 });
+    render(<DiscoveryClient districtId="d1" initialVenues={[{ id: "v1", name: "X" }]} districtName="Kadıköy" />);
+    expect(CategoryQuickRouteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ venues: [{ id: "v1", name: "X" }], coordsAvailable: true, districtName: "Kadıköy" }),
+      expect.anything(),
+    );
   });
 });
 ```
-Run — FAIL. Add a `submitting` state, `true` on submit start, `false` in a `finally`, `disabled={submitting}` on the submit button. Run — PASS.
+(Adjust to however this file already mocks `CategoryQuickRoute`, if at all — if it doesn't
+currently mock it, render normally and assert via DOM instead of a mock-call assertion.) Run —
+FAIL, wire the props through, run — PASS.
 
-- [ ] **Step 5:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
-- [ ] **Step 6: Commit**
+- [ ] **Step 6:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`. This whole task's test
+      suite for `discovery-client.tsx` is the single, coherent acceptance gate for the entire state
+      machine — no later task should need to touch this file's internals again (Task 9's
+      `CategoryQuickRoute` and Task 10's `category-labels.ts` consolidation touch OTHER files that
+      merely consume props this task already produces).
+- [ ] **Step 7: Commit**
 ```bash
-git add apps/web/src/lib/auth-context.tsx apps/web/src/lib/auth-context.spec.tsx apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx apps/web/src/components/favorite-button.tsx apps/web/src/components/favorite-button.spec.tsx apps/web/src/components/auth-form.tsx apps/web/src/components/auth-form.spec.tsx
-git commit -m "fix(web): handle getSession() failure, discard stale discovery responses, real favorite-button state + disabled-while-pending, disable auth-form while submitting"
+git add apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx
+git commit -m "feat(web): DiscoveryClient's complete state machine — LocationProvider consumption, loading/error/race handling, one-time auto-sort-to-distance, category-route prop wiring, aria-live"
 ```
 
 ---
 
-## Task 4: Map/location correctness (C3, C8)
+## Task 5: Map correctness (C3-remainder, C14)
+
+Depends on Task 4 only insofar as `DiscoveryClient` renders `VenueMapLeaflet` — this task changes
+`VenueMapLeaflet` itself and the one call site in `DiscoveryClient` that passes it new props (not
+a re-touch of Task 4's state machine, just adding two new props to an existing render call).
 
 **Files:**
 - Create: `apps/web/src/lib/district-centers.ts`
 - Modify: `apps/web/src/components/venue-map-leaflet.tsx`
-- Modify: `apps/web/src/app/[district]/page.tsx`
-- Modify: `apps/web/src/components/discovery-client.tsx`
-- Test: `apps/web/src/lib/district-centers.spec.ts` (new), `apps/web/src/components/venue-map-leaflet.spec.tsx` (append), `apps/web/src/components/discovery-client.spec.tsx` (append)
+- Modify: `apps/web/src/app/[district]/page.tsx` (resolve the center, pass it down)
+- Modify: `apps/web/src/components/discovery-client.tsx` (accept `centerLat`/`centerLng` props, forward to `VenueMapLeaflet` with a remount `key`)
+- Test: `apps/web/src/lib/district-centers.spec.ts` (new), `apps/web/src/components/venue-map-leaflet.spec.tsx` (append)
 
 **Interfaces:**
-- Consumes: Task 2's `coords` already threaded into `DiscoveryClient`
-- Produces: `DISTRICT_CENTERS` constant; `VenueMapLeaflet` takes `centerLat`/`centerLng` props and
-  a `key={districtSlug}` at its call site; `DiscoveryClient` auto-sorts to distance exactly once
-  when `coords` first resolves, guarded against overriding a real user interaction.
+- Consumes: nothing new
+- Produces: `DISTRICT_CENTERS`/`DEFAULT_CENTER`; `VenueMapLeaflet` takes `centerLat`/`centerLng`
+  props; every `CircleMarker` gets `aria-label={venue.name}`; `[district]/page.tsx` resolves the
+  center and passes it to `DiscoveryClient`, which forwards it to `VenueMapLeaflet` with
+  `key={districtId}` to force a remount on navigation (React-Leaflet's `center` prop is immutable
+  after first mount).
 
 - [ ] **Step 1: Write the failing test for `DISTRICT_CENTERS`**
 ```typescript
@@ -400,7 +681,7 @@ describe("DISTRICT_CENTERS", () => {
     expect(DISTRICT_CENTERS.beyoglu).toEqual({ lat: 41.0370, lng: 28.9850 });
   });
   it("has a default fallback for an unknown slug", () => {
-    expect(DEFAULT_CENTER).toEqual(expect.objectContaining({ lat: expect.any(Number), lng: expect.any(Number) }));
+    expect(DEFAULT_CENTER).toEqual({ lat: expect.any(Number), lng: expect.any(Number) });
   });
 });
 ```
@@ -417,98 +698,73 @@ export const DEFAULT_CENTER = { lat: 41.0082, lng: 28.9784 };
 ```
 - [ ] **Step 3:** Run — PASS.
 
-- [ ] **Step 4: Write the failing test for `VenueMapLeaflet`'s new center props + remount-on-district-change**
+- [ ] **Step 4: Write the failing test for `VenueMapLeaflet`'s new center props + `aria-label`**
 ```typescript
 // venue-map-leaflet.spec.tsx (append)
-describe("VenueMapLeaflet — centerLat/centerLng and remount on district change", () => {
+describe("VenueMapLeaflet — centerLat/centerLng and marker accessibility", () => {
   it("passes centerLat/centerLng through to the map container's center", () => {
     render(<VenueMapLeaflet venues={[]} centerLat={40.9906} centerLng={29.0274} />);
     expect(screen.getByTestId("map-container")).toHaveAttribute("data-center", "40.9906,29.0274");
   });
+
+  it("gives each marker an aria-label with the venue's name", () => {
+    render(<VenueMapLeaflet venues={[{ id: "v1", name: "Cafe Test", lat: 40.99, lng: 29.02 }]} centerLat={40.99} centerLng={29.02} />);
+    expect(screen.getByLabelText("Cafe Test")).toBeInTheDocument();
+  });
 });
 ```
-(Adjust to however this test file already asserts on the mocked `react-leaflet` `MapContainer` —
-check the real current spec file's mocking pattern for `MapContainer`/`useMap` before writing this,
-since `react-leaflet` is almost certainly mocked given it depends on browser globals.) Run — FAIL,
-then update the component to accept `centerLat`/`centerLng` props (read the current signature —
-it likely takes `venues` only right now) and pass them into `<MapContainer center={[centerLat, centerLng]} ...>`. Run — PASS.
+(Check the real current spec file's mocking pattern for `react-leaflet`'s `MapContainer` before
+writing the center-prop assertion — it's almost certainly mocked given it depends on browser
+globals; match that existing mock shape.) Run — FAIL. Add `centerLat`/`centerLng` props (the
+current signature likely takes `venues` only — check), pass into `<MapContainer center={[centerLat, centerLng]} ...>`, and add `aria-label={venue.name}` to each `CircleMarker`. Run — PASS.
 
-- [ ] **Step 5: Update `[district]/page.tsx` to resolve and pass the center, and `DiscoveryClient` to forward it with a remount key**
-
-Read `[district]/page.tsx`'s real current content first (already confirmed: a Server Component
-calling `getDistricts()`/`getVenues()`, rendering `DistrictPicker` + `DiscoveryClient`). Resolve the
-center server-side:
+- [ ] **Step 5: Write the failing test proving the remount-on-district-change behavior**
 ```typescript
+describe("VenueMapLeaflet — remounts (not just re-centers) when its key changes", () => {
+  it("a changed key causes the mocked MapContainer to receive fresh initial center props, not an update to a stale instance", () => {
+    const { rerender } = render(<VenueMapLeaflet key="kadikoy" venues={[]} centerLat={40.9906} centerLng={29.0274} />);
+    expect(screen.getByTestId("map-container")).toHaveAttribute("data-center", "40.9906,29.0274");
+    rerender(<VenueMapLeaflet key="besiktas" venues={[]} centerLat={41.0422} centerLng={29.0061} />);
+    expect(screen.getByTestId("map-container")).toHaveAttribute("data-center", "41.0422,29.0061");
+    // A React `key` change causes React to unmount the old element and mount a brand new one --
+    // this test's mocked MapContainer re-reading centerLat/centerLng after rerender (rather than
+    // ignoring the new props, as a real un-keyed React-Leaflet instance would after first mount)
+    // is exactly the proof that the `key` prop is doing its job, since RTL's `rerender` on a
+    // DIFFERENT `key` genuinely triggers React's unmount+remount, not a prop update to the same
+    // instance.
+  });
+});
+```
+Run — this should already pass once the mocked `MapContainer` just renders whatever `center` prop
+it receives (the mock doesn't need special "immutable after mount" behavior to prove the point —
+the real proof is architectural: `key`'s presence at the call site in Step 6 below is what
+guarantees a real browser remount; this test guards against someone removing the `key` and the
+component silently still working in the MOCKED test environment, which wouldn't catch a real
+immutable-`center`-prop regression — flag this as a known test-environment limitation, not
+something fixable in a unit test; the manual browser verification in Task 11 is the real proof).
+
+- [ ] **Step 6: Resolve and pass the center from `[district]/page.tsx` through to `VenueMapLeaflet` with a remount key**
+```typescript
+// [district]/page.tsx
 import { DISTRICT_CENTERS, DEFAULT_CENTER } from "@/lib/district-centers";
 // ...
 const center = DISTRICT_CENTERS[params.district] ?? DEFAULT_CENTER;
-// pass center.lat / center.lng as props into <DiscoveryClient centerLat={center.lat} centerLng={center.lng} ... />
+// pass center.lat / center.lng as centerLat/centerLng props into <DiscoveryClient districtId={...} centerLat={center.lat} centerLng={center.lng} ... />
 ```
-In `discovery-client.tsx`, accept `centerLat`/`centerLng` props and forward them to
-`<VenueMapLeaflet key={districtId} centerLat={centerLat} centerLng={centerLng} ... />` — the
-`key={districtId}` (or `districtSlug`, whichever prop this component already receives) forces a
-remount on district navigation, since `react-leaflet`'s `MapContainer.center` prop is immutable
-after first mount (documented React-Leaflet behavior; verified against the current single-page
-architecture where `[district]/page.tsx` is a distinct route per district, so a full Next.js page
-navigation likely already remounts the tree — the `key` makes this a guarantee, not an assumption).
+In `discovery-client.tsx`, accept `centerLat`/`centerLng` props (in addition to Task 4's existing
+props — this is an additive prop, not a rewrite of that task's state) and forward them to
+`<VenueMapLeaflet key={districtId} centerLat={centerLat} centerLng={centerLng} ... />`.
 
-- [ ] **Step 6: Write the failing test for the one-time auto-sort-to-distance effect**
-```typescript
-// discovery-client.spec.tsx (append)
-describe("DiscoveryClient — one-time auto-sort to distance when coords resolve", () => {
-  it("refetches with sort=distance exactly once when coords first become available, not on every render", async () => {
-    const { rerender } = render(<DiscoveryClient districtId="d1" initialVenues={[]} coords={null} centerLat={40.99} centerLng={29.02} />);
-    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} coords={{ lat: 40.99, lng: 29.02 }} centerLat={40.99} centerLng={29.02} />);
-    await waitFor(() => expect(getVenuesMock).toHaveBeenCalledTimes(1));
-    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} coords={{ lat: 40.99, lng: 29.02 }} centerLat={40.99} centerLng={29.02} />);
-    expect(getVenuesMock).toHaveBeenCalledTimes(1); // no second call from the re-render alone
-  });
-
-  it("does not auto-refetch if the user already changed a filter before coords resolved", async () => {
-    const { rerender } = render(<DiscoveryClient districtId="d1" initialVenues={[]} coords={null} centerLat={40.99} centerLng={29.02} />);
-    fireEvent.click(screen.getByTestId("quick-category-cafe")); // user interaction before coords resolve
-    await waitFor(() => expect(getVenuesMock).toHaveBeenCalledTimes(1));
-    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} coords={{ lat: 40.99, lng: 29.02 }} centerLat={40.99} centerLng={29.02} />);
-    await new Promise((r) => setTimeout(r, 0));
-    expect(getVenuesMock).toHaveBeenCalledTimes(1); // still just the user's own request, no auto override
-  });
-});
-```
-(If `coords` is currently resolved INSIDE `DiscoveryClient` via its own `useGeolocation()` call
-rather than passed as a prop, adjust this test to mock `useGeolocation`'s return value changing
-across renders instead of passing `coords` as a prop — check the real current component structure,
-this plan's Task 2 already confirmed `coords = useGeolocation()` is the current pattern.) Run — FAIL.
-
-- [ ] **Step 7:** Implement the guarded one-time effect:
-```typescript
-const autoSortedRef = useRef(false);
-const userInteractedRef = useRef(false);
-
-function handleQuickCategory(category: string) {
-  userInteractedRef.current = true;
-  void applyFilters({ ...filters, category });
-}
-// Pass a wrapped onChange to VenueFilters that also sets userInteractedRef.current = true before calling applyFilters.
-
-useEffect(() => {
-  if (coords && !autoSortedRef.current && !userInteractedRef.current) {
-    autoSortedRef.current = true;
-    void applyFilters(filters);
-  }
-}, [coords]);
-```
-Run — PASS.
-
-- [ ] **Step 8:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
-- [ ] **Step 9: Commit**
+- [ ] **Step 7:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
+- [ ] **Step 8: Commit**
 ```bash
-git add apps/web/src/lib/district-centers.ts apps/web/src/lib/district-centers.spec.ts apps/web/src/components/venue-map-leaflet.tsx apps/web/src/components/venue-map-leaflet.spec.tsx apps/web/src/app/\[district\]/page.tsx apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx
-git commit -m "fix(web): fixed district map centers with remount-on-navigation, one-time auto-sort-to-distance guarded against overriding user interaction"
+git add apps/web/src/lib/district-centers.ts apps/web/src/lib/district-centers.spec.ts apps/web/src/components/venue-map-leaflet.tsx apps/web/src/components/venue-map-leaflet.spec.tsx apps/web/src/app/\[district\]/page.tsx apps/web/src/components/discovery-client.tsx
+git commit -m "fix(web): fixed district map centers with remount-on-navigation key, aria-label on map markers"
 ```
 
 ---
 
-## Task 5: Venue detail completeness (C4, C9, C10)
+## Task 6: Venue detail completeness (C4, C9, C10)
 
 **Files:**
 - Modify: `apps/web/src/components/venue-detail.tsx`
@@ -516,9 +772,10 @@ git commit -m "fix(web): fixed district map centers with remount-on-navigation, 
 - Test: `apps/web/src/components/venue-detail.spec.tsx` (append), `apps/web/src/components/venue-card.spec.tsx` (append)
 
 **Interfaces:**
-- Consumes: Plan 4b's `VenueDetailSchema` (`lat`/`lng`/`address`/`photos`, already present)
-- Produces: `venue-detail.tsx` renders address, a real single-point map, and a photo grid (or empty
-  state); a `navigator.share()` button; `venue-card.tsx`'s Google badge text includes "Google yorumu".
+- Consumes: Plan 4b's `VenueDetailSchema` (`lat`/`lng`/`address`/`photos`, already present); Task 5's `VenueMapLeaflet` (no new prop needed — reuses the existing multi-marker rendering path with a one-item array, see Step 2 below)
+- Produces: `venue-detail.tsx` renders address, a real map (via the existing `VenueMapLeaflet`
+  with a single-item `venues` array), and a photo grid (or empty state); a client-only,
+  SSR-safe `navigator.share()` button; `venue-card.tsx`'s Google badge text includes "Google yorumu".
 
 - [ ] **Step 1: Write the failing test for address/map/photos**
 ```typescript
@@ -536,14 +793,16 @@ describe("VenueDetail — address, real map, photo grid", () => {
     expect(screen.queryByTestId("venue-address")).not.toBeInTheDocument();
   });
 
-  it("renders the map with the venue's real coordinates, not a placeholder", () => {
+  it("renders the map centered on the venue's real coordinates with one marker", () => {
     render(<VenueDetail venue={baseVenue} />);
     expect(screen.getByTestId("map-container")).toHaveAttribute("data-center", "40.99,29.02");
+    expect(screen.getByLabelText(baseVenue.name)).toBeInTheDocument();
   });
 
-  it("renders a photo grid when photos are present", () => {
+  it("renders a photo grid when photos are present, using real <img> elements", () => {
     render(<VenueDetail venue={baseVenue} />);
-    expect(screen.getAllByRole("img")).toHaveLength(2);
+    const images = screen.getAllByRole("img", { name: new RegExp(baseVenue.name) });
+    expect(images).toHaveLength(2);
   });
 
   it("renders an empty state when photos is empty", () => {
@@ -552,64 +811,92 @@ describe("VenueDetail — address, real map, photo grid", () => {
   });
 });
 ```
+(Naming each photo `<img>`'s `alt` after the venue name, e.g. `alt={`${venue.name} fotoğrafı ${i+1}`}`,
+is what makes `getAllByRole("img", { name: ... })` distinguish them from the map's own tiles/icons
+— the map is a mocked `<div data-testid="map-container">` in tests per the existing mock pattern,
+not real `<img>` elements, so no collision.)
 - [ ] **Step 2:** Run — FAIL (read the real current file first — confirmed no address rendering, no
       real map usage, no photo grid at all currently). Implement: conditionally render
       `venue.address` in a labeled block (`data-testid="venue-address"`); replace whatever
-      decorative placeholder currently sits where the map should be with
-      `<VenueMapLeaflet venues={[]} centerLat={venue.lat} centerLng={venue.lng} singlePoint />`
-      (add a `singlePoint` prop to `VenueMapLeaflet` if it doesn't already support rendering just
-      one marker at its center with no venue list — check Task 4's changes first to avoid
-      duplicating logic); render a photo `<img>` grid when `venue.photos.length > 0`, else the
-      empty-state text.
+      decorative placeholder currently sits where the map should be with:
+```tsx
+<VenueMapLeaflet
+  venues={[{ id: venue.id, name: venue.name, lat: venue.lat, lng: venue.lng, category: venue.category }]}
+  centerLat={venue.lat}
+  centerLng={venue.lng}
+/>
+```
+(No new prop on `VenueMapLeaflet` needed — this reuses the exact same multi-marker rendering path
+Task 5 already built, with a one-item array. This replaces the design doc's originally-proposed
+`singlePoint` boolean, which round 1's plan-red-team correctly flagged as underspecified.) Render
+a photo grid (`<img key={i} src={url} alt={`${venue.name} fotoğrafı ${i + 1}`} />` for each) when
+`venue.photos.length > 0`, else the empty-state text.
 - [ ] **Step 3:** Run — PASS.
 
-- [ ] **Step 4: Write the failing test for the native share button**
+- [ ] **Step 4: Write the failing test for the SSR-safe native share button**
 ```typescript
-describe("VenueDetail — native share button", () => {
-  it("renders a share button when navigator.share exists", () => {
+describe("VenueDetail — native share button (client-only, SSR-safe)", () => {
+  afterEach(() => {
+    // @ts-expect-error -- test cleanup, restoring navigator.share to its jsdom default
+    delete navigator.share;
+  });
+
+  it("renders a share button once mounted, when navigator.share exists", async () => {
     Object.defineProperty(navigator, "share", { value: vi.fn(), configurable: true });
     render(<VenueDetail venue={baseVenue} />);
-    expect(screen.getByTestId("native-share-button")).toBeInTheDocument();
+    // the check runs in an effect (client-only), so it may not be present on the very first
+    // synchronous render -- assert after allowing effects to flush.
+    await waitFor(() => expect(screen.getByTestId("native-share-button")).toBeInTheDocument());
   });
-  it("does not render a share button when navigator.share is unavailable", () => {
+
+  it("never renders a share button when navigator.share is unavailable", async () => {
     Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
     render(<VenueDetail venue={baseVenue} />);
+    await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByTestId("native-share-button")).not.toBeInTheDocument();
   });
 });
 ```
-Run — FAIL, then add the button, feature-detected via `"share" in navigator`, matching
-`whatsapp-share-button.tsx`'s existing visual pattern (rounded icon circle, label, same
-`data-testid` naming convention). Run — PASS.
+Run — FAIL, then implement with a `useState` + `useEffect` (client-only check, avoiding a
+server/client hydration mismatch since `navigator` doesn't exist during SSR):
+```typescript
+const [canShare, setCanShare] = useState(false);
+useEffect(() => { setCanShare(typeof navigator !== "undefined" && "share" in navigator); }, []);
+// ... {canShare && <button data-testid="native-share-button" onClick={() => navigator.share({ title: venue.name, url: window.location.href })}>...</button>}
+```
+matching `whatsapp-share-button.tsx`'s existing visual pattern (rounded icon circle, label). Run — PASS.
 
-- [ ] **Step 5: Write the failing test for the Google badge text on `venue-card.tsx`**
+- [ ] **Step 5: Write the failing test for the Google badge text (C10 — matching the design doc's actual wording: count omitted when null, but "Google yorumu" text still shown)**
 ```typescript
 // venue-card.spec.tsx (append)
 describe("VenueCard — Google rating badge text", () => {
-  it("shows '4.3 ★ · 120 Google yorumu' format", () => {
+  it("shows '4.3 ★ · 120 Google yorumu' when a count is present", () => {
     render(<VenueCard venue={{ ...baseVenue, googleRating: 4.3, googleRatingCount: 120 }} />);
     expect(screen.getByText(/4\.3 ★ · 120 Google yorumu/)).toBeInTheDocument();
   });
-  it("omits the count segment when googleRatingCount is null", () => {
+  it("shows '4.3 ★ · Google yorumu' (no count number, but 'Google yorumu' still shown) when googleRatingCount is null", () => {
     render(<VenueCard venue={{ ...baseVenue, googleRating: 4.3, googleRatingCount: null }} />);
-    expect(screen.getByText(/4\.3 ★/)).toBeInTheDocument();
-    expect(screen.queryByText(/Google yorumu/)).not.toBeInTheDocument();
+    expect(screen.getByText(/4\.3 ★ · Google yorumu/)).toBeInTheDocument();
   });
 });
 ```
 Run — FAIL (current format is bare `4.5 (123)`, no star glyph, no "Google" word — confirmed by
-reading the real file). Update the badge markup to the new format. Run — PASS.
+reading the real file). Update the badge markup:
+```tsx
+<span>{venue.googleRating.toFixed(1)} ★ · {venue.googleRatingCount !== null ? `${venue.googleRatingCount} ` : ""}Google yorumu</span>
+```
+Run — PASS.
 
 - [ ] **Step 6:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
 - [ ] **Step 7: Commit**
 ```bash
 git add apps/web/src/components/venue-detail.tsx apps/web/src/components/venue-detail.spec.tsx apps/web/src/components/venue-card.tsx apps/web/src/components/venue-card.spec.tsx
-git commit -m "feat(web): venue detail shows address/real map/photo grid + native share button, venue-card Google badge attribution text"
+git commit -m "feat(web): venue detail shows address/real single-marker map/photo grid + SSR-safe native share button, venue-card Google badge attribution text"
 ```
 
 ---
 
-## Task 6: Admin curation copy sync with Plan 4b's A3 decision
+## Task 7: Admin curation copy sync with Plan 4b's A3 decision
 
 **Files:**
 - Modify: `apps/admin/src/components/queue-item.tsx`
@@ -639,23 +926,27 @@ git commit -m "fix(admin): queue-item approve copy no longer claims verified_at 
 
 ---
 
-## Task 7: Favorites collections (C5), open-now filter (C7), boutique toggle fix (Plan 4b schema)
+## Task 8: Favorites collections (C5), open-now filter (C7), boutique toggle fix (Plan 4b schema)
 
 **Files:**
 - Modify: `apps/web/src/app/favoriler/page.tsx` (or wherever the favorites page lives — check)
+- Modify: `apps/web/src/lib/api.ts` (add a `createList`/`POST /me/lists` helper if one doesn't already exist — check first, per round 1's finding that this wasn't guaranteed)
 - Modify: `apps/web/src/components/venue-filters.tsx`
 - Test: corresponding `.spec.tsx` files (append)
 
 **Interfaces:**
-- Consumes: `POST /me/lists` (already exists per the design doc), Plan 4b's `OptionalTrueFlag`
+- Consumes: `POST /me/lists` (backend endpoint — confirm it exists; if `apps/web/src/lib/api.ts`
+  has no client-side helper for it yet, this task creates one), Plan 4b's `OptionalTrueFlag`
   pattern (already rejects `isBoutique=false`/`openNow=false`)
-- Produces: a "create new list" form on the favorites page; an `openNow` toggle in `VenueFilters`;
-  `serializeFilters`'s boutique output only ever emits `"true"`, never `"false"`.
+- Produces: a "create new list" form + a working switcher between multiple lists (showing the
+  selected list's venues, not just the newly-created list's name) on the favorites page; an
+  `openNow` toggle in `VenueFilters`; `serializeFilters`'s boutique output only ever emits
+  `"true"`, never `"false"`.
 
-- [ ] **Step 1: Write the failing test for the boutique toggle fix** (this is the most urgent of
-      the three — Plan 4b's schema change means the CURRENT toggle logic actively breaks in
-      production the moment both plans are live, since `update({ isBoutique: !filters.isBoutique })`
-      can produce `isBoutique: false`, which the backend now rejects with 400)
+- [ ] **Step 1: Write the failing test for the boutique toggle fix** (most urgent of the three —
+      Plan 4b's schema change means the CURRENT toggle logic actively breaks in production the
+      moment both plans are live, since `update({ isBoutique: !filters.isBoutique })` can produce
+      `isBoutique: false`, which the backend now rejects with 400)
 ```typescript
 // venue-filters.spec.tsx (append)
 describe("VenueFilters — boutique toggle only ever sets true or undefined", () => {
@@ -692,51 +983,78 @@ describe("VenueFilters — openNow toggle", () => {
 Run — FAIL. Add an `openNow?: boolean` field to `FilterState`, a toggle button matching the
 boutique toggle's exact same true/undefined pattern, and add `if (filters.openNow) out.openNow = "true";` to `serializeFilters`. Run — PASS.
 
-- [ ] **Step 5: Write the failing test for the favorites "create list" form**
+- [ ] **Step 5: Confirm/add the `createList` API helper**
+Check `apps/web/src/lib/api.ts` for an existing `createList`/`POST /me/lists` function. If absent,
+add:
+```typescript
+export async function createList(name: string, token: string) {
+  const authedClient = createApiClient(API_BASE, () => token);
+  return authedClient.post("/me/lists", { name });
+}
+```
+(Match the exact response schema this endpoint returns — check `packages/shared` for a
+`FavoriteListSchema` or similar to validate against, following this file's established
+`fetchValidated`-equivalent pattern for POST if one exists, or a direct `post()` call if this
+file's existing `POST` helpers don't validate responses — check the real current file for the
+established convention before choosing.)
+
+- [ ] **Step 6: Write the failing test for creating AND switching between lists**
 ```typescript
 // favoriler/page.spec.tsx (append, or new file if none exists — check first)
-describe("Favorites page — create new list", () => {
-  it("submits a new list name via POST /me/lists and shows it in the list", async () => {
-    createListMock.mockResolvedValue({ id: "l2", name: "Kadıköy Kahveleri" });
-    render(<FavoritesPage />);
+describe("Favorites page — create and switch between lists", () => {
+  it("submits a new list name via POST /me/lists and shows it as a selectable option", async () => {
+    createListMock.mockResolvedValue({ id: "l2", name: "Kadıköy Kahveleri", venues: [] });
+    render(<FavoritesPage initialLists={[{ id: "l1", name: "Default", venues: [{ id: "v1", name: "Cafe A" }] }]} />);
     fireEvent.change(screen.getByLabelText(/liste adı/i), { target: { value: "Kadıköy Kahveleri" } });
     fireEvent.click(screen.getByRole("button", { name: /oluştur/i }));
     await waitFor(() => expect(createListMock).toHaveBeenCalledWith("Kadıköy Kahveleri"));
-    expect(await screen.findByText("Kadıköy Kahveleri")).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Kadıköy Kahveleri" })).toBeInTheDocument();
+  });
+
+  it("shows the selected list's venues when switching tabs, not the previously active list's", () => {
+    render(<FavoritesPage initialLists={[
+      { id: "l1", name: "Default", venues: [{ id: "v1", name: "Cafe A" }] },
+      { id: "l2", name: "Kadıköy Kahveleri", venues: [{ id: "v2", name: "Cafe B" }] },
+    ]} />);
+    expect(screen.getByText("Cafe A")).toBeInTheDocument();
+    expect(screen.queryByText("Cafe B")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Kadıköy Kahveleri" }));
+    expect(screen.getByText("Cafe B")).toBeInTheDocument();
+    expect(screen.queryByText("Cafe A")).not.toBeInTheDocument();
   });
 });
 ```
-Run — FAIL. Add a small form (name input + submit) that calls the existing `createList`/`POST /me/lists`
-API function (check `apps/web/src/lib/api.ts` for its exact existing name), appends the new list
-to local state on success. If more than one list exists, add a simple tab/dropdown switcher between
-them (read the current page structure first — if it currently assumes a single list, this task
-needs to introduce the minimal state to support switching, per YAGNI don't build more than a
-tab list). Run — PASS.
+Run — FAIL. Read the current page's real structure (round 1 confirmed it likely assumes a single
+list) and add: a name input + submit button calling `createList`, appending the new list to local
+state on success; a simple tab list (`role="tab"` per list) with `activeListId` state, rendering
+only the active list's venues. Run — PASS.
 
-- [ ] **Step 6:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
-- [ ] **Step 7: Commit**
+- [ ] **Step 7:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
+- [ ] **Step 8: Commit**
 ```bash
-git add apps/web/src/app/favoriler apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-filters.spec.tsx
-git commit -m "feat(web): favorites collection creation UI, open-now filter, fix boutique toggle for Plan 4b's OptionalTrueFlag schema (false is now rejected)"
+git add apps/web/src/app/favoriler apps/web/src/lib/api.ts apps/web/src/lib/api.spec.ts apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-filters.spec.tsx
+git commit -m "feat(web): favorites collection creation + multi-list switching UI, open-now filter, fix boutique toggle for Plan 4b's OptionalTrueFlag schema"
 ```
 
 ---
 
-## Task 8: Category quick-route deep link completion (C6)
+## Task 9: Category quick-route deep link completion (C6)
 
 **Files:**
 - Create: `apps/web/src/lib/directions.ts`
-- Modify: `apps/web/src/components/venue-detail.tsx` (extract `directionsUrl` out)
+- Modify: `apps/web/src/components/venue-detail.tsx` (extract `directionsUrl` out — a small,
+  independent change to this file, unrelated to Task 6's changes to the same file; safe to land
+  separately since it touches a different function)
 - Modify: `apps/web/src/components/category-quick-route.tsx`
-- Modify: `apps/web/src/components/discovery-client.tsx` (pass new props through)
-- Modify: `apps/web/src/app/[district]/page.tsx` (pass district name down)
 - Test: `apps/web/src/lib/directions.spec.ts` (new), `apps/web/src/components/category-quick-route.spec.tsx` (append)
 
 **Interfaces:**
-- Consumes: `venues`/`coordsAvailable`, both already present in `DiscoveryClient`'s state (Tasks 2/4)
-- Produces: `directionsUrl(venueName, districtName)` (extracted, shared); `CategoryQuickRoute` takes
-  `venues: VenueListItem[]`, `districtName: string`, `coordsAvailable: boolean` and renders a
-  real directions link to the first (nearest-if-sorted) matching venue.
+- Consumes: `venues`/`districtName`/`coordsAvailable` props, already produced by Task 4 (`DiscoveryClient` already passes these — this task only changes what `CategoryQuickRoute` itself does with them)
+- Produces: `directionsUrl(venueName, districtName)` (extracted, shared); `CategoryQuickRoute`'s
+  `onSelectCategory` is typed `(category: string | undefined) => void` from this task onward
+  (supports deselection, closing the round-1-flagged signature gap in the SAME task that
+  introduces the deep-link feature, not a later "code quality" pass); renders a real directions
+  link to the first matching venue.
 
 - [ ] **Step 1: Write the failing test for the extracted `directionsUrl`**
 ```typescript
@@ -763,141 +1081,88 @@ Update `venue-detail.tsx`'s local `directionsUrl` to import and use this shared 
 `venue-detail.spec.tsx` tests to confirm no regression.
 - [ ] **Step 3:** Run — PASS.
 
-- [ ] **Step 4: Write the failing test for `CategoryQuickRoute`'s new props**
+- [ ] **Step 4: Write the failing test for `CategoryQuickRoute`'s widened signature + directions link**
+
+Since this component is CONTROLLED (its `activeCategory` is a prop from the parent, not owned
+locally — confirmed by reading the current file), the click handler calls `onSelectCategory`, the
+PARENT updates its own state, and the parent re-renders this component with a new `activeCategory`
+prop. The test below reflects that: it asserts the directions link appears only AFTER the
+component receives the updated `activeCategory` prop (a `rerender`, matching real controlled-component behavior), not synchronously within the same click.
 ```typescript
 // category-quick-route.spec.tsx (append)
-describe("CategoryQuickRoute — direct directions link", () => {
+describe("CategoryQuickRoute — direct directions link (controlled component)", () => {
   const venues = [{ id: "v1", name: "First Cafe", category: "cafe" }, { id: "v2", name: "Second Cafe", category: "cafe" }];
 
-  it("renders a directions link to the first matching venue when coordsAvailable is true, labeled 'En yakın'", () => {
-    render(<CategoryQuickRoute venues={venues} districtName="Kadıköy" coordsAvailable onSelectCategory={vi.fn()} />);
+  it("calls onSelectCategory(category) on click, then renders a directions link once the parent re-renders with the new activeCategory", () => {
+    const onSelectCategory = vi.fn();
+    const { rerender } = render(<CategoryQuickRoute venues={venues} districtName="Kadıköy" coordsAvailable onSelectCategory={onSelectCategory} activeCategory={undefined} />);
     fireEvent.click(screen.getByTestId("quick-category-cafe"));
+    expect(onSelectCategory).toHaveBeenCalledWith("cafe");
+    // simulate the parent (DiscoveryClient) re-rendering with the now-active category, exactly
+    // as it would in real usage since activeCategory lives in the parent, not here
+    rerender(<CategoryQuickRoute venues={venues} districtName="Kadıköy" coordsAvailable onSelectCategory={onSelectCategory} activeCategory="cafe" />);
     const link = screen.getByRole("link", { name: /en yakın cafe mekana git/i });
     expect(link).toHaveAttribute("href", expect.stringContaining(encodeURIComponent("First Cafe Kadıköy")));
   });
 
   it("uses neutral copy (not 'en yakın') when coordsAvailable is false", () => {
-    render(<CategoryQuickRoute venues={venues} districtName="Kadıköy" coordsAvailable={false} onSelectCategory={vi.fn()} />);
+    const onSelectCategory = vi.fn();
+    const { rerender } = render(<CategoryQuickRoute venues={venues} districtName="Kadıköy" coordsAvailable={false} onSelectCategory={onSelectCategory} activeCategory={undefined} />);
     fireEvent.click(screen.getByTestId("quick-category-cafe"));
+    rerender(<CategoryQuickRoute venues={venues} districtName="Kadıköy" coordsAvailable={false} onSelectCategory={onSelectCategory} activeCategory="cafe" />);
     expect(screen.getByRole("link", { name: /cafe mekana git/i })).toBeInTheDocument();
     expect(screen.queryByText(/en yakın/i)).not.toBeInTheDocument();
   });
 
-  it("renders no directions link when no venue matches the selected category", () => {
-    render(<CategoryQuickRoute venues={[]} districtName="Kadıköy" coordsAvailable onSelectCategory={vi.fn()} />);
-    fireEvent.click(screen.getByTestId("quick-category-cafe"));
+  it("renders no directions link when no venue matches the active category", () => {
+    render(<CategoryQuickRoute venues={[]} districtName="Kadıköy" coordsAvailable onSelectCategory={vi.fn()} activeCategory="cafe" />);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("calls onSelectCategory(undefined) when the already-active category is clicked again", () => {
+    const onSelectCategory = vi.fn();
+    render(<CategoryQuickRoute venues={venues} districtName="Kadıköy" coordsAvailable onSelectCategory={onSelectCategory} activeCategory="cafe" />);
+    fireEvent.click(screen.getByTestId("quick-category-cafe"));
+    expect(onSelectCategory).toHaveBeenCalledWith(undefined);
   });
 });
 ```
-- [ ] **Step 5:** Run — FAIL. Update `CategoryQuickRoute` to accept `venues: VenueListItem[]`,
-      `districtName: string`, `coordsAvailable: boolean` props (in addition to its existing
-      `onSelectCategory`). On category selection, filter `venues` by the selected category and, if
-      non-empty, render a directions link using `directionsUrl(venues.find(v => v.category === selected)!.name, districtName)`, with label text `coordsAvailable ? \`En yakın ${label} mekana git\` : \`${label} mekana git\`` (matching the design doc's exact wording).
+- [ ] **Step 5:** Run — FAIL. Update `CategoryQuickRoute`'s props to
+      `{ venues: VenueListItem[]; districtName: string; coordsAvailable: boolean; onSelectCategory: (category: string | undefined) => void; activeCategory?: string }`.
+      Click handler: `onSelectCategory(activeCategory === category ? undefined : category)`
+      (this widened signature closes the round-1-flagged toggle-off gap in this same step, not a
+      later task). When `activeCategory` matches a real category and at least one venue in
+      `venues` has that category, render a directions link using
+      `directionsUrl(matchingVenue.name, districtName)`, label text
+      `` coordsAvailable ? `En yakın ${label} mekana git` : `${label} mekana git` ``.
 - [ ] **Step 6:** Run — PASS.
 
-- [ ] **Step 7: Wire `venues`/`districtName`/`coordsAvailable` through from `DiscoveryClient`**
-`districtName` comes from `[district]/page.tsx` (it already resolves the district — pass its
-`name` down as a prop through `DiscoveryClient` to `CategoryQuickRoute`, same as `centerLat`/
-`centerLng` in Task 4). `venues` and `coordsAvailable` (`Boolean(coords)`) are already in
-`DiscoveryClient`'s own state — pass them straight through.
-
+- [ ] **Step 7:** Confirm `DiscoveryClient`'s existing call to `<CategoryQuickRoute onSelectCategory={handleQuickCategory} .../>` (from Task 4) passes a compatible handler — `handleQuickCategory` currently takes `(category: string)`; update it to `(category: string | undefined)` to match, and have it clear the category filter when called with `undefined` (this is a small, additive change to Task 4's already-landed code, not a rewrite — one line).
 - [ ] **Step 8:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
 - [ ] **Step 9: Commit**
 ```bash
-git add apps/web/src/lib/directions.ts apps/web/src/lib/directions.spec.ts apps/web/src/components/venue-detail.tsx apps/web/src/components/category-quick-route.tsx apps/web/src/components/category-quick-route.spec.tsx apps/web/src/components/discovery-client.tsx apps/web/src/app/\[district\]/page.tsx
-git commit -m "feat(web): category quick-route gets a real directions deep link, shared directionsUrl helper"
+git add apps/web/src/lib/directions.ts apps/web/src/lib/directions.spec.ts apps/web/src/components/venue-detail.tsx apps/web/src/components/category-quick-route.tsx apps/web/src/components/category-quick-route.spec.tsx apps/web/src/components/discovery-client.tsx
+git commit -m "feat(web): category quick-route gets a real directions deep link + deselect-on-second-click, shared directionsUrl helper"
 ```
 
 ---
 
-## Task 9: Accessibility (C13, C14)
+## Task 10: Code-quality cleanup — category labels consolidation
+
+(`LocationProvider`, originally slated here, was pulled forward to Task 2. `onSelectCategory`'s
+widened signature, originally slated here, was folded into Task 9 where it belongs. What remains
+is the category-labels duplication.)
 
 **Files:**
-- Modify: `apps/web/src/components/discovery-client.tsx` (loading state — likely already has `role="status"` from Task 3, verify/adjust)
-- Modify: `apps/web/src/components/venue-map-leaflet.tsx`
-- Test: corresponding `.spec.tsx` (append)
-
-**Interfaces:** Consumes nothing new. Produces `aria-live="polite"` on loading indicators;
-`aria-label` on every map marker.
-
-- [ ] **Step 1:** Confirm Task 3's loading `<p role="status">` already satisfies C13 (it should —
-      re-check its exact markup); if it's missing `aria-live="polite"`, add it now:
-      `<p role="status" aria-live="polite">Yükleniyor…</p>`. Write/adjust the test:
-```typescript
-it("loading indicator has aria-live=polite", () => {
-  // ...trigger loading state...
-  expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
-});
-```
-Run — FAIL if missing, fix, PASS.
-
-- [ ] **Step 2: Write the failing test for map marker `aria-label`**
-```typescript
-// venue-map-leaflet.spec.tsx (append)
-describe("VenueMapLeaflet — marker accessibility", () => {
-  it("gives each marker an aria-label with the venue's name", () => {
-    render(<VenueMapLeaflet venues={[{ id: "v1", name: "Cafe Test", lat: 40.99, lng: 29.02 }]} />);
-    expect(screen.getByLabelText("Cafe Test")).toBeInTheDocument();
-  });
-});
-```
-- [ ] **Step 3:** Run — FAIL, add `aria-label={venue.name}` to each `CircleMarker` (read the real
-      current markup — this is a one-attribute addition per marker, not a rewrite). Run — PASS.
-- [ ] **Step 4:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
-- [ ] **Step 5: Commit**
-```bash
-git add apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx apps/web/src/components/venue-map-leaflet.tsx apps/web/src/components/venue-map-leaflet.spec.tsx
-git commit -m "fix(web): aria-live on loading states, aria-label on map markers"
-```
-
----
-
-## Task 10: Code-quality cleanup
-
-**Files:**
-- Create: `apps/web/src/lib/location-context.tsx`
-- Modify: `apps/web/src/components/discovery-client.tsx`
-- Modify: `apps/web/src/components/district-picker.tsx`
-- Modify: `apps/web/src/app/[district]/page.tsx` (wrap in the new provider)
 - Create: `apps/web/src/lib/category-labels.ts`
-- Modify: `apps/web/src/components/venue-card.tsx`, `venue-detail.tsx`, `category-quick-route.tsx` (import from the new shared file instead of local/duplicate definitions)
-- Modify: `apps/web/src/components/category-quick-route.tsx` (toggle-off fix)
-- Test: corresponding `.spec.tsx` files
+- Modify: `apps/web/src/components/venue-card.tsx`, `venue-detail.tsx`, `category-quick-route.tsx`
+- Test: `apps/web/src/lib/category-labels.spec.ts` (new)
 
-**Interfaces:**
-- Consumes: nothing new
-- Produces: `LocationProvider`/`useLocationContext()` (single shared `useGeolocation()` call, was
-  called twice independently before); `apps/web/src/lib/category-labels.ts` exporting
-  `CATEGORY_LABELS` (using the REAL backend taxonomy, dropping the stale extra keys
-  `venue-detail.tsx`'s local copy had — `kahvalti`/`kahve`/`tatli` — confirmed not real category
-  values); `CategoryQuickRoute` toggling the same category off on a second click.
+**Interfaces:** Consumes nothing new. Produces `CATEGORY_LABELS` (real backend taxonomy, dropping
+`venue-detail.tsx`'s stale extra keys `kahvalti`/`kahve`/`tatli` — confirmed not real category
+values), consumed by all three components instead of two separate/duplicated local definitions.
 
-- [ ] **Step 1: Write the failing test for `LocationProvider`**
-```typescript
-// apps/web/src/lib/location-context.spec.tsx (new)
-describe("LocationProvider — single shared useGeolocation call", () => {
-  it("provides the same coords value to two consumers without calling the browser API twice", () => {
-    const getCurrentPositionSpy = vi.spyOn(navigator.geolocation, "getCurrentPosition");
-    render(
-      <LocationProvider>
-        <ConsumerA />
-        <ConsumerB />
-      </LocationProvider>,
-    );
-    expect(getCurrentPositionSpy).toHaveBeenCalledTimes(1);
-  });
-});
-```
-- [ ] **Step 2:** Run — FAIL (file doesn't exist). Create `apps/web/src/lib/location-context.tsx`
-      wrapping the existing `useGeolocation()` hook in a React context provider + a
-      `useLocationContext()` consumer hook, following the exact same provider pattern
-      `auth-context.tsx` already establishes in this codebase.
-- [ ] **Step 3:** Run — PASS. Update `[district]/page.tsx` to wrap `DistrictPicker` + `DiscoveryClient`
-      in `<LocationProvider>`, and update both components to call `useLocationContext()` instead of
-      their own independent `useGeolocation()` call.
-
-- [ ] **Step 4: Write the failing test for consolidated category labels**
+- [ ] **Step 1: Write the failing test**
 ```typescript
 // apps/web/src/lib/category-labels.spec.ts (new)
 import { describe, it, expect } from "vitest";
@@ -914,75 +1179,72 @@ describe("CATEGORY_LABELS", () => {
   });
 });
 ```
-- [ ] **Step 5:** Run — FAIL. Create `apps/web/src/lib/category-labels.ts`, moving the correct
+- [ ] **Step 2:** Run — FAIL. Create `apps/web/src/lib/category-labels.ts`, moving the correct
       (non-stale) label set currently in `venue-card.tsx` into this new file, exported as
       `CATEGORY_LABELS`. Update `venue-card.tsx`, `venue-detail.tsx` (deleting its separate stale
-      local copy), and `category-quick-route.tsx` to import from this one shared file. Run — PASS.
-      Run every affected component's existing tests to confirm no rendering regression from the
-      import-path change.
-
-- [ ] **Step 6: Write the failing test for the quick-route toggle-off fix**
-```typescript
-// category-quick-route.spec.tsx (append)
-describe("CategoryQuickRoute — re-clicking the active category deselects it", () => {
-  it("calls onSelectCategory(undefined) when the already-active category button is clicked again", () => {
-    const onSelectCategory = vi.fn();
-    render(<CategoryQuickRoute venues={[]} districtName="Kadıköy" coordsAvailable onSelectCategory={onSelectCategory} activeCategory="cafe" />);
-    fireEvent.click(screen.getByTestId("quick-category-cafe"));
-    expect(onSelectCategory).toHaveBeenCalledWith(undefined);
-  });
-});
-```
-- [ ] **Step 7:** Run — FAIL (confirmed: current behavior re-selects the same category, doesn't
-      deselect). Update the click handler: `onSelectCategory(activeCategory === category ? undefined : category)`. Run — PASS.
-
-- [ ] **Step 8:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
-- [ ] **Step 9: Commit**
+      local copy), and `category-quick-route.tsx` to import from this one shared file.
+- [ ] **Step 3:** Run — PASS. Run every affected component's existing tests to confirm no
+      rendering regression from the import-path change.
+- [ ] **Step 4:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
+- [ ] **Step 5: Commit**
 ```bash
-git add apps/web/src/lib/location-context.tsx apps/web/src/lib/location-context.spec.tsx apps/web/src/lib/category-labels.ts apps/web/src/lib/category-labels.spec.ts apps/web/src/components/discovery-client.tsx apps/web/src/components/district-picker.tsx apps/web/src/app/\[district\]/page.tsx apps/web/src/components/venue-card.tsx apps/web/src/components/venue-detail.tsx apps/web/src/components/category-quick-route.tsx apps/web/src/components/category-quick-route.spec.tsx
-git commit -m "refactor(web): single shared LocationProvider (was calling useGeolocation twice), consolidated category-labels.ts, fix quick-route re-click-to-deselect"
+git add apps/web/src/lib/category-labels.ts apps/web/src/lib/category-labels.spec.ts apps/web/src/components/venue-card.tsx apps/web/src/components/venue-detail.tsx apps/web/src/components/category-quick-route.tsx
+git commit -m "refactor(web): consolidate category labels into one shared lib/category-labels.ts, drop stale non-taxonomy keys"
 ```
 
 ---
 
 ## Task 11: Final regression and manual smoke verification
 
-**Files:** none.
+**Files:** none (this task verifies the whole plan's diff and updates two documentation files — no
+source code changes).
 
 - [ ] **Step 1:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`
 - [ ] **Step 2:** Run: `cd apps/admin && npx vitest run && npx tsc --noEmit`
 - [ ] **Step 3:** Run: `pnpm exec turbo run typecheck lint --filter=@gurmego/web... --filter=@gurmego/admin...`
 - [ ] **Step 4: Manual verification (NOT an automated gate)** — start both the API (Plan 4b, this
       worktree) and the web app (`cd apps/web && pnpm run dev`), then in a real browser:
-      1. Visit each of the three district pages, confirm the map opens centered correctly for each.
+      1. Visit each of the three district pages, confirm the map opens centered correctly for
+         each, and navigating between districts actually re-centers the map (this is the one
+         thing Task 5's unit tests structurally cannot prove — react-leaflet's real immutable-`center`
+         behavior only manifests in a real browser, not the mocked test environment).
       2. Grant location permission, confirm the venue list auto-sorts to distance exactly once
          (not repeatedly) and the category quick-route buttons show "En yakın ... git" links.
       3. Deny location permission, confirm manual district browsing still works fully, quick-route
          buttons show neutral (non-"en yakın") copy.
-      4. Open a venue detail page, confirm address/map/photos (or empty state) render.
-      5. In the admin panel, open the curation queue, confirm the approve button's new copy.
+      4. Open a venue detail page, confirm address/map/photos (or empty state) render, and the
+         native share button appears only on a browser/device that actually supports it.
+      5. In the favorites page, create a second list and confirm switching between the two shows
+         each list's own venues.
+      6. In the admin panel, open the curation queue, confirm the approve button's new copy.
 - [ ] **Step 5:** Update `docs/STATE.md` and `docs/SESSION-LOG-2026-07-26.md`: Plan 4c complete,
       ready for the final whole-branch review (Superpowers reviewer + mandatory `cross-model-review`).
 
 ---
 
-## Self-Review Notes
+## Self-Review Notes (round 2, after round 1's YENİDEN BÖL)
 
-- **Spec coverage:** every lettered finding from the design doc (A2 frontend/C1/C2/C3/C4/C5/C6/C7/
-  C8/C9/C10/C11/C12/C13/C14, plus Bölüm 6's admin sync and Bölüm 10's code-quality items) maps to
-  a task above.
-- **Placeholder scan:** no TBD/TODO; every step has real code grounded in the actual current file
-  contents (gathered via direct exploration of the codebase before writing this plan) or an
-  explicit "read the current file first, this is a small addition not a rewrite" instruction where
-  the exact current line numbers may have shifted since exploration.
-- **Type/interface consistency:** `getVenues(query, coords, token?)` (Task 1) is used identically
-  by every caller (Task 2); `centerLat`/`centerLng` (Task 4) flow through `[district]/page.tsx` →
-  `DiscoveryClient` → `VenueMapLeaflet` with consistent naming; `directionsUrl(venueName, districtName)`
-  (Task 8) has the same signature at its one call site (`venue-detail.tsx`) and its new consumer
-  (`category-quick-route.tsx`).
-- **Sequencing:** Task 1 (api-client signature change) before Task 2 (its callers) — same pattern
-  Plan 4b established for backend signature changes. Task 4 depends on Task 2's `coords` already
-  being threaded through `DiscoveryClient`. Task 8 depends on Task 4's `districtName`-passing
-  plumbing pattern already being established. Tasks 3, 5, 6, 7, 9 are independent of each other and
-  could in principle run in parallel, but this plan executes them sequentially per
-  `subagent-driven-development`'s "never dispatch implementers in parallel" rule.
+- **The Task 1/Task 2 contract-ownership contradiction is resolved**: Task 1 now owns the
+  signature change AND every direct caller in one commit — no separate task claims the same call
+  sites.
+- **`discovery-client.tsx`'s state machine is now one task (Task 4)**, not six — location
+  consumption, loading/error/race handling, auto-sort, and prop-passing to `CategoryQuickRoute` all
+  land together. Later tasks (5, 9) only ADD new props to an already-stable file, they don't
+  rewrite its internals again.
+- **`LocationProvider` moved forward to Task 2**, right after the API layer, so `district-picker.tsx`
+  and `DiscoveryClient` both consume it from the start — no "two independent hooks, unified later" churn.
+- **`onSelectCategory`'s widened signature** (`string | undefined`, supporting deselection) is now
+  introduced in the SAME task (9) that adds the feature needing it, not deferred to a later
+  cleanup task that would have required changing an already-shipped signature again.
+- **`VenueMapLeaflet`'s single-venue case reuses its existing multi-marker path** with a one-item
+  array — no new `singlePoint` prop, closing round 1's "underspecified marker contract" finding.
+- **C10's test now matches the design doc's literal wording** — count omitted, "Google yorumu" text
+  still shown, not hidden entirely.
+- **Native share is now behind a mount-effect `canShare` state** — SSR-safe, no hydration mismatch.
+- **A test now exists for the remount-key behavior**, with an explicit note on its real limit (a
+  mocked `MapContainer` can't prove React-Leaflet's real immutable-`center` behavior — that's
+  Task 11's manual verification's job, called out explicitly rather than papered over).
+- **Task 11's file header no longer contradicts itself** — it modifies two docs, not zero files.
+- **Auth-form/favorite-button tests fixed** to not race their own setup (fields filled before
+  submit; mount-time fetch awaited before toggling).
+- **Favorites task now has a real multi-list-switching test**, not just "create and see the name."
