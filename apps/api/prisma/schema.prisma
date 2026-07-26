@@ -76,6 +76,8 @@ model Venue {
   priceRange        PriceRange
   signatureItems    String[]
   transportNote     String?
+  address           String?
+  photos            String[]            @default([])
   openingHours      Json
   editorialNote     String?
   isBoutique        Boolean             @default(false)
