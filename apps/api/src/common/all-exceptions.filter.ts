@@ -1,8 +1,9 @@
 import { ArgumentsHost, Catch, HttpException, HttpStatus, Logger } from "@nestjs/common";
 import { BaseExceptionFilter, HttpAdapterHost } from "@nestjs/core";
+import type { FastifyReply } from "fastify";
 
 @Catch()
-export class AllExceptionsFilter extends BaseExceptionFilter {
+export class AllExceptionsFilter extends BaseExceptionFilter<unknown> {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
   constructor(httpAdapterHost: HttpAdapterHost) {
@@ -18,7 +19,7 @@ export class AllExceptionsFilter extends BaseExceptionFilter {
       return;
     }
     this.logger.error(exception instanceof Error ? exception.stack : String(exception));
-    const response = host.switchToHttp().getResponse();
+    const response = host.switchToHttp().getResponse<FastifyReply>();
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).send({ error: { code: "INTERNAL_ERROR", message: "Beklenmeyen bir hata oluştu" } });
   }
 }

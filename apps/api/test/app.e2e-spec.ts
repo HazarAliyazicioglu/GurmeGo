@@ -1,6 +1,8 @@
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
+import { HttpAdapterHost } from "@nestjs/core";
 import { AppModule } from "../src/app.module";
+import { AllExceptionsFilter } from "../src/common/all-exceptions.filter";
 
 describe("AppModule (e2e)", () => {
   let app: NestFastifyApplication;
@@ -58,5 +60,51 @@ describe("UUID path-param validation — wired at the route level", () => {
       headers: { "content-type": "application/json" },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("AllExceptionsFilter wired globally (as bootstrap() does) — Retry-After survives", () => {
+  let app: NestFastifyApplication;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    // Register the filter exactly the way main.ts's bootstrap() does. The standalone unit test in
+    // all-exceptions.filter.spec.ts never exercises this wiring, and reports.controller.spec.ts's
+    // Retry-After test builds its own bare testing module (ReportsController only) that never
+    // registers this filter either -- neither proves the filter is harmless once it actually sits
+    // in front of Nest's global exception pipeline in the real app.
+    app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it("POST /venues/:id/report still returns 429 with Retry-After once rate-limited", async () => {
+    const venueId = "d290f1ee-6c54-4b01-90e6-d701748f0851";
+    // A run-unique identifier keeps this test's rate-limit counter key isolated from any leftover
+    // state other test files/runs may have left in the real (Postgres-backed) CacheStore --
+    // the persistent-counter issue tracked separately in docs/STATE.md is out of scope here.
+    const clientId = `filter-wiring-test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const requestPayload = {
+      method: "POST" as const,
+      url: `/venues/${venueId}/report`,
+      payload: { reason: "Fiyat yanlış görünüyor" },
+      headers: { "content-type": "application/json", "x-forwarded-for": clientId },
+    };
+
+    // RATE_LIMIT_REPORT_PER_DAY defaults to 10 (see src/common/rate-limit.config.ts) -- the 11th
+    // request from this identifier must exceed it.
+    let lastRes;
+    for (let i = 0; i < 11; i++) {
+      lastRes = await app.inject(requestPayload);
+    }
+
+    expect(lastRes!.statusCode).toBe(429);
+    expect(lastRes!.headers["retry-after"]).toBe("86400");
+    expect(lastRes!.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
   });
 });
