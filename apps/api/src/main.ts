@@ -5,7 +5,7 @@ import fastifyMultipart from "@fastify/multipart";
 import { writeFileSync } from "fs";
 import { AppModule } from "./app.module";
 
-async function bootstrap() {
+export async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
   // CSV import (`POST /admin/import`) is the only multipart consumer — a curator-uploaded venue
   // list, not a general file-upload feature. Without a limit, `req.file()`/`toBuffer()` buffers an
@@ -30,14 +30,25 @@ async function bootstrap() {
     .filter(Boolean);
   app.enableCors({ origin: corsOrigins, credentials: true });
 
+  setupSwagger(app);
+
+  await app.listen(process.env.PORT ?? 3000, "0.0.0.0");
+}
+
+export function setupSwagger(app: NestFastifyApplication) {
   const config = new DocumentBuilder().setTitle("GurmeGo API").setVersion("1.0").build();
   const document = SwaggerModule.createDocument(app, config);
   if (process.env.EXPORT_OPENAPI) {
     writeFileSync("openapi.json", JSON.stringify(document));
     process.exit(0);
   }
-  SwaggerModule.setup("docs", app, document);
-
-  await app.listen(process.env.PORT ?? 3000, "0.0.0.0");
+  // Swagger docs are a reconnaissance surface (routes, DTOs, auth schemes) -- never expose them
+  // in production (B15).
+  if (process.env.NODE_ENV !== "production") {
+    SwaggerModule.setup("docs", app, document);
+  }
 }
-bootstrap();
+
+if (require.main === module) {
+  bootstrap();
+}
