@@ -17,8 +17,6 @@ import {
   type VenueListItem,
 } from "@/lib/api";
 
-const KADIKOY_CENTER: [number, number] = [40.9909, 29.0287];
-
 type LocatedVenue = MapVenue & { slug: string };
 type LoadState = "loading" | "ready" | "error";
 
@@ -93,7 +91,13 @@ function BoundsVenueLoader({
   return null;
 }
 
-export function VenueMapCanvas({ venues }: { venues: VenueListItem[] }) {
+export function VenueMapCanvas({
+  venues,
+  center,
+}: {
+  venues: VenueListItem[];
+  center: [number, number];
+}) {
   const [locations, setLocations] = useState<LocatedVenue[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
 
@@ -112,7 +116,7 @@ export function VenueMapCanvas({ venues }: { venues: VenueListItem[] }) {
       aria-label="Mekanların konumlarını gösteren interaktif harita"
     >
       <MapContainer
-        center={KADIKOY_CENTER}
+        center={center}
         zoom={13}
         minZoom={10}
         scrollWheelZoom={false}

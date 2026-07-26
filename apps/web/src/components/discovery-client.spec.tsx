@@ -18,6 +18,12 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/location-context", () => ({
   useLocationContext: () => useLocationContext(),
 }));
+const venueMapMock = vi.fn((_props: { venues: VenueListItem[]; center: [number, number] }) => (
+  <div data-testid="mock-venue-map" />
+));
+vi.mock("@/components/venue-map", () => ({
+  VenueMap: (props: { venues: VenueListItem[]; center: [number, number] }) => venueMapMock(props),
+}));
 
 describe("DiscoveryClient — quick-route and filter composition (final-review Finding 3)", () => {
   beforeEach(() => {
@@ -26,7 +32,7 @@ describe("DiscoveryClient — quick-route and filter composition (final-review F
   });
 
   it("composes a quick-category pick with an already-active boutique filter into a single query, instead of one clobbering the other", async () => {
-    render(<DiscoveryClient districtId="kadikoy" initialVenues={[]} />);
+    render(<DiscoveryClient districtId="kadikoy" initialVenues={[]} center={[40.99, 29.02]} />);
 
     // Activate the boutique toggle via VenueFilters first.
     fireEvent.click(screen.getByTestId("filter-boutique"));
@@ -50,7 +56,7 @@ describe("DiscoveryClient — quick-route and filter composition (final-review F
 
   it("passes the current coords from useLocationContext as getVenues's second argument", async () => {
     useLocationContext.mockReturnValue({ lat: 40.99, lng: 29.02 });
-    render(<DiscoveryClient districtId="kadikoy" initialVenues={[]} />);
+    render(<DiscoveryClient districtId="kadikoy" initialVenues={[]} center={[40.99, 29.02]} />);
 
     fireEvent.click(screen.getByTestId("filter-boutique"));
     await waitFor(() =>
@@ -68,7 +74,7 @@ describe("DiscoveryClient — loading, error, and stale-response discarding (C2)
   it("shows a loading indicator while a request is genuinely still in flight", async () => {
     let resolveVenues: (v: unknown) => void;
     getVenues.mockReturnValueOnce(new Promise((resolve) => { resolveVenues = resolve; }));
-    render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} />);
     fireEvent.click(screen.getByTestId("filter-boutique"));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/yükleniyor/i));
     resolveVenues!({ data: [], meta: { next_cursor: null, has_more: false } });
@@ -77,7 +83,7 @@ describe("DiscoveryClient — loading, error, and stale-response discarding (C2)
 
   it("shows an error message on failure", async () => {
     getVenues.mockRejectedValueOnce(new Error("500"));
-    render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} />);
     fireEvent.click(screen.getByTestId("filter-boutique"));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/hata/i));
   });
@@ -89,7 +95,7 @@ describe("DiscoveryClient — loading, error, and stale-response discarding (C2)
     getVenues
       .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
       .mockResolvedValueOnce({ data: [venueB], meta: { next_cursor: null, has_more: false } });
-    render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} />);
     fireEvent.click(screen.getByTestId("filter-boutique"));
     fireEvent.click(screen.getByTestId("filter-boutique")); // toggles back off -- a second, distinct request
     await waitFor(() => expect(screen.getByText("Second")).toBeInTheDocument());
@@ -107,23 +113,39 @@ describe("DiscoveryClient — one-time auto-sort effect", () => {
 
   it("auto-refetches with resolved coords exactly once via rerender", async () => {
     useLocationContext.mockReturnValue(null);
-    const { rerender } = render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    const { rerender } = render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} />);
     useLocationContext.mockReturnValue({ lat: 40.99, lng: 29.02 });
-    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} />);
     await waitFor(() => expect(getVenues).toHaveBeenCalledWith(expect.any(Object), { lat: 40.99, lng: 29.02 }));
     expect(getVenues).toHaveBeenCalledTimes(1);
-    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} />);
     expect(getVenues).toHaveBeenCalledTimes(1);
   });
 
   it("does not auto-refetch if the user already changed a filter before coords resolved", async () => {
     useLocationContext.mockReturnValue(null);
-    const { rerender } = render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    const { rerender } = render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} />);
     fireEvent.click(screen.getByTestId("filter-boutique"));
     await waitFor(() => expect(getVenues).toHaveBeenCalledTimes(1));
     useLocationContext.mockReturnValue({ lat: 40.99, lng: 29.02 });
-    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} />);
     await new Promise((r) => setTimeout(r, 0));
     expect(getVenues).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DiscoveryClient — forwards center to VenueMap (C3)", () => {
+  beforeEach(() => {
+    getVenues.mockReset().mockResolvedValue({ data: [] as VenueListItem[], meta: { next_cursor: null, has_more: false } });
+    useLocationContext.mockReset().mockReturnValue(null);
+    venueMapMock.mockClear();
+  });
+
+  it("passes the given center prop through to VenueMap when the map view is active", () => {
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[41.0422, 29.0061]} />);
+    fireEvent.click(screen.getByTestId("view-mode-toggle"));
+    expect(venueMapMock).toHaveBeenCalledWith(
+      expect.objectContaining({ center: [41.0422, 29.0061] }),
+    );
   });
 });

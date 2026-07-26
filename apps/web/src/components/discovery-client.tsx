@@ -12,7 +12,15 @@ export function toggleViewMode(current: "list" | "map"): "list" | "map" {
   return current === "list" ? "map" : "list";
 }
 
-export function DiscoveryClient({ districtId, initialVenues }: { districtId: string; initialVenues: VenueListItem[] }) {
+export function DiscoveryClient({
+  districtId,
+  initialVenues,
+  center,
+}: {
+  districtId: string;
+  initialVenues: VenueListItem[];
+  center: [number, number];
+}) {
   const [venues, setVenues] = useState(initialVenues);
   const [filters, setFilters] = useState<FilterState>({});
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
@@ -99,7 +107,11 @@ export function DiscoveryClient({ districtId, initialVenues }: { districtId: str
         </span>
         {viewMode === "list" ? "Haritada göster" : "Listede göster"}
       </button>
-      {viewMode === "list" ? <VenueList venues={venues} /> : <VenueMap venues={venues} />}
+      {viewMode === "list" ? (
+        <VenueList venues={venues} />
+      ) : (
+        <VenueMap key={districtId} venues={venues} center={center} />
+      )}
     </>
   );
 }

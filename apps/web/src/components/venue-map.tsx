@@ -22,7 +22,13 @@ const VenueMapCanvas = dynamic(
   },
 );
 
-export function VenueMap({ venues }: { venues: VenueListItem[] }) {
+export function VenueMap({
+  venues,
+  center,
+}: {
+  venues: VenueListItem[];
+  center: [number, number];
+}) {
   return (
     <section
       data-testid="venue-map"
@@ -47,7 +53,7 @@ export function VenueMap({ venues }: { venues: VenueListItem[] }) {
       </div>
 
       <div className="h-[60vh] min-h-[24rem] max-h-[38rem] w-full">
-        <VenueMapCanvas venues={venues} />
+        <VenueMapCanvas venues={venues} center={center} />
       </div>
     </section>
   );
