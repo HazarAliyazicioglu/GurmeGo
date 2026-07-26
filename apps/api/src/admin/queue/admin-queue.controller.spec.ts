@@ -1,7 +1,27 @@
+import { ParseUUIDPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AdminQueueController } from "./admin-queue.controller";
 import { AdminQueueService } from "./admin-queue.service";
+
+const QUEUE_ITEM_ID = "d290f1ee-6c54-4b01-90e6-d701748f0854";
+
+describe("UUID path-param validation", () => {
+  // Exercises the real ParseUUIDPipe class (round 3's finding: calling a controller method
+  // directly bypasses Nest's pipe execution entirely). Same instance/config is applied
+  // identically across admin-queue, admin-users, admin-venues, favorites, and reports
+  // controllers below -- this one canonical test is not repeated for each.
+  it("ParseUUIDPipe rejects a non-UUID id with a 400-mapped exception", async () => {
+    const pipe = new ParseUUIDPipe({ errorHttpStatusCode: 400 });
+    await expect(pipe.transform("not-a-uuid", { type: "param", data: "id" } as any)).rejects.toThrow();
+  });
+  it("ParseUUIDPipe accepts a real UUID", async () => {
+    const pipe = new ParseUUIDPipe({ errorHttpStatusCode: 400 });
+    await expect(
+      pipe.transform("d290f1ee-6c54-4b01-90e6-d701748f0851", { type: "param", data: "id" } as any),
+    ).resolves.toBe("d290f1ee-6c54-4b01-90e6-d701748f0851");
+  });
+});
 
 describe("AdminQueueController (e2e) — RolesGuard", () => {
   let app: NestFastifyApplication;
@@ -48,12 +68,27 @@ describe("AdminQueueController (e2e) — RolesGuard", () => {
   });
 
   it("allows an admin to approve an item", async () => {
-    service.approve.mockResolvedValue({ id: "c1", status: "APPROVED" });
+    service.approve.mockResolvedValue({ id: QUEUE_ITEM_ID, status: "APPROVED" });
 
-    const res = await app.inject({ method: "POST", url: "/admin/queue/c1/approve", headers: { "x-test-role": "admin" } });
+    const res = await app.inject({
+      method: "POST",
+      url: `/admin/queue/${QUEUE_ITEM_ID}/approve`,
+      headers: { "x-test-role": "admin" },
+    });
 
     expect(res.statusCode).toBe(201);
-    expect(service.approve).toHaveBeenCalledWith("c1", "test-user");
+    expect(service.approve).toHaveBeenCalledWith(QUEUE_ITEM_ID, "test-user");
+  });
+
+  it("rejects a non-UUID id with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/queue/not-a-uuid/approve",
+      headers: { "x-test-role": "admin" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.approve).not.toHaveBeenCalled();
   });
 
   it("blocks a plain user from listing the queue", async () => {

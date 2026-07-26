@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from "@nestjs/common";
 import { FastifyRequest } from "fastify";
 import { AdminVenueCreateSchema, AdminVenueUpdateSchema } from "@gurmego/shared";
 import { Roles } from "../../auth/roles.decorator";
@@ -20,14 +20,17 @@ export class AdminVenuesController {
 
   @Put("venues/:id")
   update(
-    @Param("id") id: string,
+    @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
     @Body(new ZodValidationPipe(AdminVenueUpdateSchema)) body: ReturnType<(typeof AdminVenueUpdateSchema)["parse"]>,
   ) {
     return this.venues.update(id, body);
   }
 
   @Post("venues/:id/revert/:versionId")
-  revert(@Param("id") id: string, @Param("versionId") versionId: string) {
+  revert(
+    @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
+    @Param("versionId", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) versionId: string,
+  ) {
     return this.venues.revert(id, versionId);
   }
 

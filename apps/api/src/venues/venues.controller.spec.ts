@@ -1,9 +1,11 @@
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
+import { BboxQuerySchema } from "@gurmego/shared";
 import { VenuesController } from "./venues.controller";
 import { VenuesService } from "./venues.service";
 import { RateLimitGuard } from "../common/rate-limit.guard";
 import { CACHE_STORE } from "../common/cache-store.interface";
+import { ZodValidationPipe } from "../common/zod-validation.pipe";
 
 describe("VenuesController (e2e)", () => {
   let app: NestFastifyApplication;
@@ -81,6 +83,12 @@ describe("VenuesController (e2e)", () => {
       expect.objectContaining({ limit: 5 }),
       { lat: 40.99, lng: 29.02 },
     );
+  });
+});
+
+describe("mapView bbox validation via ZodValidationPipe", () => {
+  it("throws on a malformed bbox", () => {
+    expect(() => new ZodValidationPipe(BboxQuerySchema).transform({ bbox: "not,numbers,here" })).toThrow();
   });
 });
 

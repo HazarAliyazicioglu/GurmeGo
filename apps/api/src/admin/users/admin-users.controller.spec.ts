@@ -3,6 +3,8 @@ import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify
 import { AdminUsersController } from "./admin-users.controller";
 import { AdminUsersService } from "./admin-users.service";
 
+const USER_ID = "d290f1ee-6c54-4b01-90e6-d701748f0853";
+
 describe("AdminUsersController (e2e) — RolesGuard", () => {
   let app: NestFastifyApplication;
   let service: { assignRole: jest.Mock };
@@ -37,23 +39,35 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
   });
 
   it("allows an admin to assign a role", async () => {
-    service.assignRole.mockResolvedValue({ id: "u1", role: "CURATOR" });
+    service.assignRole.mockResolvedValue({ id: USER_ID, role: "CURATOR" });
 
     const res = await app.inject({
       method: "PUT",
-      url: "/admin/users/u1/roles",
+      url: `/admin/users/${USER_ID}/roles`,
       headers: { "x-test-role": "admin" },
       payload: { role: "curator" },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(service.assignRole).toHaveBeenCalledWith("u1", "curator");
+    expect(service.assignRole).toHaveBeenCalledWith(USER_ID, "curator");
+  });
+
+  it("rejects a non-UUID id with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/admin/users/not-a-uuid/roles",
+      headers: { "x-test-role": "admin" },
+      payload: { role: "curator" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.assignRole).not.toHaveBeenCalled();
   });
 
   it("blocks a curator from assigning a role (admin-only, unlike other admin endpoints)", async () => {
     const res = await app.inject({
       method: "PUT",
-      url: "/admin/users/u1/roles",
+      url: `/admin/users/${USER_ID}/roles`,
       headers: { "x-test-role": "curator" },
       payload: { role: "curator" },
     });
@@ -65,7 +79,7 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
   it("blocks a plain user from assigning a role", async () => {
     const res = await app.inject({
       method: "PUT",
-      url: "/admin/users/u1/roles",
+      url: `/admin/users/${USER_ID}/roles`,
       headers: { "x-test-role": "user" },
       payload: { role: "curator" },
     });
@@ -75,7 +89,7 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
   });
 
   it("blocks an unauthenticated request", async () => {
-    const res = await app.inject({ method: "PUT", url: "/admin/users/u1/roles", payload: { role: "curator" } });
+    const res = await app.inject({ method: "PUT", url: `/admin/users/${USER_ID}/roles`, payload: { role: "curator" } });
 
     expect(res.statusCode).toBe(403);
     expect(service.assignRole).not.toHaveBeenCalled();
@@ -93,7 +107,7 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
 
     const res = await app.inject({
       method: "PUT",
-      url: "/admin/users/u1/roles",
+      url: `/admin/users/${USER_ID}/roles`,
       headers: { "x-test-role": "admin" },
       payload: { role: "approved_rater" },
     });

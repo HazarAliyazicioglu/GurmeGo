@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
-import { VenueListQuerySchema } from "@gurmego/shared";
+import { BboxQuerySchema, VenueListQuerySchema } from "@gurmego/shared";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { RateLimit, RateLimitGuard } from "../common/rate-limit.guard";
 import { UserLocation, UserLocationParam } from "../common/user-location.decorator";
@@ -12,9 +12,8 @@ export class VenuesController {
 
   @Get("map")
   @RateLimit(100, 60)
-  mapView(@Query("bbox") bbox: string) {
-    const parts = bbox.split(",").map(Number) as [number, number, number, number];
-    return this.venues.mapView(parts);
+  mapView(@Query(new ZodValidationPipe(BboxQuerySchema)) query: { bbox: [number, number, number, number] }) {
+    return this.venues.mapView(query.bbox);
   }
 
   @Get()

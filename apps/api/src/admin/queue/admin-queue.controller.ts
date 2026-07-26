@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Req, UseGuards } from "@nestjs/common";
+import { Controller, Get, ParseUUIDPipe, Post, Param, Query, Req, UseGuards } from "@nestjs/common";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
 import { AdminQueueService } from "./admin-queue.service";
@@ -15,12 +15,12 @@ export class AdminQueueController {
   }
 
   @Post(":id/approve")
-  approve(@Param("id") id: string, @Req() req: any) {
+  approve(@Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string, @Req() req: any) {
     return this.queue.approve(id, req.user.id);
   }
 
   @Post(":id/reject")
-  reject(@Param("id") id: string, @Req() req: any) {
+  reject(@Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string, @Req() req: any) {
     return this.queue.reject(id, req.user.id);
   }
 }

@@ -30,3 +30,33 @@ describe("AppModule (e2e)", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe("UUID path-param validation — wired at the route level", () => {
+  let app: NestFastifyApplication;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  // POST /venues/:id/report requires no auth (ReportsController has no RolesGuard, only
+  // RateLimitGuard), so it exercises ParseUUIDPipe's route-level wiring through the full
+  // AppModule without needing a real Supabase JWT -- app.e2e-spec.ts has no JWT/curator-token
+  // setup for admin routes (those are only stubbed per-controller in the individual
+  // *.controller.spec.ts files via an x-test-role header, not through the full AppModule here).
+  it("POST /venues/not-a-uuid/report returns 400, not a PostGIS/Prisma error", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/venues/not-a-uuid/report",
+      payload: { reason: "Fiyat yanlış görünüyor" },
+      headers: { "content-type": "application/json" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});

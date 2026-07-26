@@ -59,4 +59,31 @@ describe("FavoritesController (e2e) — RolesGuard", () => {
     expect(res.statusCode).toBe(403);
     expect(service.listLists).not.toHaveBeenCalled();
   });
+
+  it("allows an authenticated user to add a venue to a list", async () => {
+    const listId = "d290f1ee-6c54-4b01-90e6-d701748f0855";
+    service.addVenue.mockResolvedValue({ id: listId });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/me/lists/${listId}/venues`,
+      headers: { "x-test-role": "user" },
+      payload: { venueId: "d290f1ee-6c54-4b01-90e6-d701748f0851" },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(service.addVenue).toHaveBeenCalledWith("test-user", listId, "d290f1ee-6c54-4b01-90e6-d701748f0851");
+  });
+
+  it("rejects a non-UUID list id with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/me/lists/not-a-uuid/venues",
+      headers: { "x-test-role": "user" },
+      payload: { venueId: "d290f1ee-6c54-4b01-90e6-d701748f0851" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.addVenue).not.toHaveBeenCalled();
+  });
 });

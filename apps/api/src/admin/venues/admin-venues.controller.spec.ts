@@ -5,6 +5,9 @@ import { AdminVenuesController } from "./admin-venues.controller";
 import { AdminVenuesService } from "./admin-venues.service";
 import { CsvImportService } from "./csv-import.service";
 
+const VENUE_ID = "d290f1ee-6c54-4b01-90e6-d701748f0851";
+const VERSION_ID = "d290f1ee-6c54-4b01-90e6-d701748f0852";
+
 const VALID_CREATE_PAYLOAD = {
   name: "A",
   slug: "a",
@@ -89,17 +92,40 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
   });
 
   it("allows an admin to update a venue", async () => {
-    venues.update.mockResolvedValue({ id: "v1" });
+    venues.update.mockResolvedValue({ id: VENUE_ID });
 
     const res = await app.inject({
       method: "PUT",
-      url: "/admin/venues/v1",
+      url: `/admin/venues/${VENUE_ID}`,
       headers: { "x-test-role": "admin" },
       payload: { branchCount: 2 },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(venues.update).toHaveBeenCalledWith("v1", expect.objectContaining({ branchCount: 2 }));
+    expect(venues.update).toHaveBeenCalledWith(VENUE_ID, expect.objectContaining({ branchCount: 2 }));
+  });
+
+  it("rejects a non-UUID id on update with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/admin/venues/not-a-uuid",
+      headers: { "x-test-role": "admin" },
+      payload: { branchCount: 2 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(venues.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-UUID id or versionId on revert with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/admin/venues/not-a-uuid/revert/${VERSION_ID}`,
+      headers: { "x-test-role": "admin" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(venues.revert).not.toHaveBeenCalled();
   });
 
   it("blocks a plain user from creating a venue", async () => {
@@ -115,7 +141,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
   });
 
   it("blocks an unauthenticated request to revert", async () => {
-    const res = await app.inject({ method: "POST", url: "/admin/venues/v1/revert/ver1" });
+    const res = await app.inject({ method: "POST", url: `/admin/venues/${VENUE_ID}/revert/${VERSION_ID}` });
 
     expect(res.statusCode).toBe(403);
     expect(venues.revert).not.toHaveBeenCalled();

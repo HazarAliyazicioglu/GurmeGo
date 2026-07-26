@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { VenueSchema, VenueListQuerySchema, OptionalTrueFlag, VenueDetailSchema } from "./venue.schema";
+import { VenueSchema, VenueListQuerySchema, OptionalTrueFlag, VenueDetailSchema, BboxQuerySchema } from "./venue.schema";
 
 describe("VenueSchema", () => {
   it("accepts a valid venue payload", () => {
@@ -77,4 +77,11 @@ describe("VenueDetailSchema", () => {
     expect(parsed.address).toBe("Bahariye Cd. No:1");
     expect(parsed.photos).toEqual(["p1"]);
   });
+});
+
+describe("BboxQuerySchema", () => {
+  it("rejects a malformed bbox string", () => expect(BboxQuerySchema.safeParse({ bbox: "not,numbers,here" }).success).toBe(false));
+  it("rejects only 3 parts", () => expect(BboxQuerySchema.safeParse({ bbox: "29.0,40.9,29.1" }).success).toBe(false));
+  it("rejects an empty leading part instead of treating it as 0 (Number('')===0 footgun)", () => expect(BboxQuerySchema.safeParse({ bbox: ",40.9,29.1,41" }).success).toBe(false));
+  it("accepts a well-formed bbox", () => expect(BboxQuerySchema.parse({ bbox: "29.0,40.9,29.1,41.0" }).bbox).toEqual([29.0, 40.9, 29.1, 41.0]));
 });

@@ -78,3 +78,30 @@ export const VenueDetailSchema = z.object({
   photos: z.array(z.string()),
 });
 export type VenueDetail = z.infer<typeof VenueDetailSchema>;
+
+// `GET /venues/map`'s bbox query param. Guards against empty string parts BEFORE calling
+// Number() on them -- Number("") is 0, the same footgun already fixed once for
+// parseUserLocationHeader (Task 4); a bbox like ",40.9,29.1,41" must not silently become
+// [0, 40.9, 29.1, 41], which would otherwise reach PostGIS and either crash or silently
+// mis-filter the map view.
+export const BboxQuerySchema = z.object({
+  bbox: z.string().transform((s, ctx) => {
+    const rawParts = s.split(",");
+    if (rawParts.length !== 4 || rawParts.some((p) => p.trim() === "")) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "bbox must be 4 comma-separated finite numbers" });
+      return z.NEVER;
+    }
+    const parts = rawParts.map(Number);
+    if (parts.some((n) => !Number.isFinite(n))) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "bbox must be 4 comma-separated finite numbers" });
+      return z.NEVER;
+    }
+    const [minLng, minLat, maxLng, maxLat] = parts;
+    if (minLng >= maxLng || minLat >= maxLat) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "bbox min must be less than max" });
+      return z.NEVER;
+    }
+    return parts as [number, number, number, number];
+  }),
+});
+export type BboxQuery = z.infer<typeof BboxQuerySchema>;

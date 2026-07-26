@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
 import { CreateReport, CreateReportSchema } from "@gurmego/shared";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { RateLimit, RateLimitGuard } from "../common/rate-limit.guard";
@@ -11,7 +11,10 @@ export class ReportsController {
   @Post(":id/report")
   @UseGuards(RateLimitGuard)
   @RateLimit(10, 86400)
-  submit(@Param("id") venueId: string, @Body(new ZodValidationPipe(CreateReportSchema)) body: CreateReport) {
+  submit(
+    @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) venueId: string,
+    @Body(new ZodValidationPipe(CreateReportSchema)) body: CreateReport,
+  ) {
     return this.reports.submit(venueId, body);
   }
 }

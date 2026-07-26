@@ -5,6 +5,8 @@ import { ReportsService } from "./reports.service";
 import { RateLimitGuard } from "../common/rate-limit.guard";
 import { CACHE_STORE } from "../common/cache-store.interface";
 
+const VENUE_ID = "d290f1ee-6c54-4b01-90e6-d701748f0851";
+
 describe("ReportsController (e2e)", () => {
   let app: NestFastifyApplication;
   let service: { submit: jest.Mock };
@@ -43,20 +45,32 @@ describe("ReportsController (e2e)", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/venues/v1/report",
+      url: `/venues/${VENUE_ID}/report`,
       payload: { reason: "Fiyat yanlış görünüyor" },
       headers: { "content-type": "application/json" },
     });
 
     expect(res.statusCode).toBe(201);
     expect(res.json()).toEqual({ urgent: false });
-    expect(service.submit).toHaveBeenCalledWith("v1", { reason: "Fiyat yanlış görünüyor" });
+    expect(service.submit).toHaveBeenCalledWith(VENUE_ID, { reason: "Fiyat yanlış görünüyor" });
+  });
+
+  it("rejects a non-UUID venue id with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/venues/not-a-uuid/report",
+      payload: { reason: "Fiyat yanlış görünüyor" },
+      headers: { "content-type": "application/json" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.submit).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid payload with a 400 before reaching the service", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/venues/v1/report",
+      url: `/venues/${VENUE_ID}/report`,
       payload: { reason: "kısa" },
       headers: { "content-type": "application/json" },
     });
@@ -71,7 +85,7 @@ describe("ReportsController (e2e)", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/venues/v1/report",
+      url: `/venues/${VENUE_ID}/report`,
       payload: { reason: "Fiyat yanlış görünüyor" },
       headers: { "content-type": "application/json" },
     });
