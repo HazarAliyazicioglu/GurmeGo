@@ -134,7 +134,7 @@ async function main() {
       const existing = await prisma.venue.findUnique({ where: { slug: v.slug } });
       if (existing) continue;
 
-      await venuesRepository.createWithLocation({
+      await venuesRepository.createWithLocation(prisma, {
         name: v.name,
         slug: v.slug,
         districtId: district.id,

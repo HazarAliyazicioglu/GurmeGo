@@ -36,6 +36,8 @@ export interface AdminVenueRow {
   googleRatingCount: number | null;
   googlePlaceId: string | null;
   featured: boolean;
+  address: string | null;
+  photos: string[];
   createdAt: Date;
   updatedAt: Date;
   lat: number;
@@ -61,20 +63,51 @@ export interface CreateVenueWithLocationInput {
   status: string;
   lat: number;
   lng: number;
+  googleRating?: number;
+  googleRatingCount?: number;
+  googlePlaceId?: string;
+  address?: string;
+  photos?: string[];
 }
 
-// Same shape, but every field is optional (partial update) except the two that always travel together:
-// if either lat or lng is supplied, both must be, so `location` can be recomputed atomically.
-export type UpdateVenueWithLocationInput = Partial<Omit<CreateVenueWithLocationInput, "lat" | "lng">> & {
+// Update semantics differ from create: `undefined` means "leave alone"; for nullable-in-DB fields,
+// `null` is a distinct, meaningful value ("clear this field") -- needed by revert() restoring a
+// venue to a state where e.g. editorialNote was empty.
+type NullableUpdateFields = "cuisineType" | "transportNote" | "editorialNote" | "googleRating" | "googleRatingCount" | "googlePlaceId" | "address";
+export type UpdateVenueWithLocationInput = Partial<Omit<CreateVenueWithLocationInput, "lat" | "lng" | NullableUpdateFields>> & {
   lat?: number;
   lng?: number;
+  cuisineType?: string | null;
+  transportNote?: string | null;
+  editorialNote?: string | null;
+  googleRating?: number | null;
+  googleRatingCount?: number | null;
+  googlePlaceId?: string | null;
+  address?: string | null;
 };
+
+// Pure mapping, no DB access. revert() uses this to turn a VenueVersion snapshot back into a
+// valid updateWithLocation input. `source` is included (round 3 finding: it was omitted, meaning
+// revert lost that field). `verifiedAt` is deliberately NOT copied here -- revert() sets a fresh
+// timestamp itself, treating a revert as a re-verification event, same as update().
+export function snapshotToUpdateInput(row: AdminVenueRow): UpdateVenueWithLocationInput {
+  return {
+    name: row.name, slug: row.slug, districtId: row.districtId, category: row.category,
+    cuisineType: row.cuisineType, priceRange: row.priceRange, signatureItems: row.signatureItems,
+    transportNote: row.transportNote, openingHours: row.openingHours as Record<string, unknown>,
+    editorialNote: row.editorialNote, isBoutique: row.isBoutique, branchCount: row.branchCount,
+    franchiseFlag: row.franchiseFlag, status: row.status, source: row.source,
+    googleRating: row.googleRating, googleRatingCount: row.googleRatingCount,
+    googlePlaceId: row.googlePlaceId, address: row.address, photos: row.photos,
+    lat: row.lat, lng: row.lng,
+  };
+}
 
 const ADMIN_VENUE_RETURNING = Prisma.sql`
   RETURNING id, name, slug, "districtId", category, "cuisineType", "priceRange", "signatureItems",
     "transportNote", "openingHours", "editorialNote", "isBoutique", "branchCount", "franchiseFlag",
     source, "verifiedAt", status, "googleRating", "googleRatingCount", "googlePlaceId", featured,
-    "createdAt", "updatedAt",
+    address, photos, "createdAt", "updatedAt",
     ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
 `;
 
@@ -149,13 +182,14 @@ export class VenuesRepository {
   // ADR 002: `Venue.location` is an `Unsupported("geography(Point,4326)")` NOT NULL column, so the
   // generated Prisma client omits `create`/`upsert` (and can't touch `location` on `update`) for this
   // model. Writing it requires raw SQL, kept in this repository layer per the ADR.
-  async createWithLocation(input: CreateVenueWithLocationInput): Promise<AdminVenueRow> {
+  async createWithLocation(client: Pick<PrismaService, "$queryRaw">, input: CreateVenueWithLocationInput): Promise<AdminVenueRow> {
     const id = randomUUID();
-    const rows = await this.prisma.$queryRaw<AdminVenueRow[]>(Prisma.sql`
+    const rows = await client.$queryRaw<AdminVenueRow[]>(Prisma.sql`
       INSERT INTO "Venue" (
         id, name, slug, "districtId", category, "cuisineType", "priceRange", "signatureItems",
         "transportNote", "openingHours", "editorialNote", "isBoutique", "branchCount", "franchiseFlag",
-        source, "verifiedAt", status, location, "updatedAt"
+        source, "verifiedAt", status, location, "googleRating", "googleRatingCount", "googlePlaceId",
+        address, photos, "updatedAt"
       ) VALUES (
         ${id}, ${input.name}, ${input.slug}, ${input.districtId}, ${input.category},
         ${input.cuisineType ?? null}, ${input.priceRange}::"PriceRange", ${input.signatureItems},
@@ -163,6 +197,8 @@ export class VenuesRepository {
         ${input.editorialNote ?? null}, ${input.isBoutique}, ${input.branchCount}, ${input.franchiseFlag},
         ${input.source}::"VenueSource", ${input.verifiedAt}, ${input.status}::"VenueStatus",
         ST_SetSRID(ST_MakePoint(${input.lng}, ${input.lat}), 4326)::geography,
+        ${input.googleRating ?? null}, ${input.googleRatingCount ?? null}, ${input.googlePlaceId ?? null},
+        ${input.address ?? null}, ${input.photos ?? []},
         now()
       )
       ${ADMIN_VENUE_RETURNING}
@@ -170,7 +206,24 @@ export class VenuesRepository {
     return rows[0];
   }
 
-  async updateWithLocation(id: string, input: UpdateVenueWithLocationInput): Promise<AdminVenueRow> {
+  async findRawForSnapshot(client: Pick<PrismaService, "$queryRaw">, id: string): Promise<AdminVenueRow> {
+    const rows = await client.$queryRaw<AdminVenueRow[]>(Prisma.sql`
+      SELECT id, name, slug, "districtId", category, "cuisineType", "priceRange", "signatureItems",
+        "transportNote", "openingHours", "editorialNote", "isBoutique", "branchCount", "franchiseFlag",
+        source, "verifiedAt", status, "googleRating", "googleRatingCount", "googlePlaceId", featured,
+        address, photos, "createdAt", "updatedAt",
+        ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
+      FROM "Venue" WHERE id = ${id}
+    `);
+    if (rows.length === 0) {
+      const notFound = new NotFoundException({ error: { code: "VENUE_NOT_FOUND", message: "Mekan bulunamadı" } });
+      notFound.message = "Mekan bulunamadı";
+      throw notFound;
+    }
+    return rows[0];
+  }
+
+  async updateWithLocation(client: Pick<PrismaService, "$queryRaw">, id: string, input: UpdateVenueWithLocationInput): Promise<AdminVenueRow> {
     const assignments: Prisma.Sql[] = [];
     if (input.name !== undefined) assignments.push(Prisma.sql`name = ${input.name}`);
     if (input.slug !== undefined) assignments.push(Prisma.sql`slug = ${input.slug}`);
@@ -188,6 +241,11 @@ export class VenuesRepository {
     if (input.source !== undefined) assignments.push(Prisma.sql`source = ${input.source}::"VenueSource"`);
     if (input.verifiedAt !== undefined) assignments.push(Prisma.sql`"verifiedAt" = ${input.verifiedAt}`);
     if (input.status !== undefined) assignments.push(Prisma.sql`status = ${input.status}::"VenueStatus"`);
+    if (input.googleRating !== undefined) assignments.push(Prisma.sql`"googleRating" = ${input.googleRating}`);
+    if (input.googleRatingCount !== undefined) assignments.push(Prisma.sql`"googleRatingCount" = ${input.googleRatingCount}`);
+    if (input.googlePlaceId !== undefined) assignments.push(Prisma.sql`"googlePlaceId" = ${input.googlePlaceId}`);
+    if (input.address !== undefined) assignments.push(Prisma.sql`address = ${input.address}`);
+    if (input.photos !== undefined) assignments.push(Prisma.sql`photos = ${input.photos}`);
     // lat/lng always travel together (validated by the admin zod schema); only touch `location` if given,
     // otherwise leave the existing point untouched.
     if (input.lat !== undefined && input.lng !== undefined) {
@@ -195,7 +253,7 @@ export class VenuesRepository {
     }
     assignments.push(Prisma.sql`"updatedAt" = now()`);
 
-    const rows = await this.prisma.$queryRaw<AdminVenueRow[]>(Prisma.sql`
+    const rows = await client.$queryRaw<AdminVenueRow[]>(Prisma.sql`
       UPDATE "Venue"
       SET ${Prisma.join(assignments, ", ")}
       WHERE id = ${id}

@@ -1,5 +1,7 @@
 import { ConflictException, Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { VenuesRepository } from "../../venues/venues.repository";
 import { getUrgentReportThreshold } from "../../common/rule-config";
 
 // The HTTP response body must stay exactly `{ error: { code, message } }` per docs/api-spec.md
@@ -16,7 +18,7 @@ function alreadyProcessedError() {
 
 @Injectable()
 export class AdminQueueService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private venuesRepository: VenuesRepository) {}
 
   async list(type?: string, status?: string) {
     const items = await this.prisma.contributionQueue.findMany({
@@ -39,25 +41,23 @@ export class AdminQueueService {
   }
 
   async approve(id: string, reviewerId: string) {
-    return this.prisma.$transaction(async (tx: any) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const item = await tx.contributionQueue.findUniqueOrThrow({ where: { id } });
-      if (item.status !== "PENDING") {
-        throw alreadyProcessedError();
+      if (item.status !== "PENDING") throw alreadyProcessedError();
+      if (item.type === "EDIT" && item.venueId) {
+        const snapshot = await this.venuesRepository.findRawForSnapshot(tx, item.venueId);
+        await tx.venueVersion.create({ data: { venueId: item.venueId, snapshot: snapshot as unknown as Prisma.InputJsonValue, createdBy: reviewerId } });
+        await tx.venue.update({ where: { id: item.venueId }, data: { verifiedAt: new Date() } });
       }
-      if (item.venueId) {
-        const venue = await tx.venue.findUniqueOrThrow({ where: { id: item.venueId } });
-        await tx.venueVersion.create({ data: { venueId: venue.id, snapshot: venue, createdBy: reviewerId } });
-        await tx.venue.update({ where: { id: venue.id }, data: { verifiedAt: new Date() } });
-      }
-      return tx.contributionQueue.update({
-        where: { id },
-        data: { status: "APPROVED", reviewedBy: reviewerId, reviewedAt: new Date() },
-      });
+      // REPORT: intentionally does NOT touch Venue/VenueVersion -- approving a "this info is
+      // wrong" report means "we've reviewed it," not "we've confirmed it's accurate." Any actual
+      // correction happens through AdminVenuesService.update() (Step 15 above).
+      return tx.contributionQueue.update({ where: { id }, data: { status: "APPROVED", reviewedBy: reviewerId, reviewedAt: new Date() } });
     });
   }
 
   reject(id: string, reviewerId: string) {
-    return this.prisma.$transaction(async (tx: any) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const item = await tx.contributionQueue.findUniqueOrThrow({ where: { id } });
       if (item.status !== "PENDING") {
         throw alreadyProcessedError();

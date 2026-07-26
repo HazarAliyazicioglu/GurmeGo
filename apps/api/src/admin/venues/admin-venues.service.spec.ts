@@ -16,87 +16,64 @@ const VALID_CREATE_INPUT = {
   lng: 29.0,
 } as any;
 
-describe("AdminVenuesService.create", () => {
-  it("computes isBoutique via BoutiqueService and delegates to VenuesRepository.createWithLocation", async () => {
-    const prisma = {} as any;
-    const boutique = { evaluate: jest.fn().mockReturnValue(true) } as any;
-    const venuesRepository = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
-    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
-
-    await service.create(VALID_CREATE_INPUT);
-
-    expect(boutique.evaluate).toHaveBeenCalledWith({ branchCount: 1, franchiseFlag: false, hasEditorialNote: true });
-    expect(venuesRepository.createWithLocation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        isBoutique: true,
-        verifiedAt: expect.any(Date),
-        status: "DRAFT",
-        source: "MANUAL",
-        lat: 41.0,
-        lng: 29.0,
-      }),
-    );
+describe("AdminVenuesService.create — status", () => {
+  it("uses input.status when provided", async () => {
+    const repo = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
+    const service = new AdminVenuesService({} as any, boutique, repo);
+    await service.create({ name: "A", slug: "a", districtId: "d1", category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: {}, branchCount: 1, franchiseFlag: false, status: "PUBLISHED" } as any);
+    expect(repo.createWithLocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "PUBLISHED" }));
+  });
+  it("defaults to DRAFT when status is omitted", async () => {
+    const repo = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
+    const service = new AdminVenuesService({} as any, boutique, repo);
+    await service.create({ name: "A", slug: "a", districtId: "d1", category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: {}, branchCount: 1, franchiseFlag: false } as any);
+    expect(repo.createWithLocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "DRAFT" }));
   });
 });
 
-describe("AdminVenuesService.update", () => {
-  it("re-evaluates isBoutique on update, same as create, and delegates to VenuesRepository.updateWithLocation", async () => {
-    const prisma = {} as any;
-    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
-    const venuesRepository = { updateWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
-    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
-
-    await service.update("v1", { branchCount: 5, franchiseFlag: false, editorialNote: "not" } as any);
-
-    expect(boutique.evaluate).toHaveBeenCalledWith({ branchCount: 5, franchiseFlag: false, hasEditorialNote: true });
-    expect(venuesRepository.updateWithLocation).toHaveBeenCalledWith(
-      "v1",
-      expect.objectContaining({ branchCount: 5, isBoutique: false }),
-    );
-  });
-
-  it("passes lat/lng through when supplied, so location can be recomputed", async () => {
-    const prisma = {} as any;
-    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
-    const venuesRepository = { updateWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
-    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
-
-    await service.update("v1", { lat: 41.1, lng: 29.1 } as any);
-
-    expect(venuesRepository.updateWithLocation).toHaveBeenCalledWith(
-      "v1",
-      expect.objectContaining({ lat: 41.1, lng: 29.1 }),
-    );
+describe("AdminVenuesService.update — atomic snapshot + write, partial-update completeness", () => {
+  it("wraps snapshot + update in a single transaction, completes isBoutique inputs from the DB", async () => {
+    const prisma = { $transaction: jest.fn((fn) => fn({ venueVersion: { create: jest.fn() } })) } as any;
+    const repo = {
+      findRawForSnapshot: jest.fn().mockResolvedValue({ id: "v1", branchCount: 2, franchiseFlag: false, editorialNote: "old note", status: "PUBLISHED" }),
+      updateWithLocation: jest.fn().mockResolvedValue({ id: "v1" }),
+    } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(true) } as any;
+    const service = new AdminVenuesService(prisma, boutique, repo);
+    await service.update("v1", { branchCount: 5 } as any);
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(boutique.evaluate).toHaveBeenCalledWith({ branchCount: 5, franchiseFlag: false, hasEditorialNote: true, status: "PUBLISHED" });
+    expect(repo.updateWithLocation).toHaveBeenCalled();
   });
 });
 
 describe("AdminVenuesService.revert", () => {
-  it("applies the version snapshot when the version belongs to the venue", async () => {
-    const version = { id: "ver1", venueId: "v1", snapshot: { name: "Old Name" } };
-    const prisma = {
-      venueVersion: { findUniqueOrThrow: jest.fn().mockResolvedValue(version) },
-      venue: { update: jest.fn().mockResolvedValue({ id: "v1", name: "Old Name" }) },
+  it("snapshots current state, applies the target version's snapshot via snapshotToUpdateInput, sets a fresh verifiedAt", async () => {
+    const targetSnapshot = {
+      id: "v1", name: "Old Name", lat: 40.9, lng: 29.0, status: "PUBLISHED", source: "MANUAL",
+      cuisineType: null, priceRange: "MODERATE", signatureItems: [], transportNote: null,
+      openingHours: {}, editorialNote: null, isBoutique: false, branchCount: 1, franchiseFlag: false,
+      verifiedAt: new Date(), googleRating: null, googleRatingCount: null, googlePlaceId: null,
+      featured: false, address: null, photos: [], createdAt: new Date(), updatedAt: new Date(),
+    };
+    const txClient = { venueVersion: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "ver1", venueId: "v1", snapshot: targetSnapshot }), create: jest.fn().mockResolvedValue({}) } };
+    const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
+    const repo = {
+      findRawForSnapshot: jest.fn().mockResolvedValue({ id: "v1", name: "Current Name", status: "PUBLISHED" }),
+      updateWithLocation: jest.fn().mockResolvedValue({ id: "v1" }),
     } as any;
-    const service = new AdminVenuesService(prisma, {} as any, {} as any);
-
+    const service = new AdminVenuesService(prisma, {} as any, repo);
     await service.revert("v1", "ver1");
-
-    expect(prisma.venue.update).toHaveBeenCalledWith({ where: { id: "v1" }, data: version.snapshot });
+    expect(txClient.venueVersion.create).toHaveBeenCalledWith({ data: { venueId: "v1", snapshot: expect.objectContaining({ name: "Current Name" }), createdBy: null } });
+    expect(repo.updateWithLocation).toHaveBeenCalledWith(txClient, "v1", expect.objectContaining({ name: "Old Name", source: "MANUAL", verifiedAt: expect.any(Date) }));
   });
-
-  it("rejects and does not apply the update when the version belongs to a different venue", async () => {
-    const version = { id: "ver1", venueId: "OTHER-VENUE", snapshot: { name: "Old Name" } };
-    const prisma = {
-      venueVersion: { findUniqueOrThrow: jest.fn().mockResolvedValue(version) },
-      venue: { update: jest.fn().mockResolvedValue({}) },
-    } as any;
-    const service = new AdminVenuesService(prisma, {} as any, {} as any);
-
-    await expect(service.revert("v1", "ver1")).rejects.toMatchObject({
-      response: { error: { code: "VENUE_VERSION_NOT_FOUND" } },
-    });
-
-    expect(prisma.venue.update).not.toHaveBeenCalled();
+  it("throws NotFoundException if the version doesn't belong to this venue", async () => {
+    const txClient = { venueVersion: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "ver1", venueId: "OTHER", snapshot: {} }) } };
+    const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
+    const service = new AdminVenuesService(prisma, {} as any, { findRawForSnapshot: jest.fn() } as any);
+    await expect(service.revert("v1", "ver1")).rejects.toThrow("Bu mekan için böyle bir versiyon bulunamadı");
   });
 });
 
@@ -170,6 +147,7 @@ describe("AdminVenuesService.importRows", () => {
     expect(result.rowErrors).toEqual([{ row: 12, message: expect.stringContaining("ilçe") }]);
     expect(venuesRepository.createWithLocation).toHaveBeenCalledTimes(1);
     expect(venuesRepository.createWithLocation).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({ slug: "new-cafe", districtId: "d1", signatureItems: [] }),
     );
   });

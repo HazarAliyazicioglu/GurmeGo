@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AdminVenueCreateInput, AdminVenueUpdateInput } from "@gurmego/shared";
 import { PrismaService } from "../../prisma/prisma.service";
 import { BoutiqueService } from "../../rule-engine/boutique.service";
-import { VenuesRepository } from "../../venues/venues.repository";
+import { VenuesRepository, snapshotToUpdateInput, AdminVenueRow } from "../../venues/venues.repository";
 import type { CsvImportRow } from "./csv-import.service";
 
 // Postgres unique_violation (SQLSTATE 23505). `createWithLocation` inserts via `$queryRaw` (ADR 002 —
@@ -27,53 +27,55 @@ export class AdminVenuesService {
   ) {}
 
   create(input: AdminVenueCreateInput) {
-    const isBoutique = this.boutique.evaluate({
-      branchCount: input.branchCount,
-      franchiseFlag: input.franchiseFlag,
-      hasEditorialNote: !!input.editorialNote,
-    });
+    const status = input.status ?? "DRAFT";
+    const isBoutique = this.boutique.evaluate({ branchCount: input.branchCount, franchiseFlag: input.franchiseFlag, hasEditorialNote: !!input.editorialNote, status });
     // `location` is a required PostGIS column the Prisma client can't write (ADR 002) — delegated to
     // the repository's raw-SQL insert, which also handles isBoutique/verifiedAt/status/source.
-    return this.venuesRepository.createWithLocation({
-      ...input,
-      isBoutique,
-      verifiedAt: new Date(),
-      status: "DRAFT",
-      source: "MANUAL",
-    });
+    return this.venuesRepository.createWithLocation(this.prisma, { ...input, isBoutique, verifiedAt: new Date(), status, source: "MANUAL" });
   }
 
-  update(id: string, input: AdminVenueUpdateInput) {
-    // `update` is a partial patch — only recompute isBoutique when both rule-engine inputs are present
-    // in this request; otherwise leave it untouched (repository skips undefined fields).
-    const isBoutique =
-      input.branchCount !== undefined && input.franchiseFlag !== undefined
-        ? this.boutique.evaluate({
-            branchCount: input.branchCount,
-            franchiseFlag: input.franchiseFlag,
-            hasEditorialNote: !!input.editorialNote,
-          })
-        : undefined;
-    return this.venuesRepository.updateWithLocation(id, { ...input, isBoutique });
+  async update(id: string, input: AdminVenueUpdateInput) {
+    // Snapshot + write must be atomic (A4): the version row and the venue mutation land together or
+    // not at all. Partial-update completeness — recompute isBoutique from the merged (request +
+    // current DB) state, so a patch that only changes branchCount still evaluates the rule correctly.
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await this.venuesRepository.findRawForSnapshot(tx, id);
+      await tx.venueVersion.create({ data: { venueId: id, snapshot: existing as unknown as Prisma.InputJsonValue, createdBy: null } });
+      const branchCount = input.branchCount ?? existing.branchCount;
+      const franchiseFlag = input.franchiseFlag ?? existing.franchiseFlag;
+      const hasEditorialNote = input.editorialNote !== undefined ? !!input.editorialNote : !!existing.editorialNote;
+      const status = input.status ?? existing.status;
+      const isBoutique = this.boutique.evaluate({ branchCount, franchiseFlag, hasEditorialNote, status });
+      return this.venuesRepository.updateWithLocation(tx, id, { ...input, isBoutique, verifiedAt: new Date() });
+    });
   }
 
   async revert(venueId: string, versionId: string) {
-    const version = await this.prisma.venueVersion.findUniqueOrThrow({ where: { id: versionId } });
-    if (version.venueId !== venueId) {
-      // A mismatched venueId/versionId pair is treated as "no such version for this venue" —
-      // same shape as VENUE_NOT_FOUND elsewhere, so callers can't distinguish "wrong venue" from
-      // "wrong id" and use that to probe other venues' version history.
-      // The HTTP response body must stay exactly `{ error: { code, message } }` per
-      // docs/api-spec.md; NestJS's HttpException only derives `.message` from a top-level
-      // `message` property, so set it explicitly after construction (same pattern as
-      // venues.service.ts / admin-users.service.ts).
-      const notFound = new NotFoundException({
-        error: { code: "VENUE_VERSION_NOT_FOUND", message: "Bu mekan için böyle bir versiyon bulunamadı" },
-      });
-      notFound.message = "Bu mekan için böyle bir versiyon bulunamadı";
-      throw notFound;
-    }
-    return this.prisma.venue.update({ where: { id: venueId }, data: version.snapshot as any });
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const version = await tx.venueVersion.findUniqueOrThrow({ where: { id: versionId } });
+      if (version.venueId !== venueId) {
+        // A mismatched venueId/versionId pair is treated as "no such version for this venue" —
+        // same shape as VENUE_NOT_FOUND elsewhere, so callers can't distinguish "wrong venue" from
+        // "wrong id" and use that to probe other venues' version history.
+        // The HTTP response body must stay exactly `{ error: { code, message } }` per
+        // docs/api-spec.md; NestJS's HttpException only derives `.message` from a top-level
+        // `message` property, so set it explicitly after construction (same pattern as
+        // venues.service.ts / admin-users.service.ts).
+        const notFound = new NotFoundException({
+          error: { code: "VENUE_VERSION_NOT_FOUND", message: "Bu mekan için böyle bir versiyon bulunamadı" },
+        });
+        notFound.message = "Bu mekan için böyle bir versiyon bulunamadı";
+        throw notFound;
+      }
+      const current = await this.venuesRepository.findRawForSnapshot(tx, venueId);
+      await tx.venueVersion.create({ data: { venueId, snapshot: current as unknown as Prisma.InputJsonValue, createdBy: null } });
+      // `version.snapshot` is a Prisma Json column -- its static type (Prisma.JsonValue) cannot
+      // carry the domain knowledge that THIS snapshot was produced by findRawForSnapshot's
+      // AdminVenueRow shape. This is the one place that knowledge is asserted; every field after
+      // this cast flows through snapshotToUpdateInput's fully-typed signature.
+      const restored = snapshotToUpdateInput(version.snapshot as unknown as AdminVenueRow);
+      return this.venuesRepository.updateWithLocation(tx, venueId, { ...restored, verifiedAt: new Date() });
+    });
   }
 
   async importRows(

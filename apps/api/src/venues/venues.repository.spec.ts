@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { VenuesRepository } from "./venues.repository";
+import { VenuesRepository, AdminVenueRow, UpdateVenueWithLocationInput, snapshotToUpdateInput } from "./venues.repository";
 import { PrismaService } from "../prisma/prisma.service";
 
 describe("VenuesRepository.searchPublished", () => {
@@ -36,13 +36,97 @@ describe("VenuesRepository.searchPublished", () => {
   });
 });
 
+describe("VenuesRepository.createWithLocation — client parameter and Google fields", () => {
+  it("accepts an explicit Prisma client as the first argument", async () => {
+    const client = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1" }]) } as any;
+    const repo = new VenuesRepository({} as any);
+    const result = await repo.createWithLocation(client, {
+      name: "A", slug: "a", districtId: "d1", category: "cafe", priceRange: "MODERATE",
+      signatureItems: [], openingHours: {}, isBoutique: false, branchCount: 1, franchiseFlag: false,
+      source: "MANUAL", verifiedAt: new Date(), status: "DRAFT", lat: 40.99, lng: 29.02,
+    });
+    expect(client.$queryRaw).toHaveBeenCalled();
+    expect(result).toEqual({ id: "v1" });
+  });
+
+  it("includes googleRating/googleRatingCount/googlePlaceId/address/photos in the INSERT", async () => {
+    const client = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1" }]) } as any;
+    const repo = new VenuesRepository({} as any);
+    await repo.createWithLocation(client, {
+      name: "A", slug: "a", districtId: "d1", category: "cafe", priceRange: "MODERATE",
+      signatureItems: [], openingHours: {}, isBoutique: false, branchCount: 1, franchiseFlag: false,
+      source: "MANUAL", verifiedAt: new Date(), status: "DRAFT", lat: 40.99, lng: 29.02,
+      googleRating: 4.5, googleRatingCount: 10, googlePlaceId: "place123", address: "Adres 1", photos: ["p1"],
+    });
+    const call = client.$queryRaw.mock.calls[0][0];
+    expect(call.strings.join("")).toContain("googleRating");
+    expect(call.values).toEqual(expect.arrayContaining([4.5, 10, "place123", "Adres 1"]));
+  });
+});
+
+describe("VenuesRepository.updateWithLocation — zero-coordinate and explicit-null handling", () => {
+  it("includes a lat=0/lng=0 update", async () => {
+    const client = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1" }]) } as any;
+    await new VenuesRepository({} as any).updateWithLocation(client, "v1", { lat: 0, lng: 0 });
+    const call = client.$queryRaw.mock.calls[0][0];
+    expect(call.strings.join("")).toContain("location");
+    expect(call.values).toContain(0);
+  });
+  it("accepts explicit null for nullable fields (needed by revert restoring a cleared field)", async () => {
+    const client = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1" }]) } as any;
+    await new VenuesRepository({} as any).updateWithLocation(client, "v1", { editorialNote: null, address: null });
+    expect(client.$queryRaw.mock.calls[0][0].values).toContain(null);
+  });
+  it("includes photos in the UPDATE (round 4 catch: previously silently dropped)", async () => {
+    const client = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1" }]) } as any;
+    await new VenuesRepository({} as any).updateWithLocation(client, "v1", { photos: ["p1", "p2"] });
+    const call = client.$queryRaw.mock.calls[0][0];
+    expect(call.strings.join("")).toContain("photos");
+    expect(call.values).toEqual(expect.arrayContaining([["p1", "p2"]]));
+  });
+});
+
+describe("VenuesRepository.findRawForSnapshot", () => {
+  it("returns the full row including lat/lng via raw SQL", async () => {
+    const client = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1", lat: 40.99, lng: 29.02 }]) } as any;
+    const result = await new VenuesRepository({} as any).findRawForSnapshot(client, "v1");
+    const sqlText = client.$queryRaw.mock.calls[0][0].strings.join("");
+    expect(sqlText).toContain("ST_Y");
+    expect(sqlText).toContain("ST_X");
+    expect(result).toEqual({ id: "v1", lat: 40.99, lng: 29.02 });
+  });
+  it("throws NotFoundException when not found", async () => {
+    const client = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    await expect(new VenuesRepository({} as any).findRawForSnapshot(client, "missing")).rejects.toThrow("Mekan bulunamadı");
+  });
+});
+
+describe("snapshotToUpdateInput", () => {
+  it("maps a raw snapshot row into a fully-typed update input including source, no cast needed", () => {
+    const row: AdminVenueRow = {
+      id: "v1", name: "A", slug: "a", districtId: "d1", category: "cafe", cuisineType: null,
+      priceRange: "MODERATE", signatureItems: [], transportNote: null, openingHours: {},
+      editorialNote: null, isBoutique: false, branchCount: 1, franchiseFlag: false,
+      source: "MANUAL", verifiedAt: new Date(), status: "PUBLISHED", googleRating: null,
+      googleRatingCount: null, googlePlaceId: null, featured: false, address: null, photos: [],
+      createdAt: new Date(), updatedAt: new Date(), lat: 40.99, lng: 29.02,
+    };
+    const input: UpdateVenueWithLocationInput = snapshotToUpdateInput(row);
+    expect(input).toMatchObject({
+      name: "A", slug: "a", districtId: "d1", category: "cafe", cuisineType: null,
+      priceRange: "MODERATE", isBoutique: false, branchCount: 1, franchiseFlag: false,
+      status: "PUBLISHED", source: "MANUAL", googleRating: null, address: null, photos: [], lat: 40.99, lng: 29.02,
+    });
+  });
+});
+
 describe("VenuesRepository.updateWithLocation", () => {
   it("throws a clean error envelope when the venue does not exist (regression: no top-level message field)", async () => {
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as unknown as PrismaService;
     const repo = new VenuesRepository(prisma);
 
     try {
-      await repo.updateWithLocation("missing-id", { name: "New name" });
+      await repo.updateWithLocation(prisma, "missing-id", { name: "New name" });
       throw new Error("expected updateWithLocation to throw");
     } catch (err: any) {
       expect(err.getResponse()).toEqual({
