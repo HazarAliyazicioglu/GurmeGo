@@ -36,20 +36,20 @@ describe("RolesGuard — 401 vs 403", () => {
       switchToHttp: () => ({ getRequest: () => ({ user }) }),
       getHandler: () => ({}),
       getClass: () => ({}),
-    } as any);
+    } as unknown as ExecutionContext);
 
   it("throws UnauthorizedException when there is no user", () => {
-    const guard = new RolesGuard({ getAllAndOverride: jest.fn().mockReturnValue(["curator"]) } as any);
+    const guard = new RolesGuard({ getAllAndOverride: jest.fn().mockReturnValue(["curator"]) } as unknown as Reflector);
     expect(() => guard.canActivate(makeCtx(undefined))).toThrow(UnauthorizedException);
   });
 
   it("throws ForbiddenException when the role is insufficient", () => {
-    const guard = new RolesGuard({ getAllAndOverride: jest.fn().mockReturnValue(["curator"]) } as any);
+    const guard = new RolesGuard({ getAllAndOverride: jest.fn().mockReturnValue(["curator"]) } as unknown as Reflector);
     expect(() => guard.canActivate(makeCtx({ role: "user" }))).toThrow(ForbiddenException);
   });
 
   it("allows access when the role matches", () => {
-    const guard = new RolesGuard({ getAllAndOverride: jest.fn().mockReturnValue(["curator"]) } as any);
+    const guard = new RolesGuard({ getAllAndOverride: jest.fn().mockReturnValue(["curator"]) } as unknown as Reflector);
     expect(guard.canActivate(makeCtx({ role: "curator" }))).toBe(true);
   });
 });
