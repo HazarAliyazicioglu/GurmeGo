@@ -129,6 +129,36 @@ describe("AdminQueueController (e2e) — RolesGuard", () => {
     expect(service.list).toHaveBeenCalledWith("EDIT", "APPROVED");
   });
 
+  // Re-review finding (round 2): AdminQueueListQuerySchema's `type` had been narrowed to
+  // REPORT/EDIT only, which regressed filtering by NEW_VENUE/OWNER_VERIFICATION (real
+  // ContributionType values, previously accepted). These two cases pin the fix so this exact
+  // regression can't recur silently.
+  it("allows type=NEW_VENUE through to the service", async () => {
+    service.list.mockResolvedValue([]);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/queue?type=NEW_VENUE",
+      headers: { "x-test-role": "curator" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.list).toHaveBeenCalledWith("NEW_VENUE", undefined);
+  });
+
+  it("allows type=OWNER_VERIFICATION through to the service", async () => {
+    service.list.mockResolvedValue([]);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/queue?type=OWNER_VERIFICATION",
+      headers: { "x-test-role": "curator" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.list).toHaveBeenCalledWith("OWNER_VERIFICATION", undefined);
+  });
+
   it("blocks a plain user from listing the queue", async () => {
     const res = await app.inject({ method: "GET", url: "/admin/queue", headers: { "x-test-role": "user" } });
 

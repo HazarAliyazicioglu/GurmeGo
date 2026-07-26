@@ -79,15 +79,10 @@ export const VenueDetailSchema = z.object({
 });
 export type VenueDetail = z.infer<typeof VenueDetailSchema>;
 
-// `GET /venues/map`'s bbox query param. Guards against empty string parts BEFORE calling
-// Number() on them -- Number("") is 0, the same footgun already fixed once for
-// parseUserLocationHeader (Task 4); a bbox like ",40.9,29.1,41" must not silently become
-// [0, 40.9, 29.1, 41], which would otherwise reach PostGIS and either crash or silently
-// mis-filter the map view.
 // `X-User-Location` header ("lat,lng"), consumed by apps/api's `parseUserLocationHeader`
 // (common/user-location.decorator.ts). Guards against empty string parts BEFORE calling Number()
-// on them -- Number("") is 0, the same footgun already fixed for `BboxQuerySchema` above; a
-// header like "40.99," must not silently become { lat: 40.99, lng: 0 }.
+// on them -- Number("") is 0, the same footgun also guarded against below for `BboxQuerySchema`;
+// a header like "40.99," must not silently become { lat: 40.99, lng: 0 }.
 export const UserLocationHeaderSchema = z.string().transform((s, ctx) => {
   const rawParts = s.split(",");
   if (rawParts.length !== 2 || rawParts.some((p) => p.trim() === "")) {
@@ -107,6 +102,11 @@ export const UserLocationHeaderSchema = z.string().transform((s, ctx) => {
 });
 export type UserLocationHeader = z.infer<typeof UserLocationHeaderSchema>;
 
+// `GET /venues/map`'s bbox query param. Guards against empty string parts BEFORE calling
+// Number() on them -- Number("") is 0, the same footgun already fixed above for
+// UserLocationHeaderSchema; a bbox like ",40.9,29.1,41" must not silently become
+// [0, 40.9, 29.1, 41], which would otherwise reach PostGIS and either crash or silently
+// mis-filter the map view.
 export const BboxQuerySchema = z.object({
   bbox: z.string().transform((s, ctx) => {
     const rawParts = s.split(",");

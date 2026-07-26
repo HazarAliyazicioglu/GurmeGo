@@ -37,12 +37,18 @@ export const AdminQueueMutationResultSchema = z.object({
 // `GET /admin/queue`'s `type`/`status` query params. Final whole-branch review finding:
 // AdminQueueController previously cast these raw strings directly to their Prisma enum types
 // with no validation, so an invalid value (e.g. `?status=NOTAREALSTATUS`) reached Postgres as
-// literal enum text and failed with 22P02, surfacing as a 500 instead of a clean 400. Enum values
-// match `AdminQueueItemSchema.type`/`.status` above -- REPORT/EDIT is a deliberate subset of the
-// full `ContributionType` (NEW_VENUE/OWNER_VERIFICATION are not queue-listed), matching that
-// schema's established precedent (Task 2/3 of this plan).
+// literal enum text and failed with 22P02, surfacing as a 500 instead of a clean 400.
+//
+// Re-review finding (round 2): `type` here is a FILTER over the admin queue LIST, not a shape of
+// an already-queued item's payload -- it is a different concern from `AdminQueueItemSchema.type`,
+// which is deliberately narrowed to REPORT/EDIT and stays that way (see that schema's own
+// comment). A curator filtering the list must be able to select on ANY of the 4 real
+// `ContributionType` values (confirmed against apps/api/prisma/schema.prisma): REPORT, NEW_VENUE,
+// EDIT, OWNER_VERIFICATION. The previous REPORT/EDIT-only version of this schema was copied from
+// AdminQueueItemSchema and silently regressed a working filter (`?type=NEW_VENUE` 400'd instead of
+// returning a filtered list).
 export const AdminQueueListQuerySchema = z.object({
-  type: z.enum(["REPORT", "EDIT"]).optional(),
+  type: z.enum(["REPORT", "NEW_VENUE", "EDIT", "OWNER_VERIFICATION"]).optional(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
 });
 export type AdminQueueListQuery = z.infer<typeof AdminQueueListQuerySchema>;

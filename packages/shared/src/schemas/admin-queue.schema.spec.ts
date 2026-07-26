@@ -32,4 +32,20 @@ describe("AdminQueueListQuerySchema", () => {
   it("accepts absent type/status (both optional)", () => expect(AdminQueueListQuerySchema.safeParse({}).success).toBe(true));
   it("rejects an invalid status", () => expect(AdminQueueListQuerySchema.safeParse({ status: "NOTAREALSTATUS" }).success).toBe(false));
   it("rejects an invalid type", () => expect(AdminQueueListQuerySchema.safeParse({ type: "NOT_A_TYPE" }).success).toBe(false));
+
+  // Re-review finding: this schema is a QUERY FILTER over the admin queue list, unlike
+  // AdminQueueItemSchema.type (which models what a single already-queued item's payload shape
+  // looks like today, deliberately narrowed to REPORT/EDIT). A curator filtering the list must be
+  // able to select on ANY of the real `ContributionType` enum's 4 values (confirmed against
+  // apps/api/prisma/schema.prisma), including NEW_VENUE and OWNER_VERIFICATION -- narrowing this
+  // query schema to REPORT/EDIT silently regressed a previously-working filter (?type=NEW_VENUE
+  // used to work, now 400s).
+  it("accepts type=NEW_VENUE (full ContributionType, not the item-schema's narrower subset)", () => {
+    const r = AdminQueueListQuerySchema.safeParse({ type: "NEW_VENUE" });
+    expect(r.success && r.data).toEqual({ type: "NEW_VENUE" });
+  });
+  it("accepts type=OWNER_VERIFICATION (full ContributionType, not the item-schema's narrower subset)", () => {
+    const r = AdminQueueListQuerySchema.safeParse({ type: "OWNER_VERIFICATION" });
+    expect(r.success && r.data).toEqual({ type: "OWNER_VERIFICATION" });
+  });
 });
