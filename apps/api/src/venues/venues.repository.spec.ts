@@ -36,6 +36,42 @@ describe("VenuesRepository.searchPublished", () => {
   });
 });
 
+describe("VenuesRepository.searchPublished — B11 zero-coordinate handling", () => {
+  it("still applies distance sort and radius filter when lat=0/lng=0 (not falsy-and-ignored)", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    await new VenuesRepository(prisma).searchPublished({ sort: "distance", limit: 20, lat: 0, lng: 0, radiusM: 500 } as any);
+    const sqlText = prisma.$queryRaw.mock.calls[0][0].strings.join("");
+    expect(sqlText).toContain("ST_Distance");
+    expect(sqlText).toContain("ST_DWithin");
+    expect(sqlText).toMatch(/ORDER BY v\.location <->/);
+  });
+});
+
+describe("VenuesRepository.searchPublished — openNow", () => {
+  it("adds a fail-open CASE barrier (PostgreSQL NOT(NULL) is NULL, not TRUE)", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    await new VenuesRepository(prisma).searchPublished({ sort: "newest", limit: 20, openNow: true } as any);
+    const sqlText = prisma.$queryRaw.mock.calls[0][0].strings.join("");
+    expect(sqlText).toContain("Europe/Istanbul");
+    expect(sqlText).toMatch(/CASE\s+WHEN/i);
+    expect(sqlText).toMatch(/ELSE\s+true/i);
+  });
+  it("adds no openNow condition when the filter is absent", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    await new VenuesRepository(prisma).searchPublished({ sort: "newest", limit: 20 } as any);
+    expect(prisma.$queryRaw.mock.calls[0][0].strings.join("")).not.toContain("Europe/Istanbul");
+  });
+});
+
+describe("open_now opening-hours format regex (extracted for direct testing)", () => {
+  const HOURS_FORMAT = /^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$/;
+  it("accepts a valid HH:MM-HH:MM range", () => expect(HOURS_FORMAT.test("09:00-18:00")).toBe(true));
+  it("accepts the boundary hour 23", () => expect(HOURS_FORMAT.test("00:00-23:59")).toBe(true));
+  it("rejects an out-of-range hour", () => expect(HOURS_FORMAT.test("29:00-10:00")).toBe(false));
+  it("rejects an empty string", () => expect(HOURS_FORMAT.test("")).toBe(false));
+  it("rejects a non-numeric value", () => expect(HOURS_FORMAT.test("kapalı")).toBe(false));
+});
+
 describe("VenuesRepository.createWithLocation — client parameter and Google fields", () => {
   it("accepts an explicit Prisma client as the first argument", async () => {
     const client = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1" }]) } as any;

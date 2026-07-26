@@ -1,17 +1,20 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { VenueListQuery } from "@gurmego/shared";
 import { VenuesRepository } from "./venues.repository";
+import { UserLocation } from "../common/user-location.decorator";
 
 @Injectable()
 export class VenuesService {
   constructor(private repo: VenuesRepository) {}
 
-  async list(filters: VenueListQuery) {
-    const { items, nextCursor } = await this.repo.searchPublished(filters);
-    return {
-      data: items,
-      meta: { next_cursor: nextCursor, has_more: nextCursor !== null },
-    };
+  list(query: VenueListQuery, location?: UserLocation) {
+    const sort = query.sort ?? (location ? "distance" : "newest");
+    return this.repo
+      .searchPublished({ ...query, sort, lat: location?.lat, lng: location?.lng })
+      .then(({ items, nextCursor }) => ({
+        data: items,
+        meta: { next_cursor: nextCursor, has_more: nextCursor !== null },
+      }));
   }
 
   mapView(bbox: [number, number, number, number]) {

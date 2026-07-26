@@ -1,5 +1,6 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { RateLimit, RateLimitGuard } from "../common/rate-limit.guard";
+import { UserLocation, UserLocationParam } from "../common/user-location.decorator";
 import { DistrictsService } from "./districts.service";
 
 @Controller("districts")
@@ -15,7 +16,8 @@ export class DistrictsController {
 
   @Get("nearest")
   @RateLimit(100, 60)
-  findNearest(@Query("lat") lat: string, @Query("lng") lng: string) {
-    return this.districts.findNearest(parseFloat(lat), parseFloat(lng));
+  findNearest(@UserLocationParam() location?: UserLocation) {
+    if (!location) throw new BadRequestException({ error: { code: "LOCATION_REQUIRED", message: "Konum bilgisi gerekli" } });
+    return this.districts.findNearest(location.lat, location.lng);
   }
 }

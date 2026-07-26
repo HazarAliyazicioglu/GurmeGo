@@ -1,7 +1,8 @@
-import { Controller, Get, Param, Query, UseGuards, UsePipes } from "@nestjs/common";
+import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
 import { VenueListQuerySchema } from "@gurmego/shared";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { RateLimit, RateLimitGuard } from "../common/rate-limit.guard";
+import { UserLocation, UserLocationParam } from "../common/user-location.decorator";
 import { VenuesService } from "./venues.service";
 
 @Controller("venues")
@@ -18,9 +19,11 @@ export class VenuesController {
 
   @Get()
   @RateLimit(100, 60)
-  @UsePipes(new ZodValidationPipe(VenueListQuerySchema))
-  list(@Query() query: ReturnType<(typeof VenueListQuerySchema)["parse"]>) {
-    return this.venues.list(query);
+  list(
+    @Query(new ZodValidationPipe(VenueListQuerySchema)) query: ReturnType<(typeof VenueListQuerySchema)["parse"]>,
+    @UserLocationParam() location?: UserLocation,
+  ) {
+    return this.venues.list(query, location);
   }
 
   @Get(":slug")

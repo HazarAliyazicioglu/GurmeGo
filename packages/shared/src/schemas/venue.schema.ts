@@ -33,21 +33,21 @@ export const VenueSchema = z.object({
 });
 export type Venue = z.infer<typeof VenueSchema>;
 
-export const VenueListQuerySchema = z
-  .object({
-    districtId: z.string().uuid().optional(),
-    category: z.string().optional(),
-    cuisineType: z.string().optional(),
-    priceRange: z.enum(PRICE_RANGE_VALUES).optional(),
-    isBoutique: z.coerce.boolean().optional(),
-    lat: z.coerce.number().min(-90).max(90).optional(),
-    lng: z.coerce.number().min(-180).max(180).optional(),
-    radiusM: z.coerce.number().int().positive().max(20000).optional(),
-    sort: z.enum(["distance", "newest"]).optional(),
-    limit: z.coerce.number().int().min(1).max(50).default(20),
-    cursor: z.string().optional(),
-  })
-  .transform((v) => ({ ...v, sort: v.sort ?? (v.lat && v.lng ? "distance" : "newest") }));
+// lat/lng removed (ADR 004): location now arrives via the X-User-Location header, never a query
+// param that could end up in access logs. See apps/api's user-location.decorator.ts and
+// VenuesService.list for where the header-derived location and default sort are merged back in.
+export const VenueListQuerySchema = z.object({
+  districtId: z.string().uuid().optional(),
+  category: z.string().optional(),
+  cuisineType: z.string().optional(),
+  priceRange: z.enum(PRICE_RANGE_VALUES).optional(),
+  isBoutique: OptionalTrueFlag,
+  radiusM: z.coerce.number().int().positive().max(20000).optional(),
+  sort: z.enum(["distance", "newest"]).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().optional(),
+  openNow: OptionalTrueFlag,
+});
 export type VenueListQuery = z.infer<typeof VenueListQuerySchema>;
 
 // `GET /venues/:slug` (apps/api's `VenuesRepository.findBySlug`) returns a DIFFERENT projection than

@@ -20,4 +20,13 @@ describe("AppModule (e2e)", () => {
     const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(200);
   });
+
+  it("GET /venues — header doesn't get corrupted by the query pipe (no setGlobalPrefix in this test app, unlike production main.ts)", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/venues?limit=5",
+      headers: { "x-user-location": "40.99,29.02" },
+    });
+    expect(res.statusCode).toBe(200);
+  });
 });

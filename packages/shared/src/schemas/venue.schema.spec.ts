@@ -41,19 +41,19 @@ describe("VenueSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("VenueListQuerySchema defaults sort to distance when lat/lng present", () => {
-    const result = VenueListQuerySchema.parse({
-      districtId: "d290f1ee-6c54-4b01-90e6-d701748f0852",
-      lat: "40.99",
-      lng: "29.02",
-    });
-    expect(result.sort).toBe("distance");
-    expect(result.lat).toBe(40.99);
-  });
 });
 
 describe("OptionalTrueFlag", () => {
   it("stays undefined when absent", () => expect(z.object({ flag: OptionalTrueFlag }).parse({}).flag).toBeUndefined());
   it("parses 'true' as true", () => expect(z.object({ flag: OptionalTrueFlag }).parse({ flag: "true" }).flag).toBe(true));
   it("rejects 'false'", () => expect(z.object({ flag: OptionalTrueFlag }).safeParse({ flag: "false" }).success).toBe(false));
+});
+
+describe("VenueListQuerySchema", () => {
+  it("no longer accepts lat/lng", () => expect((VenueListQuerySchema.parse({ lat: "40.99", lng: "29.02" }) as any).lat).toBeUndefined());
+  it("openNow=true parses, openNow=false rejects", () => {
+    expect(VenueListQuerySchema.parse({ openNow: "true" }).openNow).toBe(true);
+    expect(VenueListQuerySchema.safeParse({ openNow: "false" }).success).toBe(false);
+  });
+  it("isBoutique=false rejects", () => expect(VenueListQuerySchema.safeParse({ isBoutique: "false" }).success).toBe(false));
 });

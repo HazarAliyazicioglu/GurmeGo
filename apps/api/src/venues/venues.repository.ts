@@ -109,6 +109,10 @@ export function snapshotToUpdateInput(row: AdminVenueRow): UpdateVenueWithLocati
   };
 }
 
+// Internal only. VenueListQuery no longer carries lat/lng (ADR 004) or a resolved sort;
+// VenuesService.list() merges the header-derived location and computed sort in.
+export type VenueSearchFilters = Omit<VenueListQuery, "sort"> & { sort: "distance" | "newest"; lat?: number; lng?: number };
+
 const ADMIN_VENUE_RETURNING = Prisma.sql`
   RETURNING id, name, slug, "districtId", category, "cuisineType", "priceRange", "signatureItems",
     "transportNote", "openingHours", "editorialNote", "isBoutique", "branchCount", "franchiseFlag",
@@ -121,30 +125,45 @@ const ADMIN_VENUE_RETURNING = Prisma.sql`
 export class VenuesRepository {
   constructor(private prisma: PrismaService) {}
 
-  async searchPublished(filters: VenueListQuery) {
+  async searchPublished(filters: VenueSearchFilters) {
     const conditions: Prisma.Sql[] = [Prisma.sql`v.status = 'PUBLISHED'`];
     if (filters.districtId) conditions.push(Prisma.sql`v."districtId" = ${filters.districtId}`);
     if (filters.category) conditions.push(Prisma.sql`v.category = ${filters.category}`);
     if (filters.priceRange) conditions.push(Prisma.sql`v."priceRange" = ${filters.priceRange}::"PriceRange"`);
     if (filters.isBoutique !== undefined) conditions.push(Prisma.sql`v."isBoutique" = ${filters.isBoutique}`);
+    if (filters.openNow) {
+      conditions.push(Prisma.sql`
+        CASE
+          WHEN EXTRACT(ISODOW FROM now() AT TIME ZONE 'Europe/Istanbul') BETWEEN 1 AND 5
+               AND v."openingHours"->>'mon_fri' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
+          THEN (now() AT TIME ZONE 'Europe/Istanbul')::time
+               BETWEEN (split_part(v."openingHours"->>'mon_fri', '-', 1))::time
+               AND (split_part(v."openingHours"->>'mon_fri', '-', 2))::time
+          WHEN EXTRACT(ISODOW FROM now() AT TIME ZONE 'Europe/Istanbul') BETWEEN 6 AND 7
+               AND v."openingHours"->>'sat_sun' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
+          THEN (now() AT TIME ZONE 'Europe/Istanbul')::time
+               BETWEEN (split_part(v."openingHours"->>'sat_sun', '-', 1))::time
+               AND (split_part(v."openingHours"->>'sat_sun', '-', 2))::time
+          ELSE true
+        END
+      `);
+    }
 
     const where = Prisma.join(conditions, " AND ");
     const limit = filters.limit ?? 20;
 
-    const distanceSelect =
-      filters.lat && filters.lng
-        ? Prisma.sql`, ST_Distance(v.location, ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography) AS distance_m`
-        : Prisma.sql``;
+    const hasLocation = filters.lat !== undefined && filters.lng !== undefined;
+    const distanceSelect = hasLocation
+      ? Prisma.sql`, ST_Distance(v.location, ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography) AS distance_m`
+      : Prisma.sql``;
 
-    const radiusFilter =
-      filters.lat && filters.lng && filters.radiusM
-        ? Prisma.sql`AND ST_DWithin(v.location, ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography, ${filters.radiusM})`
-        : Prisma.sql``;
+    const radiusFilter = hasLocation && filters.radiusM
+      ? Prisma.sql`AND ST_DWithin(v.location, ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography, ${filters.radiusM})`
+      : Prisma.sql``;
 
-    const orderBy =
-      filters.sort === "distance" && filters.lat && filters.lng
-        ? Prisma.sql`ORDER BY v.location <-> ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography ASC`
-        : Prisma.sql`ORDER BY v."createdAt" DESC`;
+    const orderBy = filters.sort === "distance" && hasLocation
+      ? Prisma.sql`ORDER BY v.location <-> ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography ASC`
+      : Prisma.sql`ORDER BY v."createdAt" DESC`;
 
     const rows = await this.prisma.$queryRaw<VenueRow[]>(Prisma.sql`
       SELECT v.id, v.name, v.slug, v.category, v."priceRange", v."isBoutique", v."editorialNote",
