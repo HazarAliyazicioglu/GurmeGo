@@ -139,3 +139,17 @@ Test Cafe,test-cafe,kadikoy,cafe,MODERATE,1,false,40.99,29.02,"{}"`;
     expect(valid[0].data.franchiseFlag).toBe(false);
   });
 });
+
+describe("CsvImportService.parseRows — status/address columns", () => {
+  it("parses a CSV with one row omitting status and one row setting DRAFT + address", () => {
+    const csv =
+      "name,slug,districtSlug,category,priceRange,branchCount,franchiseFlag,lat,lng,openingHours,status,address\n" +
+      'A,a,kadikoy,cafe,MODERATE,1,false,40.99,29.02,"{""mon_fri"":""09:00-18:00""}",,\n' +
+      'B,b,kadikoy,cafe,MODERATE,1,false,40.98,29.01,"{""mon_fri"":""09:00-18:00""}",DRAFT,"Bahariye Cd. No:1"\n';
+    const { valid, errors } = new CsvImportService().parseRows(csv);
+    expect(errors).toEqual([]);
+    expect(valid[0].data.status).toBeUndefined();
+    expect(valid[1].data.status).toBe("DRAFT");
+    expect(valid[1].data.address).toBe("Bahariye Cd. No:1");
+  });
+});

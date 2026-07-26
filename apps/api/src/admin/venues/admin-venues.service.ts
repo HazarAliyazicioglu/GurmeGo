@@ -117,6 +117,8 @@ export class AdminVenuesService {
           franchiseFlag: row.franchiseFlag,
           lat: row.lat,
           lng: row.lng,
+          status: row.status ?? "PUBLISHED",
+          address: row.address,
         });
         created++;
       } catch (err) {

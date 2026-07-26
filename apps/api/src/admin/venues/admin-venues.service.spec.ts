@@ -270,3 +270,22 @@ describe("AdminVenuesService.importRows", () => {
     consoleErrorSpy.mockRestore();
   });
 });
+
+describe("AdminVenuesService.importRows — status/address default", () => {
+  it("defaults to PUBLISHED when the CSV row has no status", async () => {
+    const prisma = { venue: { findUnique: jest.fn().mockResolvedValue(null) }, district: { findUnique: jest.fn().mockResolvedValue({ id: "d1" }) } } as any;
+    const repo = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
+    const service = new AdminVenuesService(prisma, boutique, repo);
+    await service.importRows([{ row: 1, data: { name: "A", slug: "a", districtSlug: "kadikoy", category: "cafe", priceRange: "MODERATE", branchCount: 1, franchiseFlag: false, lat: 40.99, lng: 29.02, openingHours: {} } as any }]);
+    expect(repo.createWithLocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "PUBLISHED" }));
+  });
+  it("respects an explicit DRAFT status and passes address through", async () => {
+    const prisma = { venue: { findUnique: jest.fn().mockResolvedValue(null) }, district: { findUnique: jest.fn().mockResolvedValue({ id: "d1" }) } } as any;
+    const repo = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
+    const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
+    const service = new AdminVenuesService(prisma, boutique, repo);
+    await service.importRows([{ row: 1, data: { name: "A", slug: "a", districtSlug: "kadikoy", category: "cafe", priceRange: "MODERATE", branchCount: 1, franchiseFlag: false, lat: 40.99, lng: 29.02, openingHours: {}, status: "DRAFT", address: "Bahariye Cd. No:1" } as any }]);
+    expect(repo.createWithLocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "DRAFT", address: "Bahariye Cd. No:1" }));
+  });
+});
