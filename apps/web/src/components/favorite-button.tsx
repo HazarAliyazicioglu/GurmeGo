@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { getFavoriteLists, createFavoriteList, addFavoriteVenue } from "@/lib/api";
@@ -10,6 +10,28 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
   const { user, session } = useAuth();
   const router = useRouter();
   const [added, setAdded] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [initialCheckPending, setInitialCheckPending] = useState(true);
+
+  useEffect(() => {
+    if (!user || !session?.access_token) {
+      setInitialCheckPending(false);
+      return;
+    }
+    let cancelled = false;
+    getFavoriteLists(session.access_token)
+      .then((lists) => {
+        if (cancelled) return;
+        const isFavorited = lists.some((list) => list.favorites.some((favorite) => favorite.venueId === venueId));
+        if (isFavorited) setAdded(true);
+      })
+      .finally(() => {
+        if (!cancelled) setInitialCheckPending(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, session?.access_token, venueId]);
 
   async function handleClick() {
     if (!user) {
@@ -17,16 +39,22 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
       return;
     }
     if (!session?.access_token) return;
-    const lists = await getFavoriteLists(session.access_token);
-    const list = lists[0] ?? (await createFavoriteList(session.access_token, DEFAULT_LIST_NAME));
-    await addFavoriteVenue(session.access_token, list.id, venueId);
-    setAdded(true);
+    setPending(true);
+    try {
+      const lists = await getFavoriteLists(session.access_token);
+      const list = lists[0] ?? (await createFavoriteList(session.access_token, DEFAULT_LIST_NAME));
+      await addFavoriteVenue(session.access_token, list.id, venueId);
+      setAdded(true);
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
     <button
       data-testid="favorite-button"
       onClick={handleClick}
+      disabled={pending || initialCheckPending}
       aria-pressed={added}
       className={`group inline-flex min-h-12 w-full items-center justify-between gap-4 rounded-full border px-5 text-sm font-black transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7] ${
         added

@@ -96,3 +96,15 @@ describe("AuthProvider", () => {
     expect(screen.getByText("user:fresh-user")).toBeInTheDocument();
   });
 });
+
+describe("AuthProvider — getSession() failure", () => {
+  it("does not throw and settles loading to false when getSession() rejects", async () => {
+    vi.mocked(supabase.auth.getSession).mockRejectedValue(new Error("network down"));
+    function Probe() {
+      const { loading } = useAuth();
+      return <div data-testid="loading-state">{String(loading)}</div>;
+    }
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId("loading-state")).toHaveTextContent("false"));
+  });
+});

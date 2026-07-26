@@ -20,12 +20,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let stateChangeReceived = false;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!stateChangeReceived) {
-        setSession(data.session);
-        setLoading(false);
-      }
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!stateChangeReceived) {
+          setSession(data.session);
+          setLoading(false);
+        }
+      })
+      .catch(() => setLoading(false));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       stateChangeReceived = true;
       setSession(newSession);

@@ -9,13 +9,19 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const fn = mode === "signin" ? signIn : signUp;
-    const { error } = await fn(email, password);
-    if (error) setError(error);
-    else router.push("/favoriler");
+    setSubmitting(true);
+    try {
+      const fn = mode === "signin" ? signIn : signUp;
+      const { error } = await fn(email, password);
+      if (error) setError(error);
+      else router.push("/favoriler");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -81,7 +87,8 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
 
       <button
         type="submit"
-        className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#201d18] px-5 text-sm font-black text-[#f4f0e7] shadow-[0_8px_22px_rgba(32,29,24,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#2d2923] hover:shadow-[0_10px_26px_rgba(32,29,24,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7] active:translate-y-0"
+        disabled={submitting}
+        className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#201d18] px-5 text-sm font-black text-[#f4f0e7] shadow-[0_8px_22px_rgba(32,29,24,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#2d2923] hover:shadow-[0_10px_26px_rgba(32,29,24,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7] active:translate-y-0 disabled:opacity-60 disabled:pointer-events-none"
       >
         {mode === "signin" ? "Giriş yap" : "Kayıt ol"}
         <svg

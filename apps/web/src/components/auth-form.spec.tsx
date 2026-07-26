@@ -15,3 +15,17 @@ describe("AuthForm", () => {
     await waitFor(() => expect(signIn).toHaveBeenCalledWith("a@b.com", "sifre123"));
   });
 });
+
+describe("AuthForm — disabled while submitting", () => {
+  it("disables the submit button until the request resolves", async () => {
+    let resolveSignIn: (v: { error: string | null }) => void;
+    signIn.mockReturnValue(new Promise((resolve) => { resolveSignIn = resolve; }));
+    render(<AuthForm mode="signin" />);
+    fireEvent.change(screen.getByLabelText("E-posta"), { target: { value: "test@example.com" } });
+    fireEvent.change(screen.getByLabelText("Şifre"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Giriş yap" }));
+    expect(screen.getByRole("button", { name: "Giriş yap" })).toBeDisabled();
+    resolveSignIn!({ error: null });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Giriş yap" })).not.toBeDisabled());
+  });
+});

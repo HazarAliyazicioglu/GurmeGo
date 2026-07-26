@@ -27,16 +27,47 @@ describe("FavoriteButton", () => {
     getFavoriteLists.mockResolvedValue([]);
     createFavoriteList.mockResolvedValue({ id: "list1", name: "Favorilerim" });
     render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
     fireEvent.click(screen.getByTestId("favorite-button"));
     await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("tok", "Favorilerim"));
     expect(addFavoriteVenue).toHaveBeenCalledWith("tok", "list1", "v1");
   });
 
   it("reuses the user's first existing list instead of creating a new one", async () => {
-    getFavoriteLists.mockResolvedValue([{ id: "existing", name: "Denenecekler" }]);
+    getFavoriteLists.mockResolvedValue([{ id: "existing", name: "Denenecekler", favorites: [] }]);
     render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
     fireEvent.click(screen.getByTestId("favorite-button"));
     await waitFor(() => expect(addFavoriteVenue).toHaveBeenCalledWith("tok", "existing", "v1"));
     expect(createFavoriteList).not.toHaveBeenCalled();
+  });
+});
+
+describe("FavoriteButton — real mount-time state check and disabled-while-pending", () => {
+  beforeEach(() => {
+    getFavoriteLists.mockReset();
+    createFavoriteList.mockReset();
+    addFavoriteVenue.mockReset().mockResolvedValue(undefined);
+  });
+
+  it("reflects the venue's real favorite status from GET /me/lists on mount (no click needed)", async () => {
+    getFavoriteLists.mockResolvedValue([{
+      id: "l1", userId: "u1", name: "Default", createdAt: "2026-01-01T00:00:00.000Z",
+      favorites: [{ id: "f1", venueId: "v1", venue: { id: "v1", name: "X", slug: "x", category: "cafe", priceRange: "BUDGET", isBoutique: false } }],
+    }]);
+    render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  it("disables itself while the add flow (getFavoriteLists -> createFavoriteList/addFavoriteVenue) is in flight", async () => {
+    getFavoriteLists.mockResolvedValue([{ id: "l1", userId: "u1", name: "Default", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] }]);
+    let resolveAdd: () => void;
+    addFavoriteVenue.mockReturnValue(new Promise<void>((resolve) => { resolveAdd = resolve; }));
+    render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled()); // mount-time check resolved
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    expect(screen.getByTestId("favorite-button")).toBeDisabled();
+    resolveAdd!();
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
   });
 });
