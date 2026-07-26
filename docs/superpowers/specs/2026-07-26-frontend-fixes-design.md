@@ -1,7 +1,7 @@
 # GurmeGo — Plan 4c: Frontend/Admin Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 2 PIVOT sonrası tam
-revizyon), idea-red-team round 3'e hazır
+**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 3 PIVOT sonrası tam
+revizyon), idea-red-team round 4'e hazır
 
 İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
 [docs/superpowers/specs/2026-07-26-backend-fixes-design.md](2026-07-26-backend-fixes-design.md) (kardeş plan — bu plan ondan SONRA yürütülmeli)
@@ -126,11 +126,31 @@ taşınır.
   değil. İlk sunucu-taraflı sorgu her zaman `sort: newest` ile kalır (`initialVenues`), bu doğru.
 - Gerçek düzeltme, tarayıcıda (client tarafında) olur: `discovery-client.tsx`'e, `coords`
   `null`'dan gerçek bir değere geçtiğinde (geolocation ilk kez çözüldüğünde), **kullanıcı henüz
-  hiçbir filtreye dokunmamışsa**, otomatik bir tek seferlik yeniden-sorgu eklenir:
+  hiçbir filtreye dokunmamışsa**, otomatik bir tek seferlik yeniden-sorgu eklenir. **Round 3
+  düzeltmesi:** önceki taslak yalnızca `coords`+`autoSortedRef` kontrol ediyordu — kullanıcı
+  geolocation çözülmeden ÖNCE bir filtre değiştirmişse yine otomatik tetiklenip kullanıcının
+  seçimini görmezden gelirdi. Ayrı bir `userInteractedRef`, `handleQuickCategory` ve
+  `VenueFilters`'ın `onChange`'i (yani gerçek kullanıcı etkileşimiyle çağrılan yollar, otomatik
+  effect'in kendisi değil) içinde `true`'ya çekilir; otomatik effect yalnızca bu ref hâlâ `false`
+  iken çalışır:
   ```typescript
   const autoSortedRef = useRef(false);
+  const userInteractedRef = useRef(false);
+
+  async function applyFilters(next: FilterState) {
+    setFilters(next);
+    const { data } = await getVenues({ districtId, ...serializeFilters(next) }, coords);
+    setVenues(data);
+  }
+
+  function handleQuickCategory(category: string) {
+    userInteractedRef.current = true;
+    void applyFilters({ ...filters, category });
+  }
+  // VenueFilters'a geçilen onChange da aynı şekilde userInteractedRef.current = true set eder.
+
   useEffect(() => {
-    if (coords && !autoSortedRef.current) {
+    if (coords && !autoSortedRef.current && !userInteractedRef.current) {
       autoSortedRef.current = true;
       void applyFilters(filters);
     }
@@ -138,8 +158,17 @@ taşınır.
   ```
 - `serializeFilters`'in artık `lat`/`lng` döndürmemesi (Bölüm 2) sayesinde, `getVenues` çağrısı
   `coords` mevcut olduğunda **her zaman** `X-User-Location` header'ını gönderir (yalnızca
-  `radiusM` seçiliyken değil) — backend'in `VenueListQuerySchema`'daki mevcut "konum varsa
-  distance'a düş" mantığı (Plan 1'den beri var, değişmiyor) böylece otomatik devreye girer.
+  `radiusM` seçiliyken değil). **Düzeltme (round 3'te fark edilen metin çelişkisi):** "konum varsa
+  distance'a düş" mantığı `VenueListQuerySchema`'da DEĞİL — Plan 4b Bölüm 2.5'te bu mantık
+  şemadan `VenuesService.list`'e taşınıyor (header, Zod parse zamanında görünmediği için). Frontend
+  tarafında değişen bir şey yok (yalnızca header'ı göndermek yeterli), ama "backend mantığı
+  değişmeden aynen çalışıyor" ifadesi yanlıştı — mantığın KENDİSİ (şema→servis) değişiyor, yalnızca
+  frontend'in bu değişiklikle etkileşimi yok.
+- **C6'nın "En yakın" etiketi yalnızca konum/distance sıralaması aktifken kullanılmalı (round 3'te
+  bulundu):** Konum reddedilmiş/mevcut değilse liste `newest` sıralı kalır — bu durumda listenin
+  ilk öğesi "en yakın" değil, yalnızca "en yeni eklenen" demektir. `CategoryQuickRoute`'un
+  butonu, `coords` mevcut değilse "En yakın [kategori] mekana git" yerine nötr bir "[Kategori]
+  mekana git" metni kullanır (bkz. Bölüm 8).
 
 ## 5. Mekan detay tamlığı (C4, C9, C10)
 
@@ -191,12 +220,15 @@ yazılmıştı — hiçbiri yok, `CategoryQuickRoute` da zaten `venues` listesin
   `apps/web/src/lib/directions.ts`'e taşınır: `directionsUrl(venueName: string, districtName: string): string`.
 - `[district]/page.tsx` zaten hangi ilçede olduğunu biliyor (`districtId`/sayfa parametresi) —
   ilçe adını `DiscoveryClient`'a, oradan `CategoryQuickRoute`'a prop olarak geçirir.
-- `CategoryQuickRoute` artık `venues: VenueListItem[]` prop'unu da alır (zaten `DiscoveryClient`'ın
-  state'inde var, yeni bir API çağrısı gerekmez). Bir kategori seçilip filtrelenmiş `venues`
-  listesi boş değilse, listenin ilk öğesinin adını + bilinen ilçe adını `directionsUrl()`'e
-  vererek "En yakın [kategori] mekana git" butonu gösterir.
+- `CategoryQuickRoute` artık `venues: VenueListItem[]` ve `coordsAvailable: boolean` prop'larını
+  da alır (ikisi de zaten `DiscoveryClient`'ın state'inde var, yeni bir API çağrısı gerekmez).
+  Bir kategori seçilip filtrelenmiş `venues` listesi boş değilse, listenin ilk öğesinin adını +
+  bilinen ilçe adını `directionsUrl()`'e verir.
 - Liste zaten (Plan 4c Bölüm 4/C8 sayesinde) konum mevcutsa distance-sıralı geldiği için "ilk öğe"
-  doğal olarak "en yakın" anlamına gelir — ayrı bir mesafe hesaplaması gerekmez.
+  doğal olarak "en yakın" anlamına gelir — ayrı bir mesafe hesaplaması gerekmez. **Round 3
+  düzeltmesi:** buton metni `coordsAvailable`'a göre değişir — `true` ise "En yakın [kategori]
+  mekana git", `false` ise (liste yalnızca `newest` sıralı, "en yakın" iddiası yanlış olur)
+  nötr "[Kategori] mekana git".
 
 ## 9. Erişilebilirlik (C13, C14)
 

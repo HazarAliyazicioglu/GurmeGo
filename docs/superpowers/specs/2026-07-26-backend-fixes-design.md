@@ -1,7 +1,7 @@
 # GurmeGo — Plan 4b: Backend Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 2 PIVOT sonrası tam
-revizyon), idea-red-team round 3'e hazır
+**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 3 PIVOT sonrası tam
+revizyon), idea-red-team round 4'e hazır
 
 İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
 [docs/superpowers/specs/2026-07-26-frontend-fixes-design.md](2026-07-26-frontend-fixes-design.md) (kardeş plan — Bölüm 2.5'teki header sözleşmesi ortak, Bölüm 6'daki `queue-item.tsx` metin güncellemesi bu planın A3 kararına bağımlı)
@@ -52,6 +52,26 @@ için ele alınanlar:
 5. **`open_now`'ın zaman dilimi ve malformed veri koruması yoktu** — Bölüm 6 güncellendi.
 6. **`AdminQueueMutationResultSchema` hâlâ yalnızca `REPORT` literal'ı kabul ediyordu** — B8'e
    eklendi.
+
+**Round 3 idea-red-team yine PIVOT verdi** (4/7 tam, 3/7 kısmi + yeni bulgular, hepsi kodda
+doğrulandı). Round 4 için ele alınanlar:
+1. **`@UsePipes(VenueListQuerySchema)` method seviyesinde tüm parametrelere uygulanıyor** —
+   yeni `@UserLocationParam()`'ın döndürdüğü `{lat,lng}` de aynı pipe'tan geçip venue-query
+   şemasıyla bozulurdu. Çözüm: pipe, parametre seviyesine (`@Query(new ZodValidationPipe(...))`)
+   indirilir.
+2. **`VenueListQuery`'den `lat`/`lng` çıkarılınca `VenuesRepository.searchPublished`'ın imzası
+   tutarsız kalıyordu** — yeni bir dahili `VenueSearchFilters` tipi tanımlandı.
+3. **`createWithLocation`'a client parametresi eklenince `apps/api/prisma/seed.ts`'in mevcut
+   tek-argümanlı çağrısı kırılırdı** (seed zaten bu metodu doğrudan çağırıyor) — seed'in çağrısı
+   da güncellenecek şekilde plana eklendi.
+4. **`AdminQueueService.approve()`'un EDIT/re_verify yolu, konum eksikliğinden hâlâ etkileniyordu**
+   — bu, `AdminVenuesService`'ten TAMAMEN AYRI bir servis, round 2'nin "snapshot" düzeltmesi
+   yalnızca `AdminVenuesService`'i kapsamıştı. Bölüm 4'e bu servis için de eklendi.
+5. **`open_now` regex'i `29:00` gibi saat-aralığı-dışı ama formata uyan değerleri geçiriyordu** —
+   saat kısmı `0[0-9]|1[0-9]|2[0-3]` olacak şekilde sıkılaştırıldı, cast `CASE WHEN` bariyeriyle
+   korundu.
+6. **`isBoutique` filtresinde de aynı `z.coerce.boolean()` tuzağı var** (frontend `"false"` string'i
+   gönderiyor, `true`'ya coerce oluyor) — `open_now`'a seçilen güvenli desen buna da uygulandı.
 
 ## 1. Kapsam ve hedef
 
@@ -116,11 +136,22 @@ VARLIĞINA bakarak hesaplıyor — ama header, Zod'un `.parse()` çağrısı sı
 (farklı bir kaynaktan, `@UserLocationParam()` ile geliyor). Bu yüzden:
 - `VenueListQuerySchema`'dan `lat`/`lng` **çıkarılır**; `sort` artık yalnızca kullanıcının açıkça
   gönderdiği değeri taşır (`z.enum(["distance","newest"]).optional()`, otomatik varsayım yok).
-- `VenuesController.list(@Query() query, @UserLocationParam() location)` — ikisi de servise geçer.
-- `VenuesService.list(query, location)` içinde: `const sort = query.sort ?? (location ? "distance" : "newest");`
-  ve `VenuesRepository.searchPublished({ ...query, sort, lat: location?.lat, lng: location?.lng })`.
-- Aynı desen `VenuesController.mapView` için de geçerli olabilir ama `findInBbox` zaten konumdan
-  bağımsız çalışıyor (bbox tabanlı) — dokunulmaz.
+
+**Round 3 düzeltmesi — pipe kapsamı ve dahili filtre tipi (round 3 red-team'in bulduğu iki gerçek
+sorun):**
+- `VenuesController.list`'teki mevcut `@UsePipes(new ZodValidationPipe(VenueListQuerySchema))`
+  **method seviyesinde** — Nest'te bu, method'un TÜM parametrelerine (hem `@Query()` hem yeni
+  `@UserLocationParam()`) aynı pipe'ı uygular. `{lat,lng}` objesi de `VenueListQuerySchema` ile
+  parse edilmeye çalışılıp bozulurdu. Düzeltme: pipe method seviyesinden **parametre seviyesine**
+  indirilir: `list(@Query(new ZodValidationPipe(VenueListQuerySchema)) query: VenueListQuery, @UserLocationParam() location?: UserLocation)`
+  — `@UsePipes` decorator'ı tamamen kaldırılır, `@Query()` kendi pipe'ını taşır.
+- `VenuesRepository.searchPublished`'ın imzası artık `VenueListQuery` (artık `lat`/`lng` içermiyor)
+  ile birebir uyuşmuyor — yeni bir dahili tip tanımlanır: `packages/shared`'da DEĞİL,
+  `apps/api/src/venues/venues.repository.ts` içinde (bu tip yalnızca backend'in dahili
+  kullanımı, istemciye hiç gitmiyor): `type VenueSearchFilters = VenueListQuery & { sort: "distance" | "newest"; lat?: number; lng?: number }`.
+  `VenuesService.list`, `query`+`location`'ı birleştirip bu tipte bir obje üretip repository'ye
+  geçirir.
+- `VenuesController.mapView` için `findInBbox` zaten konumdan bağımsız (bbox tabanlı) — dokunulmaz.
 - `DistrictsController.findNearest`, artık `@Query("lat")`/`@Query("lng")` yerine
   `@UserLocationParam()` kullanır; konum yoksa `400 LOCATION_REQUIRED` döner (bu uç, konum
   olmadan anlamsız — diğerlerinin aksine opsiyonel değil).
@@ -144,12 +175,25 @@ snapshot transaction içinde, gerçek yazma dışında kalır, biri başarılı 
 akışında `tx`'i geçer. Bu, Prisma'nın "interactive transactions" (`prisma.$transaction(async (tx) => {...})`)
 deseniyle raw-SQL repository'lerin birlikte kullanılmasının standart yoludur.
 
+**Round 3 düzeltmesi — çağrı yerlerinin tamamı güncellenir:** `apps/api/prisma/seed.ts` da
+`venuesRepository.createWithLocation({...})`'ı **doğrudan, tek argümanla** çağırıyor (round 3
+red-team'de bulundu — bu dosya bir servis üzerinden değil, repository'yi doğrudan kullanıyor).
+İmza değişince bu çağrı `venuesRepository.createWithLocation(prisma, {...})` olacak şekilde
+güncellenir — writing-plans task'ı bu dosyayı da "Files: Modify" listesine almalı, yalnızca
+`AdminVenuesService`'i değil.
+
 ## 4. Kürasyon bütünlüğü: queue onayı + versioning (A3, A4, B8)
 
 **A3 — REPORT onayının anlamı (değişmeyen karar: "onay = rapor haklı, ekip dışarıda düzeltti"):**
-- `AdminQueueService.approve()` artık `item.type`'a göre dallanır: `REPORT` → yalnızca
-  `ContributionQueue.status = APPROVED` (venue'ye dokunmaz); `EDIT` (re_verify) → mevcut davranış
-  (snapshot + `verifiedAt`) korunur.
+- `AdminQueueService.approve()` (dikkat: bu, `AdminVenuesService`'ten **tamamen ayrı** bir
+  servis — round 3 red-team'in vurguladığı gibi, round 2'nin snapshot düzeltmesi yalnızca
+  `AdminVenuesService`'e uygulanmıştı, bu dosyaya değil) artık `item.type`'a göre dallanır:
+  `REPORT` → yalnızca `ContributionQueue.status = APPROVED` (venue'ye dokunmaz); `EDIT`
+  (re_verify) → mevcut davranış (snapshot + `verifiedAt`) korunur.
+- **Round 3 düzeltmesi — bu dosyanın EDIT snapshot'ı da konumu kaybediyordu:**
+  `AdminQueueService.approve()`'un EDIT dalı bugün `tx.venue.findUniqueOrThrow()` (Prisma model
+  API) ile snapshot alıyor — Bölüm 3'ün `findRawForSnapshot(client, id)` metodu bu dosyada da
+  kullanılır, aynı `AdminVenuesService`'teki gibi.
 - **Not (Plan 4c'ye bağımlılık):** Admin panelinin `queue-item.tsx` bileşenindeki "Onayla (yalnızca
   incelendi olarak işaretler ve mekanın verified_at'ini yeniler)" açıklama metni artık **yanlış**
   olacak — Plan 4c bu metni güncellemeli (bkz. kardeş doküman Bölüm 6). Bu, iki planın senkron
@@ -218,13 +262,30 @@ girilir, MVP'de fotoğraf yükleme akışı yok) ve `findBySlug`'ın select list
 - **Round 2 düzeltmesi — malformed veri koruması:** `openingHours` serbest-metin JSON olduğu için
   (kürasyon ekibi elle giriyor) bir hücre `"HH:MM-HH:MM"` formatında olmayabilir — doğrudan
   `::time` cast'i böyle bir değerle **tüm sorguyu** hataya düşürür. SQL koşulu, karşılaştırmadan
-  önce değerin regex ile (`~ '^[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]$'`) doğru formatta
-  olduğunu kontrol eder; uymuyorsa (veya anahtar hiç yoksa) o mekanı **filtreden hariç tutmaz,
-  dahil eder** (fail-open — bir mekanı yanlışlıkla gizlemek, yanlışlıkla göstermekten daha kötü
-  bir kullanıcı deneyimi, hem de format hatası hiçbir zaman 500'e düşmemeli).
-- Test: hem doğru formatlı hem malformed (`"kapalı"`, boş string, eksik anahtar) `openingHours`
-  değerleriyle sorgunun **hata fırlatmadığı** ve malformed olan mekanın sonuçta göründüğü
-  doğrulanır.
+  önce değerin regex ile doğru formatta olduğunu kontrol eder; uymuyorsa (veya anahtar hiç yoksa)
+  o mekanı **filtreden hariç tutmaz, dahil eder** (fail-open — bir mekanı yanlışlıkla gizlemek,
+  yanlışlıkla göstermekten daha kötü bir kullanıcı deneyimi, hem de format hatası hiçbir zaman
+  500'e düşmemeli).
+- **Round 3 düzeltmesi — regex saat aralığını da doğrulamalı:** Önceki regex
+  (`^[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]$`) `29:00` gibi format-uyumlu ama geçersiz bir
+  saati kabul ediyordu (`29` iki haneli ve `[0-2][0-9]`'a uyuyor). Saat kısmı gerçek 00-23
+  aralığına sıkılaştırılır: `^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$`.
+  Ayrıca cast, regex koşulunun SQL'in değerlendirme sırası garantisine güvenmeden gerçekten bir
+  bariyer oluşturması için `CASE WHEN <regex> THEN <"HH:MM-HH:MM">::... ELSE NULL END` içine
+  alınır — `NULL` sonuç zaten yukarıdaki fail-open kuralına göre işlenir.
+- Test: hem doğru formatlı hem malformed (`"kapalı"`, boş string, eksik anahtar, `"29:00-10:00"`
+  gibi format-uyumlu-ama-geçersiz) `openingHours` değerleriyle sorgunun **hata fırlatmadığı** ve
+  malformed olan mekanın sonuçta göründüğü doğrulanır.
+
+**`isBoutique` filtresindeki aynı `z.coerce.boolean()` tuzağı (round 3'te bulundu, `open_now`'dan
+bağımsız, önceden var olan bir bug):** `apps/web/src/components/venue-filters.tsx`'in
+`serializeFilters`'ı, butik filtresi kapatıldığında `isBoutique: "false"` string'ini gönderiyor —
+`VenueListQuerySchema`'daki mevcut `isBoutique: z.coerce.boolean().optional()` bunu `Boolean("false") === true`
+olduğu için **`true`'ya çeviriyor**. `open_now` için seçilen güvenli desen (`z.literal("true").optional().transform(...)`)
+`isBoutique`'e de uygulanır. **Bu bir davranış değişikliği değil, mevcut bir bug'ın düzeltilmesi**
+— "kapalı" durumun query'den hiç gönderilmemesi (frontend zaten `filters.isBoutique !== undefined`
+kontrolüyle bunu büyük ölçüde önlüyordu, ama `false` değeri de açıkça set edilebiliyor) daha
+güvenli, MVP'nin diğer boolean filtrelerinde zaten kullanılan desenle tutarlı.
 
 ## 7. Diğer veri doğruluğu düzeltmeleri (B4, B5, B6, B9, B10, B11, B12, B13)
 
