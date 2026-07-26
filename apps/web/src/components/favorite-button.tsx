@@ -15,15 +15,22 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
 
   useEffect(() => {
     if (!user || !session?.access_token) {
+      setAdded(false);
       setInitialCheckPending(false);
       return;
     }
     let cancelled = false;
+    setAdded(false);
+    setInitialCheckPending(true);
     getFavoriteLists(session.access_token)
       .then((lists) => {
         if (cancelled) return;
         const isFavorited = lists.some((list) => list.favorites.some((favorite) => favorite.venueId === venueId));
         if (isFavorited) setAdded(true);
+      })
+      .catch(() => {
+        // Initial "already favorited" check failed — leave `added` as false and
+        // unblock the button; favoriting still works via handleClick's own flow.
       })
       .finally(() => {
         if (!cancelled) setInitialCheckPending(false);
@@ -31,7 +38,13 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [user, session?.access_token, venueId]);
+    // Depend on `user.id` (a stable primitive) rather than the `user` object itself:
+    // some auth-context consumers (and this component's own tests) return a fresh
+    // `user` object reference on every render even when the underlying user hasn't
+    // changed, which would otherwise re-trigger this effect on every render and
+    // cause `initialCheckPending` to ping-pong between true/false forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, session?.access_token, venueId]);
 
   async function handleClick() {
     if (!user) {

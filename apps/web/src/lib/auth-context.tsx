@@ -19,22 +19,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     let stateChangeReceived = false;
     supabase.auth
       .getSession()
       .then(({ data }) => {
+        if (cancelled) return;
         if (!stateChangeReceived) {
           setSession(data.session);
           setLoading(false);
         }
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       stateChangeReceived = true;
       setSession(newSession);
       setLoading(false);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const value: AuthContextValue = {

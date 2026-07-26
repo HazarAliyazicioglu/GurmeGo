@@ -25,7 +25,13 @@ describe("FavoriteButton", () => {
 
   it("creates a default 'Favorilerim' list when the user has none, then adds the venue", async () => {
     getFavoriteLists.mockResolvedValue([]);
-    createFavoriteList.mockResolvedValue({ id: "list1", name: "Favorilerim" });
+    createFavoriteList.mockResolvedValue({
+      id: "list1",
+      name: "Favorilerim",
+      userId: "u1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      favorites: [],
+    });
     render(<FavoriteButton venueId="v1" />);
     await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
     fireEvent.click(screen.getByTestId("favorite-button"));
