@@ -84,6 +84,29 @@ export type VenueDetail = z.infer<typeof VenueDetailSchema>;
 // parseUserLocationHeader (Task 4); a bbox like ",40.9,29.1,41" must not silently become
 // [0, 40.9, 29.1, 41], which would otherwise reach PostGIS and either crash or silently
 // mis-filter the map view.
+// `X-User-Location` header ("lat,lng"), consumed by apps/api's `parseUserLocationHeader`
+// (common/user-location.decorator.ts). Guards against empty string parts BEFORE calling Number()
+// on them -- Number("") is 0, the same footgun already fixed for `BboxQuerySchema` above; a
+// header like "40.99," must not silently become { lat: 40.99, lng: 0 }.
+export const UserLocationHeaderSchema = z.string().transform((s, ctx) => {
+  const rawParts = s.split(",");
+  if (rawParts.length !== 2 || rawParts.some((p) => p.trim() === "")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "must be 'lat,lng' with two non-empty parts" });
+    return z.NEVER;
+  }
+  const [lat, lng] = rawParts.map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "lat/lng must be finite numbers" });
+    return z.NEVER;
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "lat/lng out of range" });
+    return z.NEVER;
+  }
+  return { lat, lng };
+});
+export type UserLocationHeader = z.infer<typeof UserLocationHeaderSchema>;
+
 export const BboxQuerySchema = z.object({
   bbox: z.string().transform((s, ctx) => {
     const rawParts = s.split(",");

@@ -1,15 +1,16 @@
 import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { UserLocationHeaderSchema } from "@gurmego/shared";
 
 export interface UserLocation { lat: number; lng: number; }
 
+// Validation now lives in `UserLocationHeaderSchema` (packages/shared/src/schemas/venue.schema.ts)
+// per the project-wide rule that all API input is validated via Zod schemas from packages/shared
+// -- this wrapper just adapts safeParse's result to this function's `undefined`-on-failure
+// signature so every existing caller/test keeps working unchanged.
 export function parseUserLocationHeader(header: string | undefined): UserLocation | undefined {
   if (typeof header !== "string") return undefined;
-  const parts = header.split(",");
-  if (parts.length !== 2 || parts.some((p) => p.trim() === "")) return undefined;
-  const lat = Number(parts[0]);
-  const lng = Number(parts[1]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return undefined;
-  return { lat, lng };
+  const result = UserLocationHeaderSchema.safeParse(header);
+  return result.success ? result.data : undefined;
 }
 
 export const UserLocationParam = createParamDecorator((_: unknown, ctx: ExecutionContext): UserLocation | undefined => {

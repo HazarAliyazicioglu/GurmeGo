@@ -34,6 +34,19 @@ export const AdminQueueMutationResultSchema = z.object({
   createdAt: z.string().datetime(),
 });
 
+// `GET /admin/queue`'s `type`/`status` query params. Final whole-branch review finding:
+// AdminQueueController previously cast these raw strings directly to their Prisma enum types
+// with no validation, so an invalid value (e.g. `?status=NOTAREALSTATUS`) reached Postgres as
+// literal enum text and failed with 22P02, surfacing as a 500 instead of a clean 400. Enum values
+// match `AdminQueueItemSchema.type`/`.status` above -- REPORT/EDIT is a deliberate subset of the
+// full `ContributionType` (NEW_VENUE/OWNER_VERIFICATION are not queue-listed), matching that
+// schema's established precedent (Task 2/3 of this plan).
+export const AdminQueueListQuerySchema = z.object({
+  type: z.enum(["REPORT", "EDIT"]).optional(),
+  status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
+});
+export type AdminQueueListQuery = z.infer<typeof AdminQueueListQuerySchema>;
+
 export const CsvImportResultSchema = z.object({
   created: z.number().int().min(0),
   skipped: z.number().int().min(0),

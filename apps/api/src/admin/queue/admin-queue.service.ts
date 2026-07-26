@@ -20,17 +20,17 @@ function alreadyProcessedError() {
 export class AdminQueueService {
   constructor(private prisma: PrismaService, private venuesRepository: VenuesRepository) {}
 
-  async list(type?: string, status?: string) {
+  async list(type?: ContributionType, status?: ContributionStatus) {
     const items = await this.prisma.contributionQueue.findMany({
       where: {
-        // `type`/`status` arrive as unvalidated `@Query()` strings (admin-queue.controller.ts has
-        // no zod/enum pipe on this route yet) -- Prisma's generated `where` type requires the real
-        // enum type, which is narrower than `string`. There's no type-level narrowing available
-        // without adding runtime validation (out of scope for this fix); an invalid value reaches
-        // Postgres as literal enum text and fails there (22P02 invalid input value for enum),
-        // surfacing as a 500 on this admin-only endpoint.
-        type: type as ContributionType | undefined,
-        status: (status as ContributionStatus | undefined) ?? "PENDING",
+        // `type`/`status` are now validated by `AdminQueueListQuerySchema` (@gurmego/shared) via
+        // `ZodValidationPipe` in admin-queue.controller.ts before reaching this service -- an
+        // invalid value is rejected with a clean 400 there and never reaches Prisma/Postgres.
+        // (Final whole-branch review finding: this used to be an unvalidated `@Query()` string
+        // cast directly to the enum type, so a bad value reached Postgres as literal enum text
+        // and failed with 22P02, surfacing as a 500 on this admin-only endpoint.)
+        type,
+        status: status ?? "PENDING",
       },
       orderBy: { createdAt: "asc" },
       include: { venue: { select: { name: true, slug: true } } },

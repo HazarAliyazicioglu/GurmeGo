@@ -105,6 +105,22 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
     expect(venues.update).toHaveBeenCalledWith(VENUE_ID, expect.objectContaining({ branchCount: 2 }));
   });
 
+  // Final whole-branch review finding: a lat-only (or lng-only) update payload used to reach
+  // updateWithLocation, which silently drops the coordinate change (only writes `location` when
+  // BOTH are present) while AdminVenuesService.update() still stamps a fresh verifiedAt --
+  // falsely marking the venue as re-verified. AdminVenueUpdateSchema now rejects it up front.
+  it("rejects a lat-only update payload with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: `/admin/venues/${VENUE_ID}`,
+      headers: { "x-test-role": "admin" },
+      payload: { lat: 40.99 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(venues.update).not.toHaveBeenCalled();
+  });
+
   it("rejects a non-UUID id on update with 400 before reaching the service", async () => {
     const res = await app.inject({
       method: "PUT",

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { VenueSchema, VenueListQuerySchema, OptionalTrueFlag, VenueDetailSchema, BboxQuerySchema } from "./venue.schema";
+import { VenueSchema, VenueListQuerySchema, OptionalTrueFlag, VenueDetailSchema, BboxQuerySchema, UserLocationHeaderSchema } from "./venue.schema";
 
 describe("VenueSchema", () => {
   it("accepts a valid venue payload", () => {
@@ -77,6 +77,26 @@ describe("VenueDetailSchema", () => {
     expect(parsed.address).toBe("Bahariye Cd. No:1");
     expect(parsed.photos).toEqual(["p1"]);
   });
+});
+
+describe("UserLocationHeaderSchema", () => {
+  // Final whole-branch review finding: apps/api's `parseUserLocationHeader` hand-rolled this
+  // validation instead of going through a packages/shared Zod schema, breaking the project-wide
+  // "all API input validated via Zod schemas from packages/shared" rule.
+  it("parses a well-formed 'lat,lng' string", () => {
+    const result = UserLocationHeaderSchema.safeParse("40.99,29.02");
+    expect(result.success && result.data).toEqual({ lat: 40.99, lng: 29.02 });
+  });
+  it("rejects malformed input (empty parts, Number('')===0 footgun)", () => {
+    expect(UserLocationHeaderSchema.safeParse(",").success).toBe(false);
+    expect(UserLocationHeaderSchema.safeParse("40.99,").success).toBe(false);
+  });
+  it("rejects out-of-range lat/lng", () => {
+    expect(UserLocationHeaderSchema.safeParse("999,29.02").success).toBe(false);
+    expect(UserLocationHeaderSchema.safeParse("40.99,999").success).toBe(false);
+  });
+  it("rejects a string with the wrong number of parts", () => expect(UserLocationHeaderSchema.safeParse("40.99,29.02,1").success).toBe(false));
+  it("rejects non-numeric parts", () => expect(UserLocationHeaderSchema.safeParse("abc,def").success).toBe(false));
 });
 
 describe("BboxQuerySchema", () => {

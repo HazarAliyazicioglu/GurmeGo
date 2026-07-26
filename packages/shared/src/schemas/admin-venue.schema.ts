@@ -45,5 +45,14 @@ export const AdminVenueCreateSchema = z.object({
 });
 export type AdminVenueCreateInput = z.infer<typeof AdminVenueCreateSchema>;
 
-export const AdminVenueUpdateSchema = AdminVenueCreateSchema.partial();
+// Final whole-branch review finding: `VenuesRepository.updateWithLocation` only writes the raw
+// PostGIS `location` column when BOTH lat AND lng are present on the input -- a lat-only (or
+// lng-only) payload silently drops the coordinate change while `AdminVenuesService.update()`
+// still snapshots a VenueVersion and stamps a fresh verifiedAt, falsely marking the venue as
+// re-verified even though the requested coordinate update never happened. Enforce both-or-neither
+// here, before the payload ever reaches the repository.
+export const AdminVenueUpdateSchema = AdminVenueCreateSchema.partial().refine(
+  (data) => (data.lat === undefined) === (data.lng === undefined),
+  { message: "lat and lng must be provided together", path: ["lat"] },
+);
 export type AdminVenueUpdateInput = z.infer<typeof AdminVenueUpdateSchema>;

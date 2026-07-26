@@ -1,6 +1,8 @@
 import { Controller, Get, ParseUUIDPipe, Post, Param, Query, Req, UseGuards } from "@nestjs/common";
+import { AdminQueueListQuerySchema } from "@gurmego/shared";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
+import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { AdminQueueService } from "./admin-queue.service";
 
 @Controller("admin/queue")
@@ -10,8 +12,8 @@ export class AdminQueueController {
   constructor(private queue: AdminQueueService) {}
 
   @Get()
-  list(@Query("type") type?: string, @Query("status") status?: string) {
-    return this.queue.list(type, status);
+  list(@Query(new ZodValidationPipe(AdminQueueListQuerySchema)) query: ReturnType<(typeof AdminQueueListQuerySchema)["parse"]>) {
+    return this.queue.list(query.type, query.status);
   }
 
   @Post(":id/approve")

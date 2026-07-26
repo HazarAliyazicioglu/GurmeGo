@@ -91,6 +91,44 @@ describe("AdminQueueController (e2e) — RolesGuard", () => {
     expect(service.approve).not.toHaveBeenCalled();
   });
 
+  // Final whole-branch review finding: `type`/`status` used to be cast directly to their Prisma
+  // enum types with no validation, so an invalid value reached Postgres as literal enum text and
+  // failed with a 500 (22P02) instead of a clean 400. Now validated via AdminQueueListQuerySchema.
+  it("rejects an invalid status with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/queue?status=NOTAREALSTATUS",
+      headers: { "x-test-role": "curator" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.list).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid type with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/queue?type=NOT_A_TYPE",
+      headers: { "x-test-role": "curator" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.list).not.toHaveBeenCalled();
+  });
+
+  it("allows a valid type/status combination through to the service", async () => {
+    service.list.mockResolvedValue([]);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/queue?type=EDIT&status=APPROVED",
+      headers: { "x-test-role": "curator" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.list).toHaveBeenCalledWith("EDIT", "APPROVED");
+  });
+
   it("blocks a plain user from listing the queue", async () => {
     const res = await app.inject({ method: "GET", url: "/admin/queue", headers: { "x-test-role": "user" } });
 
