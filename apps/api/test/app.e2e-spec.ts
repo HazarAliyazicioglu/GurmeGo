@@ -3,6 +3,7 @@ import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify
 import { HttpAdapterHost } from "@nestjs/core";
 import { AppModule } from "../src/app.module";
 import { AllExceptionsFilter } from "../src/common/all-exceptions.filter";
+import { PrismaService } from "../src/prisma/prisma.service";
 
 describe("AppModule (e2e)", () => {
   let app: NestFastifyApplication;
@@ -85,19 +86,29 @@ describe("AllExceptionsFilter wired globally (as bootstrap() does) — Retry-Aft
 
   it("POST /venues/:id/report still returns 429 with Retry-After once rate-limited", async () => {
     const venueId = "d290f1ee-6c54-4b01-90e6-d701748f0851";
-    // A run-unique identifier keeps this test's rate-limit counter key isolated from any leftover
-    // state other test files/runs may have left in the real (Postgres-backed) CacheStore --
-    // the persistent-counter issue tracked separately in docs/STATE.md is out of scope here.
-    const clientId = `filter-wiring-test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const requestPayload = {
       method: "POST" as const,
       url: `/venues/${venueId}/report`,
       payload: { reason: "Fiyat yanlış görünüyor" },
-      headers: { "content-type": "application/json", "x-forwarded-for": clientId },
+      headers: { "content-type": "application/json" },
     };
 
+    // NOTE: an `x-forwarded-for` header here would NOT isolate this test's counter -- Fastify's
+    // `req.ip` is always the real (truthy) socket address unless `trustProxy` is configured on the
+    // adapter (it isn't, anywhere in this codebase; see docs/STATE.md: "RateLimitGuard trustProxy
+    // yok"), so `RateLimitGuard`'s `req.ip ?? req.headers["x-forwarded-for"] ?? "unknown"` never
+    // falls through to the header -- it always resolves to the same socket IP. That means this
+    // test's rate-limit key (`ReportsController:report:<ip>`) is shared with every other test that
+    // hits this handler through a real (Postgres-backed) CacheStore, including the `not-a-uuid`
+    // test above and any prior run of this same test in earlier CI executions. Isolation is
+    // achieved instead by deleting that exact counter row from `rate_limit_counters` right before
+    // firing the 11 requests, so the counter always starts fresh regardless of what other tests or
+    // prior runs left behind.
+    const prisma = app.get(PrismaService);
+    await prisma.$executeRaw`DELETE FROM rate_limit_counters WHERE key LIKE 'ReportsController:report:%'`;
+
     // RATE_LIMIT_REPORT_PER_DAY defaults to 10 (see src/common/rate-limit.config.ts) -- the 11th
-    // request from this identifier must exceed it.
+    // request must exceed it, now that the counter has been reset to a known-empty state.
     let lastRes;
     for (let i = 0; i < 11; i++) {
       lastRes = await app.inject(requestPayload);
