@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -25,5 +26,10 @@ export class ReVerifyService {
       created++;
     }
     return created;
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_3AM, { name: "re-verify-stale" })
+  async handleCron(): Promise<void> {
+    await this.enqueueStale();
   }
 }
