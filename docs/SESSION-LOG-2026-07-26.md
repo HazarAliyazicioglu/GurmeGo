@@ -253,3 +253,57 @@ aynı task'ta mı?" sorusunu açıkça sor** — "sonradan düzeltilecek" varsay
 **Sıradaki adım:** `subagent-driven-development` ile Task 1'den başla. Görev başına: implementer
 subagent → code-reviewer subagent (spec uyumu + kalite) → düzeltme varsa tekrar review. Tüm task'lar
 bitince final whole-branch review (Superpowers) + `cross-model-review` (Codex, zorunlu, ayrı).
+
+---
+
+## Plan 4b — subagent-driven-development yürütmesi (16/16 TAMAMLANDI, 2026-07-26)
+
+Tüm 16 task implementer → code-reviewer (Codex-routed) döngüsüyle tamamlandı. Tam kayıt
+`.superpowers/sdd/progress.md`'de (worktree-lokal, git-ignored, ama commit hash'leri git log'da
+kalıcı). Özet:
+
+- **Task 1-2**: Migration (`address`/`photos`) + `packages/shared` şema güncellemeleri. Task 2'nin
+  implementer'ı brief'te kendi bıraktığım bir çelişkiyi (Step 8 prose vs Step 9 kod bloğu,
+  `VenueDetailSchema` hakkında) doğru şekilde yakalayıp durup sordu — tahmin etmedi.
+- **Task 3**: En büyük/riskli task (A1/A3/A4/B5 düzeltmeleri, transaction-aware repository + tüm
+  çağıranları tek commit'te). **1 fix turu** gerektirdi: gerekçesiz cast, zayıf rollback test
+  assertion'ı (gerçek FK hata koduna değil genel `toThrow()`'a bakıyordu), reviewer'ın yanlış
+  konuma attığı bir `any` bulgusu (gerçek yeri `approve()` değil `list()`'teydi — implementer
+  kendi araştırıp doğru yeri buldu).
+- **Task 4**: Implementer session limit'e mid-task çarptı (Türkiye saatiyle 08:50 reset). Yaptığı
+  iş commit edilmeden kaldı ama incelendiğinde tamamen doğru ve plana birebir uyumluydu — kontrol
+  eden oturum dosya dosya doğrulayıp testleri/typecheck'i kendi çalıştırıp commit'i tamamladı,
+  sonra normal review sürecine soktu (TEMİZ, 1 bilgilendirici MINOR: apps/web'in lat/lng kırılması
+  zaten Plan 4c'ye planlı).
+- **Task 5**: Reviewer 2 BLOCKER rapor etti (server-side response validation eksikliği,
+  Date/string tip uyuşmazlığı) — ikisi de araştırıldı ve bu task'ın icat etmediği, kod tabanında
+  zaten var olan desenler olduğu doğrulanıp gerekçeli reddedildi.
+- **Task 6-14**: Sorunsuz veya 1 küçük fix turu ile TEMİZ (tipik bulgular: brief'ten miras kalan
+  gerekçesiz `as any`'ler — 3 kez, hep aynı kök neden: plan metnindeki örnek kodun kendisi `any`
+  kullanıyordu).
+- **Task 15**: **3 fix turu** gerektirdi — en uzun döngü. `AllExceptionsFilter`'ın tip parametresi
+  eksikti; Retry-After korunduğu iddiası gerçek `bootstrap()` kablolamasından geçmiyordu (yeni e2e
+  test eklendi); o yeni testin `x-forwarded-for` izolasyon iddiası yanlış çıktı (Fastify `req.ip`
+  `trustProxy` olmadan header'ı hiç görmüyor); düzeltmede kullanılan DELETE sorgusu yanlış anahtar
+  hedefliyordu (`report` yerine gerçek metod adı `submit`) — kök neden (magic string drift)
+  programatik türetmeyle kalıcı çözüldü.
+- **Task 16 (final regression)**: Doğrudan orkestratör oturumu tarafından çalıştırıldı (kod
+  değişikliği gerektirmeyen bir checkpoint bekleniyordu, ama gerçekten iki gerçek hata bulundu):
+  (1) `not-a-uuid` e2e testi kendi rate-limit sayacını sıfırlamıyordu, tam suite çalıştığında
+  flaky'ydi — Task 15'in kurduğu reset deseniyle düzeltildi; (2) `turbo lint` 6 gerçek
+  `no-require-imports` hatası buldu (Task 12/14'ün testlerinde) — ikisi de gerekçeli
+  eslint-disable veya (main.spec.ts'de gereksiz olduğu için) statik import'a çevrilerek
+  düzeltildi. Kendi yazdığım kodu "kendi review etme" kuralına uyarak ayrıca review'a soktum
+  (DÜZELTİLEBİLİR, 2 kozmetik yorum-doğruluğu notu, düzeltildi).
+
+**Manuel adım atlandı:** Task 16'nın Step 3'ü (gerçek curator JWT ile curl smoke test) gerçek bir
+Supabase login akışı gerektiriyor, bu otomatik akışta uydurulamaz — A1'in otomatik kanıtı zaten
+Task 3/6'nın test suite'lerinde var.
+
+**Bu round'un tekrarlayan deseni:** Plan metnindeki örnek kod bloklarının kendisi birden fazla
+kez (Task 8, 9) gerekçesiz `any` içeriyordu ve implementer'lar bunu olduğu gibi uyguladı — plan
+yazarken kod örneklerinin kendisinin de proje kurallarına (any yasak) uyup uymadığını kontrol
+etmek gerekiyor, sadece mantığın doğruluğunu değil.
+
+**PLAN 4B: 16/16 TAMAMLANDI.** Sıradaki adım: final whole-branch review (Superpowers final
+code-reviewer + ayrıca `cross-model-review` skill'i, ikisi de zorunlu, atlanamaz).
