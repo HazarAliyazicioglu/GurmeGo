@@ -2,11 +2,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getNearestDistrict } from "@/lib/api";
-import { useGeolocation } from "@/lib/use-geolocation";
+import { useLocationContext } from "@/lib/location-context";
 import type { District } from "@gurmego/shared";
 
 export function useSuggestedDistrict(currentSlug: string): District | null {
-  const coords = useGeolocation();
+  const coords = useLocationContext();
   const [suggested, setSuggested] = useState<District | null>(null);
 
   useEffect(() => {
