@@ -952,7 +952,10 @@ valid scenarios instead — neither depends on a transition the guard blocks:
 
 ```typescript
 describe("DiscoveryClient — sortedByDistance reaches CategoryQuickRoute correctly (via real rendered output, not a mock)", () => {
-  const venue = { id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null };
+  // satisfies VenueListItem here too (round-10 finding: this fixture was missed when the same fix
+  // was applied to Step 2's fixture) -- prevents priceRange: "BUDGET" widening to string, which
+  // would otherwise fail typecheck once passed into DiscoveryClient's initialVenues prop below.
+  const venue = { id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
 
   it("shows neutral quick-route copy when the user picks a category before coords ever resolve (auto-sort correctly never fires)", async () => {
     vi.mocked(useLocationContextMock).mockReturnValue(null);
