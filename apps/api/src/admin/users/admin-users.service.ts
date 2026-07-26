@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 
-const MVP_ASSIGNABLE_ROLES = ["curator", "admin"];
+const MVP_ASSIGNABLE_ROLES = ["curator"];
 
 @Injectable()
 export class AdminUsersService {

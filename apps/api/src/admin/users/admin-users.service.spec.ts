@@ -19,4 +19,13 @@ describe("AdminUsersService.assignRole", () => {
       "Bu rol MVP'de kullanılamaz (Faz 2)",
     );
   });
+
+  it("rejects assigning the admin role in MVP", async () => {
+    const prisma = { user: { update: jest.fn() } } as any;
+    const service = new AdminUsersService(prisma);
+
+    await expect(service.assignRole("u1", "admin")).rejects.toThrow(
+      "Bu rol MVP'de kullanılamaz (Faz 2)",
+    );
+  });
 });
