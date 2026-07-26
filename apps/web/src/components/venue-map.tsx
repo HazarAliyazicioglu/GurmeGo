@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { VenueListItem } from "@/lib/api";
+import type { FocusVenue } from "./venue-map-leaflet";
 
 const VenueMapCanvas = dynamic(
   () => import("./venue-map-leaflet").then((module) => module.VenueMapCanvas),
@@ -25,9 +26,11 @@ const VenueMapCanvas = dynamic(
 export function VenueMap({
   venues,
   center,
+  focusVenue,
 }: {
   venues: VenueListItem[];
   center: [number, number];
+  focusVenue?: FocusVenue;
 }) {
   return (
     <section
@@ -48,12 +51,12 @@ export function VenueMap({
           </h2>
         </div>
         <span className="mb-1 shrink-0 text-xs font-bold tabular-nums text-[#f4f0e7]/55">
-          {venues.length.toString().padStart(2, "0")} mekan
+          {(focusVenue ? 1 : venues.length).toString().padStart(2, "0")} mekan
         </span>
       </div>
 
       <div className="h-[60vh] min-h-[24rem] max-h-[38rem] w-full">
-        <VenueMapCanvas venues={venues} center={center} />
+        <VenueMapCanvas venues={venues} center={center} focusVenue={focusVenue} />
       </div>
     </section>
   );

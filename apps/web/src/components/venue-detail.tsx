@@ -3,6 +3,7 @@ import { PRICE_RANGE_LABELS } from "@gurmego/shared";
 import { ReportForm } from "./report-form";
 import { WhatsappShareButton } from "./whatsapp-share-button";
 import { FavoriteButton } from "./favorite-button";
+import { VenueMap } from "./venue-map";
 import { directionsUrl } from "@/lib/directions";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -101,6 +102,49 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
                 </a>
               </div>
             </div>
+          </section>
+
+          <section className="rounded-[1.5rem] border border-[#201d18]/12 bg-[#faf7f0] p-5 sm:p-6" aria-labelledby="venue-location-title">
+            <p id="venue-location-title" className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#201d18]/42">
+              Konum ve fotoğraflar
+            </p>
+            {venue.address && (
+              <p data-testid="venue-address" className="mt-3 text-sm font-semibold leading-relaxed text-[#201d18]/70">
+                {venue.address}
+              </p>
+            )}
+
+            <div className="mt-4">
+              <VenueMap
+                venues={[]}
+                center={[venue.lat, venue.lng]}
+                focusVenue={{
+                  id: venue.id,
+                  name: venue.name,
+                  slug: venue.slug,
+                  category: venue.category,
+                  lat: venue.lat,
+                  lng: venue.lng,
+                }}
+              />
+            </div>
+
+            {venue.photos.length > 0 ? (
+              <div data-testid="venue-photos" className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {venue.photos.map((photo, index) => (
+                  <img
+                    key={photo}
+                    src={photo}
+                    alt={`${venue.name} fotoğrafı ${index + 1}`}
+                    className="aspect-square w-full rounded-xl object-cover"
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="mt-5 text-sm font-semibold text-[#201d18]/45">
+                Bu mekan için henüz fotoğraf eklenmedi.
+              </p>
+            )}
           </section>
 
           {venue.googleRating && (

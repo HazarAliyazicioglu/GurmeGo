@@ -20,6 +20,15 @@ import {
 type LocatedVenue = MapVenue & { slug: string };
 type LoadState = "loading" | "ready" | "error";
 
+export type FocusVenue = {
+  id: string;
+  name: string;
+  slug: string;
+  category: string;
+  lat: number;
+  lng: number;
+};
+
 function BoundsVenueLoader({
   venues,
   onLocationsChange,
@@ -94,12 +103,14 @@ function BoundsVenueLoader({
 export function VenueMapCanvas({
   venues,
   center,
+  focusVenue,
 }: {
   venues: VenueListItem[];
   center: [number, number];
+  focusVenue?: FocusVenue;
 }) {
   const [locations, setLocations] = useState<LocatedVenue[]>([]);
-  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [loadState, setLoadState] = useState<LoadState>(focusVenue ? "ready" : "loading");
 
   const handleLocationsChange = useCallback((nextLocations: LocatedVenue[]) => {
     setLocations(nextLocations);
@@ -109,6 +120,14 @@ export function VenueMapCanvas({
     setLoadState(nextState);
   }, []);
 
+  const effectiveCenter: [number, number] = focusVenue
+    ? [focusVenue.lat, focusVenue.lng]
+    : center;
+
+  const markers: LocatedVenue[] = focusVenue
+    ? [{ id: focusVenue.id, slug: focusVenue.slug, name: focusVenue.name, category: focusVenue.category, lat: focusVenue.lat, lng: focusVenue.lng }]
+    : locations;
+
   return (
     <div
       className="relative h-full w-full"
@@ -116,7 +135,7 @@ export function VenueMapCanvas({
       aria-label="Mekanların konumlarını gösteren interaktif harita"
     >
       <MapContainer
-        center={center}
+        center={effectiveCenter}
         zoom={13}
         minZoom={10}
         scrollWheelZoom={false}
@@ -128,13 +147,15 @@ export function VenueMapCanvas({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <BoundsVenueLoader
-          venues={venues}
-          onLocationsChange={handleLocationsChange}
-          onLoadStateChange={handleLoadStateChange}
-        />
+        {!focusVenue && (
+          <BoundsVenueLoader
+            venues={venues}
+            onLocationsChange={handleLocationsChange}
+            onLoadStateChange={handleLoadStateChange}
+          />
+        )}
 
-        {locations.map((venue) => (
+        {markers.map((venue) => (
           <CircleMarker
             key={venue.id}
             center={[venue.lat, venue.lng]}
@@ -189,7 +210,7 @@ export function VenueMapCanvas({
         </div>
       )}
 
-      {loadState === "ready" && locations.length === 0 && (
+      {!focusVenue && loadState === "ready" && locations.length === 0 && (
         <div
           className="pointer-events-none absolute bottom-8 left-3 right-3 z-[500] rounded-xl border border-[#201d18]/10 bg-[#f4f0e7]/95 px-4 py-3 text-sm font-semibold text-[#201d18] shadow-lg backdrop-blur-sm sm:left-auto sm:max-w-sm"
           role="status"
