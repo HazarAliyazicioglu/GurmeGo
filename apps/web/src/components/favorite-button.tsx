@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { getFavoriteLists, createFavoriteList, addFavoriteVenue } from "@/lib/api";
@@ -12,8 +12,14 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
   const [added, setAdded] = useState(false);
   const [pending, setPending] = useState(false);
   const [initialCheckPending, setInitialCheckPending] = useState(true);
+  const latestClickRequest = useRef(0);
 
   useEffect(() => {
+    // Invalidate any in-flight `handleClick` request: this effect re-runs whenever
+    // `venueId` (or the user/session) changes, which is exactly when a stale click's
+    // eventual `setAdded(true)` would otherwise apply to the wrong venue (see
+    // `handleClick`'s `requestId` guard below).
+    latestClickRequest.current += 1;
     if (!user || !session?.access_token) {
       setAdded(false);
       setInitialCheckPending(false);
@@ -43,7 +49,6 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
     // `user` object reference on every render even when the underlying user hasn't
     // changed, which would otherwise re-trigger this effect on every render and
     // cause `initialCheckPending` to ping-pong between true/false forever.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, session?.access_token, venueId]);
 
   async function handleClick() {
@@ -52,13 +57,23 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
       return;
     }
     if (!session?.access_token) return;
+    const requestId = ++latestClickRequest.current;
     setPending(true);
     try {
       const lists = await getFavoriteLists(session.access_token);
       const list = lists[0] ?? (await createFavoriteList(session.access_token, DEFAULT_LIST_NAME));
       await addFavoriteVenue(session.access_token, list.id, venueId);
-      setAdded(true);
+      if (requestId === latestClickRequest.current) setAdded(true);
+    } catch {
+      // Add-to-favorites failed (network/API error) — there is no error-display UI in
+      // this component to route it to; swallow so the rejection doesn't propagate as an
+      // unhandled promise rejection. The button re-enables via `finally` below so the
+      // user can retry.
     } finally {
+      // Always reset `pending` (this click's own request truly finished, one way or
+      // another) — only whether to *apply* the result (`setAdded(true)` above) is
+      // guarded by `requestId`, since that's the part that could otherwise show the
+      // wrong venue as favorited after `venueId` changes mid-flight.
       setPending(false);
     }
   }
