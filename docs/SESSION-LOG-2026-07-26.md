@@ -200,3 +200,56 @@ geçitleri (idea-red-team, plan-red-team, final review + cross-model-review) hâ
 geçit sonrası kullanıcıya durup sormak yerine sonucu bu dosyaya yazıp devam edeceğim. Yalnızca
 gerçek, geri dönüşü zor kararlar (ör. `master`'a merge, gerçek hesap açma/harcama) için durup
 soracağım — bunlar zaten önceden "kullanıcı onayıyla" olarak işaretlenmiş kalıcı kurallar.
+
+---
+
+## Plan 4b — writing-plans + plan-red-team (2026-07-26, bu talimat sonrası)
+
+`docs/superpowers/plans/2026-07-26-backend-fixes.md` yazıldı (backend düzeltmeleri, audit
+bulgularının A1/A3/A4 + B3-B16'sı). ADR 004 yazıldı (`docs/adr/004-user-location-via-http-header.md`)
+— kullanıcı konumu artık `X-User-Location` header'ında, query param değil (NFR-04).
+
+**plan-red-team 6 tur sürdü** (Codex, `model_reasoning_effort=high`), her turda gerçek bulgu:
+
+- **Round 1 (YENİDEN BÖL):** Repository imza değişikliği (eski Task 3) production çağrı
+  noktalarını (seed.ts, AdminVenuesService, AdminQueueService) 2-3 task sonra düzeltiyordu —
+  aradaki `tsc`/`jest` iddiaları gerçekte FAIL verirdi. B11/B12 eksik, CSV `address` şemada yok,
+  `open_now` fail-open PostgreSQL three-valued logic'iyle uyumsuz, `revert()` `any` kullanıyor.
+- **Round 2 (YENİDEN BÖL):** Round 1'in düzeltmesi sorunu **çözmemiş, sadece etiketlemişti** —
+  aynı kırık yapı korunmuş, "bu ara adımda test çalıştırma" notu eklenmiş. **KALICI DERS:** bir
+  red-team bulgusuna "yorumla düzelt" değil, gerçekten yapıyı değiştirerek cevap ver.
+  Kod okundu (venues.repository.ts, admin-venues.service.ts, admin-queue.service.ts,
+  roles.guard.ts, csv-import.service.ts, main.ts, her controller'ın `@Param` kullanımı) —
+  placeholder'lar gerçek dosya/satır/metoda dönüştürüldü.
+- **Round 3 (YENİDEN BÖL, ama farklı sınıf bulgu):** Tek-task/tek-commit birleşimi gerçekten
+  tuttu ("Round 2'nin ana sorunu... dar anlamda çözülmüş" — Codex'in kendi ifadesi). Kalan
+  bulgular: `searchPublished`'ın arama tarafındaki B11 hâlâ kırık (güncelleme tarafı zaten
+  doğruydu), `AdminVenueRow`'a `address`/`photos` eklenmemiş, `snapshotToUpdateInput` `source`'u
+  atlıyor, `tx: any`, task aşırı büyük (34 adım).
+- **Round 4 (YENİDEN BÖL):** Task ikiye bölündü (Task 3 yazma/versiyonlama, Task 4 okuma/arama —
+  gerçek caller sınırına göre). Ama Task 2 `VenueListQuerySchema`'dan `lat`/`lng`'yi kaldırıyordu,
+  `searchPublished` (onları okuyan) Task 4'e kadar düzeltilmiyordu — karşılıklı bir acceptance
+  döngüsü. **KALICI DERS:** "bu imza değişikliği bu task'a ait" derken, DEĞİŞEN TARAFI DEĞİL,
+  DEĞİŞEN ŞEYİN GERÇEK TÜKETİCİSİNİ bul — şema Task 2'de, tüketicisi Task 4'te olursa hâlâ kırık.
+- **Round 5 (YENİDEN BÖL):** `lat`/`lng` döngüsü kapandı ("gerçekten kapatmış" — Codex).
+  **AYNI SINIF bulgu farklı alanda:** `VenueDetailSchema` (Task 2) `lat`/`lng`/`address`/`photos`'u
+  zorunlu yapıyordu, `findBySlug` (Task 5) onları ancak sonra üretiyordu — aradaki her
+  `GET /venues/:slug` runtime'da Zod validation hatası verirdi. Düzeltildi: şema değişikliği
+  Task 5'e taşındı (findBySlug ile atomik). Ayrıca `BboxQuerySchema`'da aynı `Number("")===0`
+  hatası tekrar üretilmişti (header parser'da bir kere düzeltilmişti) — düzeltildi.
+- **Round 6 — döngü kapatıldı, kalan bulgular implementasyona bırakıldı:** Round 5'in kalan
+  bulguları (gerçek HTTP route/verb'ler, `PrismaService` constructor şekli, `app.e2e-spec.ts`'in
+  gerçek auth/client deseni, `featured`'ın revert'te geri yüklenip yüklenmeyeceği) gerçek dosya
+  okumasını gerektiriyor — bu, per-task code review ve zorunlu `cross-model-review`'ın (gerçek
+  diff'e karşı çalışır, plan metnine değil) işi. Karar: metin-bazlı plan-red-team döngüsü burada
+  kesildi, kalan sınırlamalar plana açıkça yazıldı (silinmedi), implementasyona geçildi.
+
+**KALICI DERS (bu round'ların ortak deseni):** Aynı sınıf hata (bir sözleşme değişikliğinin
+tüketicisini yanlış task'a koymak) 3 kez farklı alan çiftinde tekrarlandı (`VenuesRepository`
+callers → `VenueListQuery`/`searchPublished` → `VenueDetailSchema`/`findBySlug`). Bir sonraki
+planda: **her Zod şema/tip değişikliği yazıldığında, "bu alanı gerçekten kim üretiyor, o üretici
+aynı task'ta mı?" sorusunu açıkça sor** — "sonradan düzeltilecek" varsayımı üç kez yanlış çıktı.
+
+**Sıradaki adım:** `subagent-driven-development` ile Task 1'den başla. Görev başına: implementer
+subagent → code-reviewer subagent (spec uyumu + kalite) → düzeltme varsa tekrar review. Tüm task'lar
+bitince final whole-branch review (Superpowers) + `cross-model-review` (Codex, zorunlu, ayrı).
