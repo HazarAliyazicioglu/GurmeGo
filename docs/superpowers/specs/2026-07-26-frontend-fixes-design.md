@@ -184,9 +184,13 @@ oluyor — ama bunu varsaymak yerine `key={districtSlug}` ile garanti altına al
 
 **C4 — Adres/harita/galeri eksik (artık gerçek veri mevcut, bkz. Plan 4b Bölüm 5-6):**
 - `venue-detail.tsx`'e: (1) `venue.address` gösterilir (yoksa alan gizlenir, zorunlu değil), (2)
-  `venue-map-leaflet` komponenti artık mevcut dekoratif CSS placeholder yerine gerçek `venue.lat`/
-  `venue.lng` ile tek-nokta modunda monte edilir, (3) `venue.photos` doluysa `<img>` grid'i, boşsa
-  "henüz fotoğraf eklenmedi" boş-state.
+  gerçek `venue.lat`/`venue.lng` ile tek-nokta modunda bir harita monte edilir, (3) `venue.photos`
+  doluysa `<img>` grid'i, boşsa "henüz fotoğraf eklenmedi" boş-state.
+  **Revizyon (implementasyon planı yazılırken kod okunarak düzeltildi):** bu bölüm ilk yazıldığında
+  "mevcut dekoratif CSS placeholder yerine" (yani bir değiştirme) diyordu, ancak
+  `venue-detail.tsx`'te harita için ayrı bir placeholder yok — mevcut "Sıradaki durak" bölümü
+  dekoratif bir CSS deseni + `directionsUrl` linkidir, harita değildir, ve kendi başına gerekli/
+  doğru bir özelliktir. Yeni harita, bu bölümün YERİNE değil, ONA EK bir bölüm olarak eklenir.
 
 **C9 — Platform paylaşım sheet'i yok:** `whatsapp-share-button.tsx`'in yanına `"share" in navigator`
 kontrolüyle korunan bir `navigator.share()` butonu eklenir (desteklenmiyorsa render edilmez).
@@ -196,13 +200,16 @@ kontrolüyle korunan bir `navigator.share()` butonu eklenir (desteklenmiyorsa re
 
 ## 6. Kürasyon bütünlüğü ile senkron (Plan 4b'nin A3 kararı — yeni, round 1'de eksikti)
 
-**`apps/admin/src/components/queue-item.tsx`'in onay açıklaması güncellenir:**
-Mevcut metin — "Onayla (yalnızca incelendi olarak işaretler ve mekanın verified_at'ini yeniler)" —
-Plan 4b'nin A3 kararıyla (REPORT onayı artık `verifiedAt`'i güncellemiyor) **yanlış** hale gelir.
-Yeni metin: "Onayla (yalnızca bildirimi incelenmiş olarak işaretler — mekan bilgisini düzeltmek
-için ayrıca admin-venues API'sinden/Prisma Studio'dan güncelleme yapılmalı)". Bu, admin panelin
-2-sayfalık kapsamının (Plan 3) "gerisi Postman/Prisma Studio'ya bırakıldı" felsefesiyle tutarlı —
-manuel düzeltme akışı için ayrı bir UI eklenmiyor, yalnızca metin gerçek davranışı doğru anlatıyor.
+**`apps/admin/src/components/queue-item.tsx`'in onay açıklaması ile ilgili bayat iddia düzeltilir.**
+**Revizyon (implementasyon planı yazılırken kod okunarak düzeltildi):** bu bölüm ilk yazıldığında
+görünür buton metninin "... ve mekanın verified_at'ini yeniler" dediğini, dolayısıyla Plan 4b'nin
+A3 kararıyla (REPORT onayı artık `verifiedAt`'i güncellemiyor) **yanlış** hale geldiğini
+varsayıyordu. Gerçek dosya okunduğunda görünür metnin zaten doğru olduğu ("yalnızca incelendi
+olarak işaretler", `verified_at` iddiası yok) ve bayat iddianın yalnızca butonun yakınındaki bir
+KAYNAK KODU YORUMUNDA hayatta kaldığı görüldü. Düzeltme hedefi bu nedenle o yorumdur, görünür metin
+değil — görünür metin isteğe bağlı olarak biraz daha açıklayıcı hale getirilebilir (ör. "... mekan
+bilgisini düzeltmek için ayrıca admin-venues API'sinden/Prisma Studio'dan güncelleme yapılmalı"
+eklenerek), ama bu zorunlu değildir, çünkü zaten yanlış bir şey söylemiyordu.
 
 ## 7. Favoriler & filtreler (C5, C7)
 
@@ -248,13 +255,21 @@ yazılmıştı — hiçbiri yok, `CategoryQuickRoute` da zaten `venues` listesin
   `apps/web/src/lib/directions.ts`'e taşınır: `directionsUrl(venueName: string, districtName: string): string`.
 - `[district]/page.tsx` zaten hangi ilçede olduğunu biliyor (`districtId`/sayfa parametresi) —
   ilçe adını `DiscoveryClient`'a, oradan `CategoryQuickRoute`'a prop olarak geçirir.
-- `CategoryQuickRoute` artık `venues: VenueListItem[]` ve `coordsAvailable: boolean` prop'larını
+- `CategoryQuickRoute` artık `venues: VenueListItem[]` ve `sortedByDistance: boolean` prop'larını
   da alır (ikisi de zaten `DiscoveryClient`'ın state'inde var, yeni bir API çağrısı gerekmez).
   Bir kategori seçilip filtrelenmiş `venues` listesi boş değilse, listenin ilk öğesinin adını +
   bilinen ilçe adını `directionsUrl()`'e verir.
+  **Revizyon (implementasyon planı yazılırken kod okunarak düzeltildi):** bu bölüm ilk yazıldığında
+  `coordsAvailable: boolean` (yani "tarayıcı konumu çözdü mü") adında bir prop öneriyordu — fakat
+  bu, "coords mevcut" ile "ekrandaki liste gerçekten distance-sıralı" durumlarını karıştırıyordu:
+  kullanıcı coords çözülmeden önce bir filtre değiştirirse (auto-sort bilinçli olarak atlanır) veya
+  coords'lu bir otomatik istek başarısız olursa, `coordsAvailable` yine de `true` olurdu ama
+  ekrandaki liste hâlâ `newest` sıralı kalırdı — "En yakın" etiketi o durumda yanlış olurdu. Gerçek
+  prop adı `sortedByDistance` — yalnızca coords'lu bir isteğin BAŞARIYLA döndüğü an `true`, aksi
+  halde (coords yok, kullanıcı önce etkileşti, veya coords'lu istek başarısız oldu) `false`.
 - Liste zaten (Plan 4c Bölüm 4/C8 sayesinde) konum mevcutsa distance-sıralı geldiği için "ilk öğe"
   doğal olarak "en yakın" anlamına gelir — ayrı bir mesafe hesaplaması gerekmez. **Round 3
-  düzeltmesi:** buton metni `coordsAvailable`'a göre değişir — `true` ise "En yakın [kategori]
+  düzeltmesi:** buton metni `sortedByDistance`'a göre değişir — `true` ise "En yakın [kategori]
   mekana git", `false` ise (liste yalnızca `newest` sıralı, "en yakın" iddiası yanlış olur)
   nötr "[Kategori] mekana git".
 

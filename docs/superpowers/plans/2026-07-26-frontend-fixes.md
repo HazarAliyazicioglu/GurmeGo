@@ -479,7 +479,7 @@ chain. Run — PASS.
 describe("FavoriteButton — real mount-time state check and disabled-while-pending", () => {
   it("reflects the venue's real favorite status from GET /me/lists on mount (no click needed)", async () => {
     getFavoriteLists.mockResolvedValue([{
-      id: "l1", name: "Default",
+      id: "l1", userId: "u1", name: "Default", createdAt: "2026-01-01T00:00:00.000Z",
       favorites: [{ id: "f1", venueId: "v1", venue: { id: "v1", name: "X", slug: "x", category: "cafe", priceRange: "BUDGET", isBoutique: false } }],
     }]);
     render(<FavoriteButton venueId="v1" />);
@@ -487,7 +487,7 @@ describe("FavoriteButton — real mount-time state check and disabled-while-pend
   });
 
   it("disables itself while the add flow (getFavoriteLists -> createFavoriteList/addFavoriteVenue) is in flight", async () => {
-    getFavoriteLists.mockResolvedValue([{ id: "l1", name: "Default", favorites: [] }]);
+    getFavoriteLists.mockResolvedValue([{ id: "l1", userId: "u1", name: "Default", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] }]);
     let resolveAdd: () => void;
     addFavoriteVenue.mockReturnValue(new Promise<void>((resolve) => { resolveAdd = resolve; }));
     render(<FavoriteButton venueId="v1" />);
@@ -956,13 +956,20 @@ describe("DiscoveryClient — sortedByDistance reaches CategoryQuickRoute correc
     expect(screen.queryByText(/en yakın/i)).not.toBeInTheDocument();
   });
 
-  it("shows 'En yakın' quick-route copy when coords are ALREADY available at mount, so the one-time auto-sort fires with no prior user interaction to block it", async () => {
+  it("shows 'En yakın' quick-route copy once coords resolve at mount AND a category is picked afterward — the link itself only ever renders once a category is active (CategoryQuickRoute's own contract from Step 2), so proving it requires both: the auto-sort effect setting sortedByDistance=true first, THEN a real category click", async () => {
     vi.mocked(useLocationContextMock).mockReturnValue({ lat: 40.99, lng: 29.02 });
     getVenuesMock.mockResolvedValue({ data: [venue], meta: { next_cursor: null, has_more: false } });
     render(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[venue]} />);
-    // no click at all -- the auto-sort effect runs on mount since coords are non-null and
-    // userInteractedRef is still false, proving sortedByDistance reaches true purely from the
-    // effect, not from a blocked/impossible post-interaction transition.
+    // Step 1: wait for the one-time auto-sort effect's coords-driven fetch to resolve (coords were
+    // already non-null at mount, userInteractedRef is still false at this point) -- this is what
+    // actually sets sortedByDistance=true; there's no directly-visible signal for it yet since no
+    // category is active, so wait on the underlying call instead.
+    await waitFor(() => expect(getVenuesMock).toHaveBeenCalledTimes(1));
+    // Step 2: NOW click a category -- userInteractedRef becomes true, but this fetch ALSO carries
+    // coords (they were already resolved), so sortedByDistance stays true through this second,
+    // real, coords-driven fetch too -- this is not the blocked transition from the neutral-copy
+    // test above (that test had coords null throughout; this one has them present throughout).
+    fireEvent.click(screen.getByTestId("quick-category-cafe"));
     await waitFor(() => expect(screen.getByRole("link", { name: /en yakın cafe mekana git/i })).toBeInTheDocument());
   });
 });
@@ -1047,10 +1054,11 @@ Run — PASS.
 
 - [ ] **Step 2: Write the failing test for address/map/photos, mocking `VenueMap` explicitly so its `data-testid="map-container"`/`data-center` attributes are actually present for the assertions below**
 ```typescript
-// venue-detail.spec.tsx (append) -- mock VenueMap the same way this file already mocks its other
-// child components (FavoriteButton, ReportForm, WhatsappShareButton -- read their real mock setup
-// first and match it), rendering a stand-in that exposes the same test hooks Task 5/7's real
-// component does:
+// venue-detail.spec.tsx (append) -- round-8 finding: this file's REAL existing vi.mock() calls
+// only cover navigation (next/navigation) and auth (@/lib/auth-context), NOT FavoriteButton/
+// ReportForm/WhatsappShareButton (confirmed by reading the file) -- read its real current mock
+// block first, then ADD a new vi.mock("@/components/venue-map", ...) alongside it, following the
+// same vi.mock() structure/conventions already used there:
 vi.mock("@/components/venue-map", () => ({
   VenueMap: ({ center, focusVenue }: { center: [number, number]; focusVenue?: { lat: number; lng: number } }) => {
     const effectiveCenter = focusVenue ? [focusVenue.lat, focusVenue.lng] : center;
