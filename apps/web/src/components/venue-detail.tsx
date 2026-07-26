@@ -3,6 +3,7 @@ import { PRICE_RANGE_LABELS } from "@gurmego/shared";
 import { ReportForm } from "./report-form";
 import { WhatsappShareButton } from "./whatsapp-share-button";
 import { FavoriteButton } from "./favorite-button";
+import { directionsUrl } from "@/lib/directions";
 
 const CATEGORY_LABELS: Record<string, string> = {
   bakery: "Fırın",
@@ -20,17 +21,6 @@ const DAY_LABELS: Record<string, string> = {
   thursday: "Per", thu: "Per", tuesday: "Sal", tue: "Sal",
   wednesday: "Çar", wed: "Çar",
 };
-
-// `findBySlug` (Plan 1) does not expose lat/lng — only `findInBbox`/the map endpoint does (ADR 002:
-// raw SQL is the only way to read the `Unsupported("geography")` column, and the detail endpoint
-// deliberately keeps to a standard Prisma `select` for the rest of its fields). Rather than adding a
-// raw-SQL branch to the detail endpoint just for this, MVP uses a name+district text search — Google
-// Maps resolves this to the correct place reliably at pilot scale (30-45 known venues). Documented
-// here as a deliberate simplification, not an oversight; revisit if the pilot shows mis-resolves.
-function directionsUrl(venue: VenueDetailType): string {
-  const query = encodeURIComponent(`${venue.name} ${venue.district.name}`);
-  return `https://www.google.com/maps/dir/?api=1&destination=${query}`;
-}
 
 export function VenueDetail({ venue }: { venue: VenueDetailType }) {
   return (
@@ -105,7 +95,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
                     <p data-testid="transport-note" className="mt-2 flex max-w-[48ch] items-start gap-2 text-sm font-semibold leading-relaxed text-[#201d18]/60"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#d75d3b]" aria-hidden="true" />{venue.transportNote}</p>
                   )}
                 </div>
-                <a data-testid="directions-link" href={directionsUrl(venue)} target="_blank" rel="noreferrer" className="group inline-flex min-h-12 w-full shrink-0 items-center justify-between gap-4 rounded-full bg-[#d75d3b] px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)] transition-all hover:-translate-y-0.5 hover:bg-[#bd4c30] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#201d18] focus-visible:ring-offset-2 focus-visible:ring-offset-[#e8e1d5] sm:w-auto">
+                <a data-testid="directions-link" href={directionsUrl(venue.name, venue.district.name)} target="_blank" rel="noreferrer" className="group inline-flex min-h-12 w-full shrink-0 items-center justify-between gap-4 rounded-full bg-[#d75d3b] px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)] transition-all hover:-translate-y-0.5 hover:bg-[#bd4c30] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#201d18] focus-visible:ring-offset-2 focus-visible:ring-offset-[#e8e1d5] sm:w-auto">
                   Yol tarifi al
                   <svg viewBox="0 0 20 20" className="size-4 fill-none" aria-hidden="true"><path d="M4 15 15 4m-7 0h7v7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </a>

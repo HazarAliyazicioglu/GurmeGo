@@ -18,7 +18,7 @@ export default async function DiscoveryPage({ params }: { params: { district: st
       <LocationProvider>
         <DistrictPicker districts={districts} current={params.district} />
         <h1>{current.name}</h1>
-        <DiscoveryClient key={current.id} districtId={current.id} initialVenues={venues} center={center} />
+        <DiscoveryClient key={current.id} districtId={current.id} initialVenues={venues} center={center} districtName={current.name} />
       </LocationProvider>
     </main>
   );

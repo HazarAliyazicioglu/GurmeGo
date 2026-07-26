@@ -16,10 +16,12 @@ export function DiscoveryClient({
   districtId,
   initialVenues,
   center,
+  districtName,
 }: {
   districtId: string;
   initialVenues: VenueListItem[];
   center: [number, number];
+  districtName: string;
 }) {
   const [venues, setVenues] = useState(initialVenues);
   const [filters, setFilters] = useState<FilterState>({});
@@ -74,13 +76,19 @@ export function DiscoveryClient({
     }
   }, [coords]);
 
-  function handleQuickCategory(category: string) {
+  function handleQuickCategory(category: string | undefined) {
     applyFilters({ ...filters, category });
   }
 
   return (
     <>
-      <CategoryQuickRoute activeCategory={filters.category} onSelectCategory={handleQuickCategory} />
+      <CategoryQuickRoute
+        venues={venues}
+        districtName={districtName}
+        sortedByDistance={sortedByDistance}
+        activeCategory={filters.category}
+        onSelectCategory={handleQuickCategory}
+      />
       <VenueFilters value={filters} onChange={applyFilters} coordsAvailable={coords !== null} />
       {loading && <p role="status" aria-live="polite">Yükleniyor…</p>}
       {error && <p role="status" aria-live="polite">{error}</p>}

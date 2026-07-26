@@ -1,5 +1,7 @@
 "use client";
 import { CATEGORY_LABELS } from "@/components/venue-card";
+import { directionsUrl } from "@/lib/directions";
+import type { VenueListItem } from "@/lib/api";
 
 // Real backend category values only — the API's `category` field is one of
 // "cafe" | "restaurant" | "bakery" | "street-food" (see `apps/api/prisma/seed.ts`,
@@ -15,11 +17,23 @@ const QUICK_CATEGORIES = ["cafe", "bakery", "restaurant"] as const;
 // being silently discarded (final-review Finding 3).
 export function CategoryQuickRoute({
   activeCategory,
+  venues,
+  districtName,
+  sortedByDistance,
   onSelectCategory,
 }: {
   activeCategory?: string;
-  onSelectCategory: (category: string) => void;
+  venues: VenueListItem[];
+  districtName: string;
+  sortedByDistance: boolean;
+  onSelectCategory: (category: string | undefined) => void;
 }) {
+  // The one venue (if any) driving the "go to the nearest {category} venue" directions link below
+  // — first match is good enough at pilot scale/list ordering; when `sortedByDistance` is true
+  // this list is already coords-sorted (Task 4/`DiscoveryClient`'s auto-sort effect), so "first"
+  // genuinely means "nearest".
+  const activeVenue = activeCategory ? venues.find((v) => v.category === activeCategory) : undefined;
+
   return (
     <div data-testid="category-quick-route" className="mt-8">
       <div className="mb-3 flex items-center justify-between gap-4 px-1">
@@ -41,7 +55,7 @@ export function CategoryQuickRoute({
               key={c}
               data-testid={`quick-category-${c}`}
               aria-pressed={isActive}
-              onClick={() => onSelectCategory(c)}
+              onClick={() => onSelectCategory(isActive ? undefined : c)}
               className={[
                 "group relative min-h-[4.75rem] min-w-[9rem] flex-1 overflow-hidden rounded-[1.15rem] border px-4 py-3 text-left transition-all duration-200",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]",
@@ -59,6 +73,18 @@ export function CategoryQuickRoute({
           );
         })}
       </div>
+
+      {activeVenue && (
+        <a
+          data-testid="quick-route-directions-link"
+          href={directionsUrl(activeVenue.name, districtName)}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#d75d3b] px-4 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)] transition-all hover:-translate-y-0.5 hover:bg-[#bd4c30] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#201d18] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]"
+        >
+          {sortedByDistance ? `En yakın ${activeCategory} mekana git` : `${activeCategory} mekana git`}
+        </a>
+      )}
     </div>
   );
 }
