@@ -143,7 +143,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
   it("blocks an unauthenticated request to revert", async () => {
     const res = await app.inject({ method: "POST", url: `/admin/venues/${VENUE_ID}/revert/${VERSION_ID}` });
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
     expect(venues.revert).not.toHaveBeenCalled();
   });
 

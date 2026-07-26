@@ -53,10 +53,10 @@ describe("FavoritesController (e2e) — RolesGuard", () => {
     expect(service.listLists).toHaveBeenCalledWith("test-user");
   });
 
-  it("blocks an unauthenticated request with 403 (RolesGuard denial, not a 500 crash)", async () => {
+  it("blocks an unauthenticated request with 401 (RolesGuard denial, not a 500 crash)", async () => {
     const res = await app.inject({ method: "GET", url: "/me/lists" });
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
     expect(service.listLists).not.toHaveBeenCalled();
   });
 

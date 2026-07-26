@@ -64,7 +64,7 @@ describe("AdminExportController (e2e) — RolesGuard", () => {
   it("blocks an unauthenticated request", async () => {
     const res = await app.inject({ method: "GET", url: "/admin/export" });
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
     expect(service.exportVenues).not.toHaveBeenCalled();
   });
 });

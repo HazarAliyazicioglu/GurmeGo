@@ -101,7 +101,7 @@ describe("AdminQueueController (e2e) — RolesGuard", () => {
   it("blocks an unauthenticated request", async () => {
     const res = await app.inject({ method: "GET", url: "/admin/queue" });
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
     expect(service.list).not.toHaveBeenCalled();
   });
 });

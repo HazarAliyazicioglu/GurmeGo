@@ -91,7 +91,7 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
   it("blocks an unauthenticated request", async () => {
     const res = await app.inject({ method: "PUT", url: `/admin/users/${USER_ID}/roles`, payload: { role: "curator" } });
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
     expect(service.assignRole).not.toHaveBeenCalled();
   });
 
