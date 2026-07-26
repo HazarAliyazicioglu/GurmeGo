@@ -20,4 +20,18 @@ describe("DistrictsRepository.findNearestDistrict", () => {
 
     expect(result).toBeUndefined();
   });
+
+  describe("findNearestDistrict — full projection + status filter", () => {
+    it("selects cityId and slug, filters PUBLISHED venues", async () => {
+      const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ id: "d1", name: "Kadıköy", cityId: "c1", slug: "kadikoy" }]) } as unknown as PrismaService;
+      const repo = new DistrictsRepository(prisma);
+
+      const result = await repo.findNearestDistrict(40.99, 29.02);
+
+      const sqlText = (prisma.$queryRaw as jest.Mock).mock.calls[0][0].strings.join("");
+      expect(sqlText).toContain("cityId");
+      expect(sqlText).toContain("PUBLISHED");
+      expect(result).toEqual({ id: "d1", name: "Kadıköy", cityId: "c1", slug: "kadikoy" });
+    });
+  });
 });

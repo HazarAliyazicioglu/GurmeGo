@@ -5,6 +5,8 @@ import { PrismaService } from "../prisma/prisma.service";
 export interface NearestDistrictRow {
   id: string;
   name: string;
+  cityId: string;
+  slug: string;
 }
 
 @Injectable()
@@ -15,9 +17,10 @@ export class DistrictsRepository {
   async findNearestDistrict(lat: number, lng: number): Promise<NearestDistrictRow | undefined> {
     const rows = await this.prisma.$queryRaw<NearestDistrictRow[]>(
       Prisma.sql`
-        SELECT d.id, d.name
+        SELECT d.id, d.name, d."cityId", d.slug
         FROM "District" d
         JOIN "Venue" v ON v."districtId" = d.id
+        WHERE v.status = 'PUBLISHED'
         ORDER BY v.location <-> ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography
         LIMIT 1
       `,

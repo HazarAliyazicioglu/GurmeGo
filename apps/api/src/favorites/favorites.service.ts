@@ -46,6 +46,12 @@ export class FavoritesService {
       notFound.message = "Liste bulunamadı";
       throw notFound;
     }
+    const venue = await this.prisma.venue.findUnique({ where: { id: venueId } });
+    if (!venue || venue.status !== "PUBLISHED") {
+      const notFound = new NotFoundException({ error: { code: "VENUE_NOT_FOUND", message: "Mekan bulunamadı" } });
+      notFound.message = "Mekan bulunamadı";
+      throw notFound;
+    }
     return this.prisma.favorite.upsert({
       where: { listId_venueId: { listId, venueId } },
       create: { listId, venueId },

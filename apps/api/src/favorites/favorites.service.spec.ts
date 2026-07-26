@@ -35,4 +35,16 @@ describe("FavoritesService", () => {
       expect(err.getResponse().message).toBeUndefined();
     }
   });
+
+  describe("addVenue — PUBLISHED check", () => {
+    it("rejects adding a DRAFT venue with 404", async () => {
+      const prisma = {
+        favoriteList: { findUnique: jest.fn().mockResolvedValue({ id: "l1", userId: "u1" }) },
+        venue: { findUnique: jest.fn().mockResolvedValue({ id: "v1", status: "DRAFT" }) },
+      } as any;
+      const service = new FavoritesService(prisma);
+
+      await expect(service.addVenue("u1", "l1", "v1")).rejects.toThrow("Mekan bulunamadı");
+    });
+  });
 });
