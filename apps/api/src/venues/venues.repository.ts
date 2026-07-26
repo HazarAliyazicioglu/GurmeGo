@@ -44,6 +44,32 @@ export interface AdminVenueRow {
   lng: number;
 }
 
+// Public detail endpoint row: all the fields needed by VenueDetailSchema (no admin-only branchCount,
+// franchiseFlag, status, featured, createdAt, updatedAt; district nested as {name, slug}, not districtId).
+export interface VenueDetailRow {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  cuisineType: string | null;
+  priceRange: string;
+  signatureItems: string[];
+  transportNote: string | null;
+  openingHours: Prisma.JsonValue;
+  editorialNote: string | null;
+  isBoutique: boolean;
+  verifiedAt: Date;
+  source: string;
+  googleRating: number | null;
+  googleRatingCount: number | null;
+  googlePlaceId: string | null;
+  address: string | null;
+  photos: string[];
+  lat: number;
+  lng: number;
+  district: { name: string; slug: string };
+}
+
 export interface CreateVenueWithLocationInput {
   name: string;
   slug: string;
@@ -181,17 +207,18 @@ export class VenuesRepository {
     return { items, nextCursor };
   }
 
-  findBySlug(slug: string) {
-    return this.prisma.venue.findFirst({
-      where: { slug, status: "PUBLISHED" },
-      select: {
-        id: true, slug: true, name: true, category: true, cuisineType: true,
-        priceRange: true, signatureItems: true, transportNote: true, openingHours: true,
-        editorialNote: true, isBoutique: true, verifiedAt: true, source: true,
-        googleRating: true, googleRatingCount: true, googlePlaceId: true,
-        district: { select: { name: true, slug: true } },
-      },
-    });
+  async findBySlug(slug: string): Promise<VenueDetailRow | undefined> {
+    const rows = await this.prisma.$queryRaw<VenueDetailRow[]>(Prisma.sql`
+      SELECT v.id, v.slug, v.name, v.category, v."cuisineType", v."priceRange", v."signatureItems",
+        v."transportNote", v."openingHours", v."editorialNote", v."isBoutique", v."verifiedAt",
+        v.source, v."googleRating", v."googleRatingCount", v."googlePlaceId", v.address, v.photos,
+        ST_Y(v.location::geometry) AS lat, ST_X(v.location::geometry) AS lng,
+        json_build_object('name', d.name, 'slug', d.slug) AS district
+      FROM "Venue" v JOIN "District" d ON d.id = v."districtId"
+      WHERE v.slug = ${slug} AND v.status = 'PUBLISHED'
+      LIMIT 1
+    `);
+    return rows[0];
   }
 
   async findInBbox([minLng, minLat, maxLng, maxLat]: [number, number, number, number]) {

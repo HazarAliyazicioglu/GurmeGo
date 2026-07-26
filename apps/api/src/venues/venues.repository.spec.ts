@@ -185,3 +185,23 @@ describe("VenuesRepository.findInBbox", () => {
     expect(result).toHaveLength(1);
   });
 });
+
+describe("VenuesRepository.findBySlug — location and new fields", () => {
+  it("returns lat/lng, address, photos, nested district via raw SQL, filters PUBLISHED", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([{
+      id: "v1", slug: "a", name: "A", lat: 40.99, lng: 29.02, address: "Adres 1", photos: ["p1"],
+      district: { name: "Kadıköy", slug: "kadikoy" },
+    }]) } as any;
+    const result = await new VenuesRepository(prisma as any).findBySlug("a");
+    const sqlText = prisma.$queryRaw.mock.calls[0][0].strings.join("");
+    expect(sqlText).toContain("ST_Y");
+    expect(sqlText).toContain("ST_X");
+    expect(sqlText).toContain("json_build_object");
+    expect(sqlText).toContain("status = 'PUBLISHED'");
+    expect(result).toMatchObject({ lat: 40.99, lng: 29.02, address: "Adres 1", photos: ["p1"], district: { name: "Kadıköy", slug: "kadikoy" } });
+  });
+  it("returns undefined when not found", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    expect(await new VenuesRepository(prisma as any).findBySlug("missing")).toBeUndefined();
+  });
+});

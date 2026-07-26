@@ -72,5 +72,9 @@ export const VenueDetailSchema = z.object({
   googleRatingCount: z.number().int().min(0).nullable(),
   googlePlaceId: z.string().nullable(),
   district: z.object({ name: z.string(), slug: z.string() }),
+  lat: z.number(),
+  lng: z.number(),
+  address: z.string().nullable(),
+  photos: z.array(z.string()),
 });
 export type VenueDetail = z.infer<typeof VenueDetailSchema>;

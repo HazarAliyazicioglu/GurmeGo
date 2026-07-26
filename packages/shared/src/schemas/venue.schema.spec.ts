@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { VenueSchema, VenueListQuerySchema, OptionalTrueFlag } from "./venue.schema";
+import { VenueSchema, VenueListQuerySchema, OptionalTrueFlag, VenueDetailSchema } from "./venue.schema";
 
 describe("VenueSchema", () => {
   it("accepts a valid venue payload", () => {
@@ -56,4 +56,25 @@ describe("VenueListQuerySchema", () => {
     expect(VenueListQuerySchema.safeParse({ openNow: "false" }).success).toBe(false);
   });
   it("isBoutique=false rejects", () => expect(VenueListQuerySchema.safeParse({ isBoutique: "false" }).success).toBe(false));
+});
+
+describe("VenueDetailSchema", () => {
+  const FULL = {
+    id: "d290f1ee-6c54-4b01-90e6-d701748f0851", slug: "x", name: "X", category: "cafe",
+    cuisineType: null, priceRange: "MODERATE", signatureItems: [], transportNote: null,
+    openingHours: {}, editorialNote: null, isBoutique: false,
+    verifiedAt: "2026-07-24T00:00:00.000Z", source: "MANUAL", googleRating: null,
+    googleRatingCount: null, googlePlaceId: null, district: { name: "Kadıköy", slug: "kadikoy" },
+    lat: 40.99, lng: 29.02, address: null, photos: [],
+  };
+  it("accepts the full shape", () => expect(VenueDetailSchema.safeParse(FULL).success).toBe(true));
+  it("rejects when lat/lng are missing (proves required, not silently stripped)", () => {
+    const { lat, lng, ...rest } = FULL;
+    expect(VenueDetailSchema.safeParse(rest).success).toBe(false);
+  });
+  it("round-trips address/photos (proves captured, not stripped)", () => {
+    const parsed = VenueDetailSchema.parse({ ...FULL, address: "Bahariye Cd. No:1", photos: ["p1"] });
+    expect(parsed.address).toBe("Bahariye Cd. No:1");
+    expect(parsed.photos).toEqual(["p1"]);
+  });
 });
