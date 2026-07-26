@@ -1,10 +1,10 @@
 # GurmeGo — Plan 4b: Backend Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team PIVOT sonrası tam
-revizyon), idea-red-team round 2'ye hazır
+**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 2 PIVOT sonrası tam
+revizyon), idea-red-team round 3'e hazır
 
 İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
-[docs/superpowers/specs/2026-07-26-frontend-fixes-design.md](2026-07-26-frontend-fixes-design.md) (kardeş plan — Bölüm 3'teki header sözleşmesi ortak, Bölüm 6'daki `queue-item.tsx` metin güncellemesi bu planın A3 kararına bağımlı)
+[docs/superpowers/specs/2026-07-26-frontend-fixes-design.md](2026-07-26-frontend-fixes-design.md) (kardeş plan — Bölüm 2.5'teki header sözleşmesi ortak, Bölüm 6'daki `queue-item.tsx` metin güncellemesi bu planın A3 kararına bağımlı)
 
 ## 0. Round 1'den Round 2'ye — ne değişti ve neden
 
@@ -36,6 +36,23 @@ revizyon), idea-red-team round 2'ye hazır
 (varsayılan `PUBLISHED`); cursor pagination bu pilot ölçeğinde ertelenir (`limit` varsayılanı
 yükseltilir), gerçek ihtiyaç doğunca ayrıca ele alınır.
 
+**Round 2 idea-red-team yine PIVOT verdi** (4/7 tam, 3/7 kısmi düzeltme + yeni bulgular). Round 3
+için ele alınanlar:
+1. **Konum header'ının backend tarafı hiç yazılmamıştı** — Bölüm 2'de round 1'de tasarlanan
+   `@UserLocation()` decorator'ı round 2'nin yeniden yazımında sehven düşmüştü. Bölüm 2.5'te
+   geri eklendi, ayrıca "sort varsayılanı" mantığının şemadan servise taşınması gerektiği
+   (header, Zod parse zamanında görünmüyor) eklendi.
+2. **CSV boş `status` hücresi `""` üretir, `.optional()` bunu yakalamaz** (Zod boş string'i
+   "alan verilmedi" saymaz) — Bölüm 2'ye `z.preprocess` normalizasyonu eklendi.
+3. **`/districts/nearest` projeksiyonu önceden bozuk** (yalnızca `{id,name}` seçiyor,
+   `DistrictSchema` `cityId`+`slug` da istiyor) — B10 bunu da düzeltecek şekilde genişletildi.
+4. **Version snapshot/revert konumu hiç kapsamıyor** (Prisma'nın normal `venue` read'i PostGIS
+   `location` kolonunu okuyamıyor — ADR 002) — Bölüm 4'e bir "snapshot için raw-SQL tam satır
+   okuma" adımı eklendi.
+5. **`open_now`'ın zaman dilimi ve malformed veri koruması yoktu** — Bölüm 6 güncellendi.
+6. **`AdminQueueMutationResultSchema` hâlâ yalnızca `REPORT` literal'ı kabul ediyordu** — B8'e
+   eklendi.
+
 ## 1. Kapsam ve hedef
 
 `docs/AUDIT-2026-07-26.md`'nin backend bulgularının tamamını, **gerçek mimariye uygun şekilde**
@@ -60,6 +77,53 @@ hardcode'u `input.status ?? "DRAFT"` olur; `update` zaten `...input`'u repositor
   ekibi tarafından önceden doğrulanmış kabul edilir).
 - `csv-import.service.ts`'nin CSV parse/validate testleri, `status` kolonu olmadan da (varsayılan
   davranış) ve `status=DRAFT` ile de (elle bastırma) test edilir.
+- **Round 2 düzeltmesi — boş hücre normalizasyonu:** CSV parser boş bir `status` hücresi için
+  `""` (boş string) üretir, JS `undefined` değil — Zod'un `.optional()`'ı yalnızca anahtarın hiç
+  olmadığı durumu, boş string'i değil, "verilmedi" sayar. `status` alanı şu şekilde tanımlanır:
+  `z.preprocess((v) => (v === "" ? undefined : v), z.enum(["DRAFT", "PUBLISHED"]).optional())`.
+  Test: boş `status` hücreli bir satır, dolu bir satırla birlikte aynı CSV'de parse edilip
+  ikisinin de doğru `status` değerine (sırasıyla varsayılan `PUBLISHED` ve elle verilen değer)
+  ulaştığı doğrulanır.
+
+## 2.5. Konum header'ının backend implementasyonu (A2 — round 1'de tasarlandı, round 2'de sehven silindi, burada geri eklendi)
+
+**Yeni bir NestJS custom parameter decorator:** `apps/api/src/common/user-location.decorator.ts`
+
+```typescript
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+
+export interface UserLocation { lat: number; lng: number }
+
+export const UserLocationParam = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): UserLocation | undefined => {
+    const req = ctx.switchToHttp().getRequest();
+    const header = req.headers["x-user-location"];
+    if (typeof header !== "string") return undefined;
+    const [latStr, lngStr] = header.split(",");
+    const lat = Number(latStr);
+    const lng = Number(lngStr);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return undefined; // Bozuk/aralık dışı header sessizce yok sayılır — konum opsiyonel bir iyileştirme.
+    }
+    return { lat, lng };
+  },
+);
+```
+
+**Sort varsayılanının şemadan servise taşınması (round 2 red-team'in bulduğu kritik ayrıntı):**
+`VenueListQuerySchema`'nın bugünkü `.transform()`'u `sort`'u `lat`/`lng` query param'larının
+VARLIĞINA bakarak hesaplıyor — ama header, Zod'un `.parse()` çağrısı sırasında hiç görünmez
+(farklı bir kaynaktan, `@UserLocationParam()` ile geliyor). Bu yüzden:
+- `VenueListQuerySchema`'dan `lat`/`lng` **çıkarılır**; `sort` artık yalnızca kullanıcının açıkça
+  gönderdiği değeri taşır (`z.enum(["distance","newest"]).optional()`, otomatik varsayım yok).
+- `VenuesController.list(@Query() query, @UserLocationParam() location)` — ikisi de servise geçer.
+- `VenuesService.list(query, location)` içinde: `const sort = query.sort ?? (location ? "distance" : "newest");`
+  ve `VenuesRepository.searchPublished({ ...query, sort, lat: location?.lat, lng: location?.lng })`.
+- Aynı desen `VenuesController.mapView` için de geçerli olabilir ama `findInBbox` zaten konumdan
+  bağımsız çalışıyor (bbox tabanlı) — dokunulmaz.
+- `DistrictsController.findNearest`, artık `@Query("lat")`/`@Query("lng")` yerine
+  `@UserLocationParam()` kullanır; konum yoksa `400 LOCATION_REQUIRED` döner (bu uç, konum
+  olmadan anlamsız — diğerlerinin aksine opsiyonel değil).
 
 ## 3. Repository'nin transaction-farkındalığı (A4'ün gerçek ön-koşulu)
 
@@ -99,8 +163,22 @@ deseniyle raw-SQL repository'lerin birlikte kullanılmasının standart yoludur.
 - `revert()` de aynı deseni kullanır: mevcut state'i yeni bir `VenueVersion` olarak kaydedip
   SONRA eski snapshot'ı uygulamak, ikisi tek transaction'da.
 
+**Round 2 düzeltmesi — snapshot'ın konumu hiç kapsamaması (ADR 002'nin bir başka sonucu):**
+`prisma.venue.findUnique()`/`findFirst()` gibi normal Prisma Client model-read çağrıları, PostGIS
+`Unsupported("geography(Point,4326)")` kolonunu **okuyamaz** — `location` alanı snapshot JSON'ında
+hiç yer almaz, `revert()` konumu asla geri alamaz. Çözüm: `VenuesRepository`'ye yeni bir metod,
+`findRawForSnapshot(client, id)`, `findBySlug`/`findInBbox`'ın zaten kullandığı
+`ST_Y(location::geometry)`/`ST_X(location::geometry)` deseniyle **tüm** düzenlenebilir alanları
+(snapshot'ın restore edebileceği her şey) `lat`/`lng` dahil tek bir `$queryRaw` ile döner.
+`AdminVenuesService.update()`/`revert()`'in snapshot adımı artık `tx.venue.findUnique()` yerine
+bunu çağırır. `revert()`, eski snapshot'ı uygularken `lat`/`lng` alanlarını
+`updateWithLocation`'a (konum güncelleyen raw SQL yolu) geçirir — düz `tx.venue.update()` ile
+DEĞİL (o yol `location` kolonuna hiç dokunamaz).
+
 **B8 — Shared şema `type:"REPORT"` dışını reddediyor:**
-- `AdminQueueItemSchema`'nın `type` alanı `z.enum(["REPORT", "EDIT"])` olur.
+- `AdminQueueItemSchema`'nın **VE** `AdminQueueMutationResultSchema`'nın (round 2'de eklendi —
+  round 1 yalnızca liste şemasını değiştirmişti, approve/reject'in döndürdüğü mutation sonucu
+  şeması hâlâ `REPORT` literal'ıydı) `type` alanı `z.enum(["REPORT", "EDIT"])` olur.
 - **Netleştirme (round 1'de belirsiz bırakılmıştı):** Admin panelinin `getQueue()` fonksiyonu
   bilinçli olarak yalnızca `type=REPORT` filtreli çalışıyor (Plan 3'ün 2 sayfalık daraltılmış
   kapsam kararı — "gerisi Postman/Prisma Studio'ya bırakıldı"). **Bu plan admin UI'ı EDIT/re_verify
@@ -132,15 +210,21 @@ girilir, MVP'de fotoğraf yükleme akışı yok) ve `findBySlug`'ın select list
   `franchiseFlag`'inde zaten kullanılan güvenli desen: query string yoksa `undefined`, varsa
   yalnızca `"true"` kabul edilir (`z.literal("true").optional().transform(v => v === "true")`).
 - `VenuesRepository.searchPublished`'a eklenen SQL koşulu, **gerçek veri şekliyle** çalışır: bugün
-  Pazartesi-Cuma mı Cumartesi-Pazar mı olduğunu `EXTRACT(ISODOW FROM now())` ile bulur (1-5 →
-  `mon_fri`, 6-7 → `sat_sun`), `openingHours->>o gün_anahtarı` ile `"HH:MM-HH:MM"` string'ini
-  çeker, `now()::time`'ı bu aralıkla karşılaştırır. İstanbul saat dilimi sabit kabul edilir (proje
-  genelinde tek şehir/tek dilim varsayımıyla tutarlı).
-- **Not:** `openingHours`'un serbest-metin JSON olması (FR-MV-01) nedeniyle her mekan tam olarak
-  `mon_fri`/`sat_sun` anahtarlarını kullanmayabilir (kürasyon ekibi elle giriyor) — SQL koşulu bu
-  anahtarlar yoksa (`NULL` sonuç) o mekanı "açık/kapalı bilinmiyor" sayıp **filtreden hariç
-  tutmaz, dahil eder** (fail-open — bir mekanı yanlışlıkla gizlemek, yanlışlıkla göstermekten
-  daha kötü bir kullanıcı deneyimi).
+  Pazartesi-Cuma mı Cumartesi-Pazar mı olduğunu `EXTRACT(ISODOW FROM now() AT TIME ZONE 'Europe/Istanbul')`
+  ile bulur (1-5 → `mon_fri`, 6-7 → `sat_sun` — **round 2 düzeltmesi:** `now()` yerine
+  `now() AT TIME ZONE 'Europe/Istanbul'` kullanılır; DB session'ının kendi zaman dilimi ayarına
+  güvenilmez, İstanbul açıkça sabitlenir), `openingHours->>gün_anahtarı` ile `"HH:MM-HH:MM"`
+  string'ini çeker.
+- **Round 2 düzeltmesi — malformed veri koruması:** `openingHours` serbest-metin JSON olduğu için
+  (kürasyon ekibi elle giriyor) bir hücre `"HH:MM-HH:MM"` formatında olmayabilir — doğrudan
+  `::time` cast'i böyle bir değerle **tüm sorguyu** hataya düşürür. SQL koşulu, karşılaştırmadan
+  önce değerin regex ile (`~ '^[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]$'`) doğru formatta
+  olduğunu kontrol eder; uymuyorsa (veya anahtar hiç yoksa) o mekanı **filtreden hariç tutmaz,
+  dahil eder** (fail-open — bir mekanı yanlışlıkla gizlemek, yanlışlıkla göstermekten daha kötü
+  bir kullanıcı deneyimi, hem de format hatası hiçbir zaman 500'e düşmemeli).
+- Test: hem doğru formatlı hem malformed (`"kapalı"`, boş string, eksik anahtar) `openingHours`
+  değerleriyle sorgunun **hata fırlatmadığı** ve malformed olan mekanın sonuçta göründüğü
+  doğrulanır.
 
 ## 7. Diğer veri doğruluğu düzeltmeleri (B4, B5, B6, B9, B10, B11, B12, B13)
 
@@ -153,7 +237,13 @@ girilir, MVP'de fotoğraf yükleme akışı yok) ve `findBySlug`'ın select list
   kısmi update'lerde eksik alanları güncelleme öncesi `venuesRepository`'den okuyup tamamlar.
 - **B9 — Favoriye DRAFT/ARCHIVED eklenebiliyor:** `FavoritesService.addVenue()` önce
   `status === "PUBLISHED"` kontrolü yapar.
-- **B10 — En yakın ilçe sorgusu status filtrelemiyor:** raw SQL'e `WHERE v.status = 'PUBLISHED'`.
+- **B10 — En yakın ilçe sorgusu status filtrelemiyor + projeksiyon önceden eksik (round 2'de
+  keşfedilen, bu plandan bağımsız pre-existing bug):** raw SQL'e `WHERE v.status = 'PUBLISHED'`
+  eklenir; **ayrıca** `SELECT`, yalnızca `d.id, d.name` yerine `d.id, d.name, d."cityId", d.slug`
+  seçer — web'in `DistrictSchema`'sı `cityId`+`slug`'ı da zorunlu kılıyor, bu alanlar hiç
+  seçilmediği için `/districts/nearest` bugüne kadar (bu planın konusu olmayan bir nedenle)
+  istemci tarafında şema doğrulamasından geçemiyordu. `NearestDistrictRow` tipi buna göre
+  genişletilir.
 - **B11 — `lat=0`/`lng=0` "yok" sayılıyor:** boolean check'ler `!== undefined`'a çevrilir.
 - **B12 — UUID/bbox doğrulaması eksik:** `bbox` için `BboxQuerySchema` (4 finite sayı, min<max);
   path param UUID'leri için doğrulayan bir pipe.

@@ -1,7 +1,7 @@
 # GurmeGo — Plan 4c: Frontend/Admin Kritik Düzeltmeler — Design Doc
 
-**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team PIVOT sonrası tam
-revizyon), idea-red-team round 2'ye hazır
+**Tarih:** 2026-07-26 · **Durum:** Onaylandı (brainstorming + idea-red-team, 2 PIVOT sonrası tam
+revizyon), idea-red-team round 3'e hazır
 
 İlgili: [docs/AUDIT-2026-07-26.md](../../AUDIT-2026-07-26.md) (bulguların kaynağı),
 [docs/superpowers/specs/2026-07-26-backend-fixes-design.md](2026-07-26-backend-fixes-design.md) (kardeş plan — bu plan ondan SONRA yürütülmeli)
@@ -24,36 +24,71 @@ revizyon), idea-red-team round 2'ye hazır
 6. **`queue-item.tsx`'in onay metni Plan 4b'nin A3 kararıyla artık çelişiyor** — round 1 bunu hiç
    ele almamıştı.
 
+**Round 2 idea-red-team yine PIVOT verdi** — bu kez "yaklaşım temelde doğru, ayrıntı eksik".
+Round 3 için ele alınanlar (hepsi kodda doğrulandı):
+1. Header implementasyonu, gerçek dosyaya (`packages/api-client`'ın `get()` metodu + web'in
+   `fetchValidated`/`createApiClient` zinciri, `packages/api-client/src/index.ts` DEĞİL yalnızca
+   soyut bir "genişletilir" cümlesiyle) doğru bağlanmamıştı.
+2. **`CategoryQuickRoute` önerisi mevcut veri sözleşmesiyle uyumsuzdu** — `VenueListItem`'da
+   `lat`/`lng`/`district` yok, bileşen zaten `venues` listesini almıyor. Yeni şema alanı eklemek
+   yerine, `venue-detail.tsx`'in zaten kullandığı isim+ilçe text-search deep-link'i (`directionsUrl`)
+   paylaşılan bir helper'a çıkarılıp kullanılacak — ilçe zaten sayfa seviyesinde (`districtId`
+   prop'undan ilçe adına çevrilebilir) biliniyor, yeni veri gerekmiyor.
+3. Plan 4b'nin `VenueListQuerySchema`'sının artık `lat`/`lng`'i tamamen çıkarıp sort mantığını
+   servise taşıması (bkz. Plan 4b Bölüm 2.5) nedeniyle, C8'in "backend'in mevcut mantığı
+   değişmeden çalışır" iddiası düzeltildi — mantık DEĞİŞİYOR (şemadan servise taşınıyor), frontend
+   tarafında bir şey değişmiyor ama iddia yanlıştı.
+
 ## 1. Kapsam ve hedef
 
 `docs/AUDIT-2026-07-26.md`'nin frontend bulgularının tamamını, **gerçek mimariye uygun şekilde**
 çözer. **Sıra bağımlılığı:** Plan 4b tamamlanmadan bu plan başlayamaz (header sözleşmesi, mekan
 koordinatı, `open_now` backend'i, `address`/`photos` alanları — hepsi Plan 4b'nin çıktısı).
 
-## 2. Konum header'a taşınır (A2 frontend tarafı — gerçek implementasyon)
+## 2. Konum header'a taşınır (A2 frontend tarafı — round 3'te gerçek dosyalara bağlandı)
 
-**`packages/api-client/src/index.ts`'in `createApiClient().get()` metodu genişletilir:**
+**`packages/api-client/src/index.ts`'in `createApiClient()`'ının döndürdüğü `get()` metodu
+genişletilir** (bu paket, `apps/web/src/lib/api.ts`'in `fetchValidated`'ının altında kullandığı
+gerçek istemci — dosya adı ve zincir doğrulandı):
 ```typescript
 async get<T>(path: string, options?: { headers?: Record<string, string> }): Promise<T> {
   const token = getToken?.();
   const res = await fetch(`${baseUrl}${path}`, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options?.headers },
   });
-  ...
+  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  return res.json();
 }
 ```
 
-**`apps/web/src/lib/api.ts`'e bir yardımcı eklenir:**
+**`apps/web/src/lib/api.ts`'teki `fetchValidated`'a bir `headers` parametresi eklenir:**
 ```typescript
+async function fetchValidated<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  token?: string,
+  headers?: Record<string, string>,
+): Promise<T> {
+  const authedClient = token ? createApiClient(API_BASE, () => token) : client;
+  const raw = await authedClient.get<unknown>(path, { headers });
+  ...
+}
+
 function locationHeaders(coords?: { lat: number; lng: number } | null): Record<string, string> {
   return coords ? { "X-User-Location": `${coords.lat},${coords.lng}` } : {};
 }
 ```
-`getVenues`/`getNearestDistrict` çağrıları artık `coords` parametresi alır ve bu header'ı ekler.
+`getVenues`/`getNearestDistrict` artık bir `coords` parametresi alır, `fetchValidated`'a
+`locationHeaders(coords)`'u dördüncü argüman olarak geçirir.
 **`serializeFilters` (venue-filters.tsx) artık `lat`/`lng`'i query objesine hiç koymaz** — yalnızca
 `radiusM`'i (coords varsa) tutar; konum tamamen header üzerinden, `getVenues`'in kendi
 sorumluluğunda taşınır. Bu, konumun ST_DWithin filtresi seçilmemiş olsa bile (yalnızca sıralama
 için) her zaman gönderilebilmesini sağlar — bkz. Bölüm 4 (C8).
+
+**`getNearestDistrict`'in kendi çağrısı** (`districts/nearest`) artık `lat`/`lng`'i query'de değil
+header'da gönderir — bu uç, Plan 4b Bölüm 2.5'te konum olmadan `400` döndüğü için `coords` burada
+opsiyonel değil, zorunlu bir parametredir (çağıran taraf zaten yalnızca coords varken bu
+fonksiyonu çağırıyor — `district-picker.tsx`'in mevcut akışı).
 
 ## 3. Hata yönetimi ve auth (C1, C2, C11, C12) — değişmedi, round 1'de zaten doğruydu
 
@@ -140,16 +175,28 @@ dropdown. Tek liste varsa mevcut sessiz davranış korunur (YAGNI).
 `getVenues`'e parametre olarak eklenir. Backend Plan 4b Bölüm 6'da hazır olacak; query param
 formatı Plan 4b'nin CSV `franchiseFlag` deseniyle aynı (`"true"` literal, coerce.boolean değil).
 
-## 8. Kategori hızlı rota tamamlanır (C6 — round 1'de düşürülmüştü, geri eklendi)
+## 8. Kategori hızlı rota tamamlanır (C6 — round 2'de veri sözleşmesi düzeltildi)
 
 **Sorun:** Bir kategori seçildiğinde yalnızca liste filtreleniyor; FR-KA-06'nın "doğrudan yol
 tarifi" kısmı yok.
 
-**Çözüm (yorum: en basit, sınırları net yorum):** `CategoryQuickRoute`, bir kategori seçildiğinde
-ve filtrelenmiş sonuçta en az bir mekan varsa, en yakın (coords mevcutsa distance-sıralı listenin
-ilk öğesi, değilse ilk öğe) mekana **doğrudan** giden bir "En yakın [kategori] mekana git" butonu
-gösterir — bu buton, `venue-detail.tsx`'in zaten kullandığı harici harita deep-link mekanizmasını
-(FR-MD-03) tekrar kullanır, yeni bir deep-link deseni icat edilmez.
+**Round 1/2'nin hatası:** Öneri, `VenueListItem`'ın `lat`/`lng`/`district` alanları varmış gibi
+yazılmıştı — hiçbiri yok, `CategoryQuickRoute` da zaten `venues` listesini prop olarak almıyor
+(yalnızca `activeCategory`+callback). Yeni şema alanı eklemek (mesela `VenueListItemSchema`'ya
+`lat`/`lng` eklemek) gereksiz bir genişletme olurdu.
+
+**Round 3 çözümü — mevcut deep-link deseni paylaşılır, yeni veri gerekmez:**
+- `venue-detail.tsx`'teki `directionsUrl(venue)` fonksiyonu (isim+ilçe metin araması ile Google
+  Maps linki üreten, zaten var olan ve "pilot ölçeğinde güvenilir" olarak belgelenen desen)
+  `apps/web/src/lib/directions.ts`'e taşınır: `directionsUrl(venueName: string, districtName: string): string`.
+- `[district]/page.tsx` zaten hangi ilçede olduğunu biliyor (`districtId`/sayfa parametresi) —
+  ilçe adını `DiscoveryClient`'a, oradan `CategoryQuickRoute`'a prop olarak geçirir.
+- `CategoryQuickRoute` artık `venues: VenueListItem[]` prop'unu da alır (zaten `DiscoveryClient`'ın
+  state'inde var, yeni bir API çağrısı gerekmez). Bir kategori seçilip filtrelenmiş `venues`
+  listesi boş değilse, listenin ilk öğesinin adını + bilinen ilçe adını `directionsUrl()`'e
+  vererek "En yakın [kategori] mekana git" butonu gösterir.
+- Liste zaten (Plan 4c Bölüm 4/C8 sayesinde) konum mevcutsa distance-sıralı geldiği için "ilk öğe"
+  doğal olarak "en yakın" anlamına gelir — ayrı bir mesafe hesaplaması gerekmez.
 
 ## 9. Erişilebilirlik (C13, C14)
 
