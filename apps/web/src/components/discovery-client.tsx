@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { VenueFilters, serializeFilters, type FilterState } from "@/components/venue-filters";
 import { VenueList } from "@/components/venue-list";
 import { VenueMap } from "@/components/venue-map";
 import { CategoryQuickRoute } from "@/components/category-quick-route";
-import { useGeolocation } from "@/lib/use-geolocation";
+import { useLocationContext } from "@/lib/location-context";
+import type { Coords } from "@/lib/use-geolocation";
 import { getVenues, type VenueListItem } from "@/lib/api";
 
 export function toggleViewMode(current: "list" | "map"): "list" | "map" {
@@ -15,26 +16,66 @@ export function DiscoveryClient({ districtId, initialVenues }: { districtId: str
   const [venues, setVenues] = useState(initialVenues);
   const [filters, setFilters] = useState<FilterState>({});
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const coords = useGeolocation();
+  const coords = useLocationContext();
 
-  // Single refetch path shared by `VenueFilters` and `CategoryQuickRoute` — both write into the
-  // SAME `FilterState` and go through this function, so a quick-category pick composes with an
-  // already-active filter (e.g. "Butik") instead of the two clobbering each other's `venues`
-  // state independently (final-review Finding 3).
-  async function applyFilters(next: FilterState) {
+  const latestRequest = useRef(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // `sortedByDistance` is produced here — becomes true only immediately after a successful
+  // coords-driven fetch, not merely "coords exist" — but has no consumer yet (Task 6's job).
+  const [sortedByDistance, setSortedByDistance] = useState(false);
+  const autoSortedRef = useRef(false);
+  const userInteractedRef = useRef(false);
+
+  // Shared fetch path used by both user-driven filter changes (`applyFilters`) and the one-time
+  // auto-sort effect below — both write into the SAME `FilterState` and go through this function,
+  // so a quick-category pick composes with an already-active filter (e.g. "Butik") instead of the
+  // two clobbering each other's `venues` state independently (final-review Finding 3), and the
+  // race-condition guard (`latestRequest`) covers both origins of a fetch.
+  async function runFetch(next: FilterState, requestCoords: Coords | null) {
+    const requestId = ++latestRequest.current;
     setFilters(next);
-    const { data } = await getVenues({ districtId, ...serializeFilters(next, coords) }, coords);
-    setVenues(data);
+    setLoading(true);
+    setError(null);
+    try {
+      const { data } = await getVenues({ districtId, ...serializeFilters(next, requestCoords) }, requestCoords);
+      if (requestId !== latestRequest.current) return;
+      setVenues(data);
+      setSortedByDistance(Boolean(requestCoords));
+    } catch {
+      if (requestId !== latestRequest.current) return;
+      setError("Mekanlar yüklenirken bir hata oluştu.");
+      setSortedByDistance(false);
+    } finally {
+      if (requestId === latestRequest.current) setLoading(false);
+    }
   }
 
+  function applyFilters(next: FilterState) {
+    userInteractedRef.current = true;
+    void runFetch(next, coords);
+  }
+
+  // One-time auto-sort: fires once when coords first resolve, but only if the user hasn't already
+  // changed a filter before coords resolved (guarded by `userInteractedRef`) — otherwise it would
+  // clobber the user's own choice with a coords-only refetch.
+  useEffect(() => {
+    if (coords && !autoSortedRef.current && !userInteractedRef.current) {
+      autoSortedRef.current = true;
+      void runFetch(filters, coords);
+    }
+  }, [coords]);
+
   function handleQuickCategory(category: string) {
-    void applyFilters({ ...filters, category });
+    applyFilters({ ...filters, category });
   }
 
   return (
     <>
       <CategoryQuickRoute activeCategory={filters.category} onSelectCategory={handleQuickCategory} />
       <VenueFilters value={filters} onChange={applyFilters} coordsAvailable={coords !== null} />
+      {loading && <p role="status" aria-live="polite">Yükleniyor…</p>}
+      {error && <p role="status" aria-live="polite">{error}</p>}
       <button
         type="button"
         data-testid="view-mode-toggle"
