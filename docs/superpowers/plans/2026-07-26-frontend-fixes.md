@@ -119,6 +119,9 @@ confirmed by reading `apps/web/package.json`) + `@testing-library/react`.
 - Modify: `apps/web/src/components/discovery-client.tsx` (only the `getVenues` call site, real
   current line: `const { data } = await getVenues({ districtId, ...serializeFilters(next, coords) });`)
 - Modify: `apps/web/src/components/district-picker.tsx` (only its `getNearestDistrict` call site)
+- Modify: `apps/web/src/components/venue-detail.spec.tsx` (Step 0's pre-flight fixture fix, if this
+  file's own fixtures are also found to be missing `lat`/`lng`/`address`/`photos` — check when
+  running Step 0, list here explicitly rather than leaving it as an unlisted side effect)
 - Test: `packages/api-client/src/index.spec.ts` (new), `apps/web/src/lib/api.spec.ts` (append —
   using the REAL existing `mockGet`/`mockPost`/`vi.hoisted()` pattern, not a `client` spy),
   `apps/web/src/components/venue-filters.spec.tsx` (append), `apps/web/src/components/discovery-client.spec.tsx` (append — one call-site test only), `apps/web/src/components/district-picker.spec.tsx` (new — confirmed this file does not exist in the repo today, create it, don't "append")
@@ -322,12 +325,16 @@ change, run — PASS.
       explicitly widened to two here, in the same step that introduces the second argument).
 - [ ] **Step 11: Update `district-picker.tsx`'s ONE `getNearestDistrict` call site** — read the
       file first for its exact current call, change to the single `coords` object. Write the
-      failing test, confirm fail, fix, confirm pass.
+      failing test, confirm fail, fix, confirm pass. **Also update `api.spec.ts`'s own two existing
+      `getNearestDistrict` tests** (confirmed real calls: `getNearestDistrict(40.99, 29.03)` at two
+      places in its `describe("getNearestDistrict", ...)` block) **from the two-number-argument
+      form to `getNearestDistrict({ lat: 40.99, lng: 29.03 })`, in this same step** — they currently
+      test the OLD signature this step replaces.
 - [ ] **Step 12:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit` and
       `cd packages/api-client && npx vitest run`.
 - [ ] **Step 13: Commit**
 ```bash
-git add packages/api-client pnpm-lock.yaml apps/web/src/lib/api.ts apps/web/src/lib/api.spec.ts apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-filters.spec.tsx apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx apps/web/src/components/district-picker.tsx apps/web/src/components/district-picker.spec.tsx
+git add packages/api-client pnpm-lock.yaml apps/web/src/lib/api.ts apps/web/src/lib/api.spec.ts apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-filters.spec.tsx apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx apps/web/src/components/district-picker.tsx apps/web/src/components/district-picker.spec.tsx apps/web/src/components/venue-detail.spec.tsx
 git commit -m "feat(web): add coords parameter + X-User-Location header to getVenues/getNearestDistrict, remove lat/lng from serializeFilters, add Vitest to api-client"
 ```
 
@@ -339,7 +346,7 @@ git commit -m "feat(web): add coords parameter + X-User-Location header to getVe
 - Create: `apps/web/src/lib/location-context.tsx`
 - Modify: `apps/web/src/app/[district]/page.tsx` (wrap `DistrictPicker` + `DiscoveryClient`)
 - Modify: `apps/web/src/components/district-picker.tsx`
-- Test: `apps/web/src/lib/location-context.spec.tsx` (new), `apps/web/src/components/district-picker.spec.tsx` (new — confirmed this file does not exist in the repo today, create it, don't "append")
+- Test: `apps/web/src/lib/location-context.spec.tsx` (new), `apps/web/src/components/district-picker.spec.tsx` (append — Task 1 creates this file first; by the time this task runs, it already exists)
 
 **Interfaces:**
 - Consumes: `useGeolocation(): Coords | null`
@@ -459,41 +466,55 @@ fails today via an unhandled promise rejection under Vitest). Add
 `.catch(() => setLoading(false))` (matching the real state-setter's name) to the `getSession()`
 chain. Run — PASS.
 
-- [ ] **Step 2 (C11): Write the failing test, using the REAL `FavoriteList`/`favorites[].venue` shape**
+- [ ] **Step 2 (C11): Write the failing test — round-7 finding: the real `FavoriteButton` has no
+      "toggle" concept at all (confirmed by reading the file in full). It only ADDS: `handleClick`
+      calls `getFavoriteLists(token)`, uses `lists[0]` or calls `createFavoriteList` if none exist,
+      then `addFavoriteVenue(token, listId, venueId)`, then `setAdded(true)`. There is no
+      `toggleFavorite` function anywhere in this codebase — do not invent one. The real mock
+      harness (confirmed in the existing `favorite-button.spec.tsx`) already exposes
+      `getFavoriteLists`, `createFavoriteList`, `addFavoriteVenue` as individually-mockable
+      functions via one `vi.mock("@/lib/api", ...)` block — reuse that exact harness, don't add a
+      new one.**
 ```typescript
-describe("FavoriteButton — real state check and disabled-while-pending", () => {
-  it("reflects the venue's real favorite status from GET /me/lists on mount", async () => {
-    getFavoriteListsMock.mockResolvedValue([{
-      id: "l1", userId: "u1", name: "Default", createdAt: "2026-01-01T00:00:00.000Z",
+describe("FavoriteButton — real mount-time state check and disabled-while-pending", () => {
+  it("reflects the venue's real favorite status from GET /me/lists on mount (no click needed)", async () => {
+    getFavoriteLists.mockResolvedValue([{
+      id: "l1", name: "Default",
       favorites: [{ id: "f1", venueId: "v1", venue: { id: "v1", name: "X", slug: "x", category: "cafe", priceRange: "BUDGET", isBoutique: false } }],
     }]);
     render(<FavoriteButton venueId="v1" />);
     await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "true"));
   });
 
-  it("disables itself while a toggle request is in flight, after the initial mount-time check resolves", async () => {
-    getFavoriteListsMock.mockResolvedValue([{ id: "l1", userId: "u1", name: "Default", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] }]);
-    let resolveToggle: () => void;
-    toggleFavoriteMock.mockReturnValue(new Promise<void>((resolve) => { resolveToggle = resolve; }));
+  it("disables itself while the add flow (getFavoriteLists -> createFavoriteList/addFavoriteVenue) is in flight", async () => {
+    getFavoriteLists.mockResolvedValue([{ id: "l1", name: "Default", favorites: [] }]);
+    let resolveAdd: () => void;
+    addFavoriteVenue.mockReturnValue(new Promise<void>((resolve) => { resolveAdd = resolve; }));
     render(<FavoriteButton venueId="v1" />);
-    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled()); // mount-time check resolved
     fireEvent.click(screen.getByTestId("favorite-button"));
     expect(screen.getByTestId("favorite-button")).toBeDisabled();
-    resolveToggle!();
+    resolveAdd!();
     await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
   });
 });
 ```
-(Match mock names to what `favorite-button.spec.tsx` already establishes.) Run — FAIL. Add a
-mount-time fetch of the user's lists (only if `useAuth().user` is truthy) checking whether any
-list's `favorites` contains this `venueId` — disabled until that resolves too — and a `pending`
-state around the toggle call. **Before running the full suite, read the EXISTING tests in
-`favorite-button.spec.tsx` in full** (round-6 finding: they click the button immediately after
-`render()` with no `favorites` in their fixtures, which the new mount-time check will race) —
-update each to (a) use a real `FavoriteList`-shaped fixture (even an empty `favorites: []` array,
-not an absent field) and (b) `await` the initial mount-time check resolving (e.g.
-`await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled())`) before
-simulating a click, in the SAME step as the new mount-time check is added — not as a follow-up.
+Run — FAIL. Add a mount-time `useEffect` (only if `useAuth().user` is truthy) that calls
+`getFavoriteLists(session.access_token)` and sets `added` to `true` if any returned list's
+`favorites` array contains an entry whose `venueId === venueId` — the button is disabled until
+this initial check resolves too (a separate `initialCheckPending` state, distinct from the
+existing `added` state). Add a `pending` state set `true` at the start of `handleClick`, `false` in
+a `finally`, with `disabled={pending || initialCheckPending}` on the button.
+
+**Update the two EXISTING tests in `favorite-button.spec.tsx` in the SAME step** (round-6/7
+finding: they click immediately after `render()`, and their fixtures — confirmed by reading the
+file — have no `favorites` field at all, e.g. `getFavoriteLists.mockResolvedValue([{ id: "existing", name: "Denenecekler" }])`
+— the new mount-time check would crash calling `.some()` on an undefined `favorites`):
+- Add `favorites: []` to both existing fixture objects (`{ id: "list1", name: "Favorilerim" }` →
+  add `favorites: []`; `{ id: "existing", name: "Denenecekler" }` → add `favorites: []`).
+- Add `await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());`
+  immediately after `render(...)` and before `fireEvent.click(...)` in both tests, so the click
+  doesn't race the new mount-time check.
 Run — PASS.
 
 - [ ] **Step 3 (C12): Write the failing test with the real `mode="signin"` value, real field labels, and the real `{ error }` resolution shape**
@@ -827,11 +848,16 @@ describe("directionsUrl", () => {
   });
 });
 ```
-Run — FAIL. Create `apps/web/src/lib/directions.ts` with the extracted function. Update
-`venue-detail.tsx`'s local `directionsUrl(venue)` to delegate:
-`directionsUrl(venue.name, venue.district.name)`, keeping its one call site
-(`href={directionsUrl(venue)}`) unchanged. Run existing `venue-detail.spec.tsx` tests — no
-regression. Run the new test — PASS.
+Run — FAIL. Create `apps/web/src/lib/directions.ts` with the extracted function.
+
+**Round-7 finding: do not keep a local wrapper also named `directionsUrl(venue)` that calls the
+newly-imported `directionsUrl(name, district)`** — same identifier, either a duplicate-declaration
+error or accidental self-recursion. Instead, DELETE `venue-detail.tsx`'s local `directionsUrl`
+function entirely, `import { directionsUrl } from "@/lib/directions"` at the top, and change its
+one call site directly from `href={directionsUrl(venue)}` to
+`href={directionsUrl(venue.name, venue.district.name)}`. Run existing `venue-detail.spec.tsx`
+tests — no regression (same URL, same `data-testid="directions-link"`, just called with two
+strings at the call site instead of one object internally). Run the new test — PASS.
 
 - [ ] **Step 2: `CategoryQuickRoute`'s widened contract**
 ```typescript
@@ -873,7 +899,17 @@ describe("CategoryQuickRoute — widened contract: venues, districtName, sortedB
 Run — FAIL. Update props to
 `{ activeCategory?: string; venues: VenueListItem[]; districtName: string; sortedByDistance: boolean; onSelectCategory: (category: string | undefined) => void }`.
 Click: `onSelectCategory(activeCategory === category ? undefined : category)`. Render a directions
-link when a matching venue exists, labeled by `sortedByDistance`. Run — PASS.
+link when a matching venue exists, labeled by `sortedByDistance`.
+
+**`venues`/`districtName`/`sortedByDistance` all become required props — before running the full
+suite, update the THREE existing render calls in `category-quick-route.spec.tsx`** (confirmed real
+file, 3 tests, each currently rendering `<CategoryQuickRoute onSelectCategory={...} />` or
+`<CategoryQuickRoute activeCategory="restaurant" onSelectCategory={...} />` with none of the new
+props) **to add `venues={[]} districtName="Kadıköy" sortedByDistance={false}` to each of the three
+calls, in this same step** — none of those three tests depend on those props' actual values, so a
+fixed placeholder is correct for all of them.
+
+Run — PASS.
 
 - [ ] **Step 3: Wire `DiscoveryClient` and `[district]/page.tsx`, proving `sortedByDistance`'s full observable behavior end-to-end**
 ```typescript
@@ -900,24 +936,38 @@ including ones that need the real component's rendering/click behavior.** Rather
 `CategoryQuickRoute` at all, assert through its REAL rendered DOM output (the real component is
 already exercised directly by Task 6, Step 2's own tests, so this is consistent, not a new mocking
 strategy introduced only for this one test):
+**Round-7 finding: the prior draft of this test clicked a category FIRST (which sets
+`userInteractedRef.current = true` inside `handleQuickCategory`/`applyFilters`), then expected the
+auto-sort effect to still fire later and flip the copy to "En yakın" — but Task 4's own guard
+(`!userInteractedRef.current`) makes that transition impossible by design. This was testing a
+state change the implementation deliberately prevents.** Split into two independent, individually
+valid scenarios instead — neither depends on a transition the guard blocks:
+
 ```typescript
 describe("DiscoveryClient — sortedByDistance reaches CategoryQuickRoute correctly (via real rendered output, not a mock)", () => {
-  it("shows neutral quick-route copy before coords resolve, 'En yakın' copy after a successful coords-driven fetch", async () => {
-    const venue = { id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null };
+  const venue = { id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null };
+
+  it("shows neutral quick-route copy when the user picks a category before coords ever resolve (auto-sort correctly never fires)", async () => {
     vi.mocked(useLocationContextMock).mockReturnValue(null);
     getVenuesMock.mockResolvedValue({ data: [venue], meta: { next_cursor: null, has_more: false } });
-    const { rerender } = render(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[venue]} />);
+    render(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[venue]} />);
     fireEvent.click(screen.getByTestId("quick-category-cafe"));
     await waitFor(() => expect(screen.getByRole("link", { name: /cafe mekana git/i })).toBeInTheDocument());
     expect(screen.queryByText(/en yakın/i)).not.toBeInTheDocument();
+  });
 
+  it("shows 'En yakın' quick-route copy when coords are ALREADY available at mount, so the one-time auto-sort fires with no prior user interaction to block it", async () => {
     vi.mocked(useLocationContextMock).mockReturnValue({ lat: 40.99, lng: 29.02 });
-    rerender(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[venue]} />);
+    getVenuesMock.mockResolvedValue({ data: [venue], meta: { next_cursor: null, has_more: false } });
+    render(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[venue]} />);
+    // no click at all -- the auto-sort effect runs on mount since coords are non-null and
+    // userInteractedRef is still false, proving sortedByDistance reaches true purely from the
+    // effect, not from a blocked/impossible post-interaction transition.
     await waitFor(() => expect(screen.getByRole("link", { name: /en yakın cafe mekana git/i })).toBeInTheDocument());
   });
 });
 ```
-Confirm fail, wire, confirm pass.
+Confirm both fail, wire, confirm both pass.
 
 - [ ] **Step 4:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
 - [ ] **Step 5: Commit**
@@ -953,14 +1003,24 @@ git commit -m "feat(web): category quick-route real directions deep link + desel
   `0` in this usage, producing a contradictory "0 mekan" header next to a real marker).
 
 - [ ] **Step 1: `focusVenue` bypass + center priority + loadState + count — write the failing test**
+
+**Round-7 finding:** initializing `loadState` to `"ready"` when `focusVenue` is given (round-6's
+fix) has a side effect the round-6 pass missed: the real, existing empty-state banner condition is
+`loadState === "ready" && locations.length === 0` (confirmed at its real line) — and in
+`focusVenue` mode, `locations` is never populated at all (it's exclusively filled by
+`BoundsVenueLoader`, which is skipped). So `"ready"` + an always-empty `locations` array would
+show "Bu görünümde seçili mekanlardan biri yok" directly over the one real marker. This condition
+must ALSO be guarded by `!focusVenue`.
+
 ```typescript
-describe("VenueMapCanvas — focusVenue bypasses the bbox fetch, wins over center, shows exactly one marker, starts ready (not stuck loading)", () => {
-  it("centers on focusVenue's coordinates even when a different center is given, renders only that marker, never calls getVenuesInBbox, and never shows the loading banner", async () => {
+describe("VenueMapCanvas — focusVenue bypasses the bbox fetch, wins over center, shows exactly one marker, starts ready (not stuck loading), and never shows the bbox-driven empty-state banner", () => {
+  it("centers on focusVenue's coordinates even when a different center is given, renders only that marker, never calls getVenuesInBbox, and shows neither the loading nor the empty-state banner", async () => {
     render(<VenueMapCanvas venues={[]} center={[41.0, 29.0]} focusVenue={{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", lat: 40.99, lng: 29.02 }} />);
     expect(screen.getByTestId("map-container")).toHaveAttribute("data-center", "40.99,29.02");
     expect(screen.getAllByTestId("circle-marker")).toHaveLength(1);
     expect(getVenuesInBboxMock).not.toHaveBeenCalled();
     expect(screen.queryByText(/aranıyor/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/seçili mekanlardan biri yok/i)).not.toBeInTheDocument();
   });
 });
 
@@ -976,11 +1036,14 @@ describe("VenueMap — venue-count header reflects focusVenue, not venues.length
 Run — FAIL. Implement: effective center = `focusVenue ? [focusVenue.lat, focusVenue.lng] : center`;
 when `focusVenue` present, skip mounting `BoundsVenueLoader` entirely and initialize
 `useState<LoadState>(focusVenue ? "ready" : "loading")` instead of always defaulting to
-`"loading"`; render one marker via the shared marker-rendering helper (Step 1 of Task 12 defines
-this helper — if Task 12 hasn't landed yet when this task is implemented, inline the marker JSX
-here and Task 12 refactors it into the shared helper then, updating this task's call site).
-Thread `focusVenue` through `VenueMap`, and update `VenueMap`'s header count expression from
-`venues.length` to `focusVenue ? 1 : venues.length`. Run — PASS.
+`"loading"`; change the real existing empty-state condition from
+`loadState === "ready" && locations.length === 0` to
+`!focusVenue && loadState === "ready" && locations.length === 0`; render one marker via the shared
+marker-rendering helper (Step 1 of Task 12 defines this helper — if Task 12 hasn't landed yet when
+this task is implemented, inline the marker JSX here and Task 12 refactors it into the shared
+helper then, updating this task's call site). Thread `focusVenue` through `VenueMap`, and update
+`VenueMap`'s header count expression from `venues.length` to `focusVenue ? 1 : venues.length`.
+Run — PASS.
 
 - [ ] **Step 2: Write the failing test for address/map/photos, mocking `VenueMap` explicitly so its `data-testid="map-container"`/`data-center` attributes are actually present for the assertions below**
 ```typescript

@@ -207,8 +207,15 @@ manuel düzeltme akışı için ayrı bir UI eklenmiyor, yalnızca metin gerçek
 ## 7. Favoriler & filtreler (C5, C7)
 
 **C5 — Koleksiyon oluşturma UI'ı yok:** `favoriler/page.tsx`'e "Yeni liste oluştur" formu
-(isim input + `POST /me/lists`) eklenir; birden fazla liste arasında geçiş için basit bir sekme/
-dropdown. Tek liste varsa mevcut sessiz davranış korunur (YAGNI).
+(isim input + `POST /me/lists`) eklenir. **Revizyon (implementasyon planı yazılırken kod
+okunarak düzeltildi):** bu bölüm ilk yazıldığında "birden fazla liste arasında geçiş için basit
+bir sekme/dropdown" istiyordu, ancak gerçek `favoriler/page.tsx` zaten TÜM listeleri ayrı kart
+olarak bir grid'de gösteriyor (her kart kendi favorilenmiş mekanlarını da inline listeliyor) —
+bu, pilot ölçeğinde (kullanıcı başına az sayıda liste) bir sekme/dropdown'dan daha basit ve en az
+o kadar kullanılabilir. Sekme/dropdown isteği bu nedenle düşürüldü; C5'in gerçek kapsamı yalnızca
+liste OLUŞTURMA formudur — yeni oluşturulan liste, sayfanın zaten var olan grid'ine otomatik
+olarak bir kart daha eklenerek görünür. Liste/kullanıcı sayısı arttıkça (Faz 2) gerçek bir
+sekme/dropdown'a geçilebilir.
 
 **C7 — Açık/kapalı filtresi yok:** `venue-filters.tsx`'e bir toggle eklenir (`openNow: boolean`).
 `getVenues`'e parametre olarak eklenir. Backend Plan 4b Bölüm 6'da hazır olacak (`OptionalTrueFlag`
