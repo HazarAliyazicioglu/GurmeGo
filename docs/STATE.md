@@ -19,10 +19,8 @@ Plan 4b'yi Task 1'den yürüt (implementer → task reviewer → final review + 
 - Yok.
 
 ## Yakın kararlar
-- Round 1/2/3 red-team + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5. Plan 1 mimari
-  kararları: docs/adr/001-003.
-- Plan 3/4a red-team + final-review kayıtları: docs/superpowers/plans/2026-07-25-admin-panel.md,
-  docs/superpowers/specs/2026-07-25-infra-ci-design.md, docs/superpowers/plans/2026-07-26-shared-build-fix.md
+- Round 1/2/3 red-team + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5. Plan 1-3/4a
+  mimari kararları/red-team kayıtları: docs/adr/001-003, ilgili plan/spec dosyaları.
 
 ## Ertelenen takip maddeleri (özet — tam liste docs/CHANGELOG.md 2026-07-25 girdisinde)
 - **Öncelikli:** Supabase Auth↔Prisma `User` senkronizasyonu yok (trigger eksik) — kayıt olan
