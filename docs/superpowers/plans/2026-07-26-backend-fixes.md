@@ -220,47 +220,25 @@ and to the row object:
 - [ ] **Step 8: Write the failing test — `venue.schema.spec.ts`** (add `import { z } from "zod";` at
       the top of this test file alongside the other imports — needed for the inline `z.object(...)`
       wrapper used to test `OptionalTrueFlag` in isolation). **This step deliberately does NOT
-      touch `VenueListQuerySchema`'s `lat`/`lng`/`isBoutique`/`openNow` fields** — round 4's
-      plan-red-team found that removing `lat`/`lng` here breaks `VenuesRepository.searchPublished`
-      (which still reads `filters.lat`/`filters.lng` off `VenueListQuery` until Task 4 rewrites
-      it), and that break sits in `apps/api`, not `packages/shared`, so this task's own
-      `npx tsc --noEmit` (Step 14, scoped to `packages/shared`) would pass while silently leaving
-      `apps/api` broken until Task 4. That entire query-shape change (removal + `openNow` +
-      `isBoutique` correction) now happens in Task 4, atomically with the `searchPublished`
-      rewrite that is its only consumer. This step only adds the `OptionalTrueFlag` helper
-      (a pure addition, no existing field touched) and `VenueDetailSchema`'s new fields (also
-      additive — `VenuesService.detail()`'s caller code is unaffected until Task 5 populates
-      `lat`/`lng`/`address`/`photos`, and Zod validation of a still-incomplete object failing is
-      an existing, unrelated behavior this task doesn't change):
+      touch `VenueListQuerySchema`'s `lat`/`lng`/`isBoutique`/`openNow` fields, NOR
+      `VenueDetailSchema`'s new fields** — round 4's plan-red-team found the `VenueListQuery`
+      instance of this problem (removing `lat`/`lng` here breaks `searchPublished`, which isn't
+      fixed until Task 4); round 5 found the SAME CLASS of bug on `VenueDetailSchema`: making
+      `lat`/`lng`/`address`/`photos` REQUIRED here, before `findBySlug` (Task 5) actually produces
+      them, means every `GET /venues/:slug` request between this task and Task 5 would fail Zod
+      validation at runtime (`VenuesService.detail()` parses `findBySlug`'s result against this
+      schema) — a regression window this plan itself would introduce, worse than a caught
+      `tsc` error because nothing here is a compile-time check. Both schema changes now happen
+      in their consumer's own task (`VenueListQuerySchema` in Task 4, `VenueDetailSchema` in
+      Task 5). This step only adds the `OptionalTrueFlag` helper, a pure addition:
 ```typescript
 import { z } from "zod";
-import { OptionalTrueFlag, VenueDetailSchema } from "./venue.schema";
+import { OptionalTrueFlag } from "./venue.schema";
 
 describe("OptionalTrueFlag", () => {
   it("stays undefined when absent", () => expect(z.object({ flag: OptionalTrueFlag }).parse({}).flag).toBeUndefined());
   it("parses 'true' as true", () => expect(z.object({ flag: OptionalTrueFlag }).parse({ flag: "true" }).flag).toBe(true));
   it("rejects 'false'", () => expect(z.object({ flag: OptionalTrueFlag }).safeParse({ flag: "false" }).success).toBe(false));
-});
-
-describe("VenueDetailSchema", () => {
-  const FULL = {
-    id: "d290f1ee-6c54-4b01-90e6-d701748f0851", slug: "x", name: "X", category: "cafe",
-    cuisineType: null, priceRange: "MODERATE", signatureItems: [], transportNote: null,
-    openingHours: {}, editorialNote: null, isBoutique: false,
-    verifiedAt: "2026-07-24T00:00:00.000Z", source: "MANUAL", googleRating: null,
-    googleRatingCount: null, googlePlaceId: null, district: { name: "Kadıköy", slug: "kadikoy" },
-    lat: 40.99, lng: 29.02, address: null, photos: [],
-  };
-  it("accepts the full shape", () => expect(VenueDetailSchema.safeParse(FULL).success).toBe(true));
-  it("rejects when lat/lng are missing (proves required, not silently stripped)", () => {
-    const { lat, lng, ...rest } = FULL;
-    expect(VenueDetailSchema.safeParse(rest).success).toBe(false);
-  });
-  it("round-trips address/photos (proves captured, not stripped)", () => {
-    const parsed = VenueDetailSchema.parse({ ...FULL, address: "Bahariye Cd. No:1", photos: ["p1"] });
-    expect(parsed.address).toBe("Bahariye Cd. No:1");
-    expect(parsed.photos).toEqual(["p1"]);
-  });
 });
 ```
 - [ ] **Step 9:** Run — FAIL, then in `venue.schema.ts` add ONLY:
@@ -1261,16 +1239,66 @@ land together."
 
 ---
 
-## Task 5: `findBySlug` rewrite (independent — no caller signature change)
+## Task 5: `findBySlug` rewrite + `VenueDetailSchema`'s new required fields (atomic)
 
-**Files:** Modify `apps/api/src/venues/venues.repository.ts` (`findBySlug` only). Test: `venues.repository.spec.ts`.
+Owns both the producer (`findBySlug`) and its schema contract (`VenueDetailSchema`) in the same
+task — round 5's plan-red-team found the same class of cross-task acceptance cycle here that
+round 4 found for `VenueListQuerySchema`/`searchPublished`: making `lat`/`lng`/`address`/`photos`
+required on `VenueDetailSchema` in Task 2, before `findBySlug` actually produced them, would mean
+every `GET /venues/:slug` request in between fails Zod validation at runtime. Both changes now
+land together.
+
+**Files:**
+- Modify: `apps/api/src/venues/venues.repository.ts` (`findBySlug` only)
+- Modify: `packages/shared/src/schemas/venue.schema.ts` (`VenueDetailSchema`)
+- Test: `venues.repository.spec.ts`, `packages/shared/src/schemas/venue.schema.spec.ts` (append)
 
 **Interfaces:** Consumes Task 1's `address`/`photos` columns. Produces `findBySlug(slug)` now
-returning `lat`/`lng`/`address`/`photos`/nested `district: {name, slug}`. `VenuesService.detail()`
-already calls this method with no arity change and passes the result straight through to
-`VenueDetailSchema` (Task 2) — no caller code changes, only richer data flows through.
+returning `lat`/`lng`/`address`/`photos`/nested `district: {name, slug}`, AND
+`VenueDetailSchema` requiring those same fields — both in this one commit.
+`VenuesService.detail()` calls `findBySlug` with no arity change and passes the result straight
+through to `VenueDetailSchema`; no caller code changes, only richer data flows through, and the
+schema is only made stricter at the exact moment the data backing it exists.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 0: Write the failing test for `VenueDetailSchema`, then add the fields**
+```typescript
+// packages/shared/src/schemas/venue.schema.spec.ts (append)
+describe("VenueDetailSchema", () => {
+  const FULL = {
+    id: "d290f1ee-6c54-4b01-90e6-d701748f0851", slug: "x", name: "X", category: "cafe",
+    cuisineType: null, priceRange: "MODERATE", signatureItems: [], transportNote: null,
+    openingHours: {}, editorialNote: null, isBoutique: false,
+    verifiedAt: "2026-07-24T00:00:00.000Z", source: "MANUAL", googleRating: null,
+    googleRatingCount: null, googlePlaceId: null, district: { name: "Kadıköy", slug: "kadikoy" },
+    lat: 40.99, lng: 29.02, address: null, photos: [],
+  };
+  it("accepts the full shape", () => expect(VenueDetailSchema.safeParse(FULL).success).toBe(true));
+  it("rejects when lat/lng are missing (proves required, not silently stripped)", () => {
+    const { lat, lng, ...rest } = FULL;
+    expect(VenueDetailSchema.safeParse(rest).success).toBe(false);
+  });
+  it("round-trips address/photos (proves captured, not stripped)", () => {
+    const parsed = VenueDetailSchema.parse({ ...FULL, address: "Bahariye Cd. No:1", photos: ["p1"] });
+    expect(parsed.address).toBe("Bahariye Cd. No:1");
+    expect(parsed.photos).toEqual(["p1"]);
+  });
+});
+```
+Run: `cd packages/shared && npx vitest run src/schemas/venue.schema.spec.ts` — FAIL, then add to
+`VenueDetailSchema` after `district`:
+```typescript
+  lat: z.number(),
+  lng: z.number(),
+  address: z.string().nullable(),
+  photos: z.array(z.string()),
+```
+Run again — PASS. **Do not run `cd packages/shared && npx tsc --noEmit` as this task's acceptance
+gate in isolation** — the meaningful gate is Step 4 below, after `findBySlug` actually produces
+these fields, at which point `packages/shared`'s own build is unaffected either way (Zod schema
+requiredness is a runtime concern, not a type-level one here since `findBySlug`'s return type
+was already loosely typed) but the API's actual runtime behavior is what round 5 was correcting.
+
+- [ ] **Step 1: Write the failing test for `findBySlug`**
 ```typescript
 describe("VenuesRepository.findBySlug — location and new fields", () => {
   it("returns lat/lng, address, photos, nested district via raw SQL, filters PUBLISHED", async () => {
@@ -1337,11 +1365,11 @@ async findBySlug(slug: string): Promise<VenueDetailRow | undefined> {
 - [ ] **Step 3:** Run — PASS (2 tests). Confirm `VenuesService.detail()`'s existing call site
       still compiles against the new `VenueDetailRow | undefined` return type (it should — this is
       strictly narrower than the previous untyped `any`, not a shape change).
-- [ ] **Step 4:** Run: `cd apps/api && npx jest src/venues/venues.repository.spec.ts src/venues/venues.service.spec.ts` — confirm `VenuesService.detail()`'s existing tests still pass unchanged.
+- [ ] **Step 4:** Run: `cd apps/api && npx jest src/venues/venues.repository.spec.ts src/venues/venues.service.spec.ts` — confirm `VenuesService.detail()`'s existing tests still pass unchanged, and now genuinely exercise the required `lat`/`lng`/`address`/`photos` fields end-to-end (schema + producer landed together in this task).
 - [ ] **Step 5:** Commit
 ```bash
-git add apps/api/src/venues/venues.repository.ts
-git commit -m "fix(api): findBySlug returns venue coordinates, address, photos via raw SQL"
+git add apps/api/src/venues/venues.repository.ts packages/shared/src/schemas/venue.schema.ts
+git commit -m "fix(api): findBySlug returns venue coordinates, address, photos via raw SQL, VenueDetailSchema requires them atomically"
 ```
 
 ---
@@ -1561,12 +1589,20 @@ git commit -m "fix(api): favorites and nearest-district only consider PUBLISHED 
 **Interfaces:** Consumes nothing new. Produces `BboxQuerySchema`; UUID validation on every `:id`/
 `:versionId` path param listed above (`venues.controller.ts`'s `:slug` is NOT touched).
 
-- [ ] **Step 1: Add `BboxQuerySchema`** to `packages/shared/src/schemas/venue.schema.ts`:
+- [ ] **Step 1: Add `BboxQuerySchema`** to `packages/shared/src/schemas/venue.schema.ts`. Guard
+      against empty string parts BEFORE calling `Number()` on them — `Number("")` is `0`, the same
+      footgun this plan already fixed once for `parseUserLocationHeader` (Task 4); a bbox like
+      `",40.9,29.1,41"` must not silently become `[0, 40.9, 29.1, 41]`:
 ```typescript
 export const BboxQuerySchema = z.object({
   bbox: z.string().transform((s, ctx) => {
-    const parts = s.split(",").map(Number);
-    if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
+    const rawParts = s.split(",");
+    if (rawParts.length !== 4 || rawParts.some((p) => p.trim() === "")) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "bbox must be 4 comma-separated finite numbers" });
+      return z.NEVER;
+    }
+    const parts = rawParts.map(Number);
+    if (parts.some((n) => !Number.isFinite(n))) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "bbox must be 4 comma-separated finite numbers" });
       return z.NEVER;
     }
@@ -1584,6 +1620,7 @@ export const BboxQuerySchema = z.object({
 describe("BboxQuerySchema", () => {
   it("rejects a malformed bbox string", () => expect(BboxQuerySchema.safeParse({ bbox: "not,numbers,here" }).success).toBe(false));
   it("rejects only 3 parts", () => expect(BboxQuerySchema.safeParse({ bbox: "29.0,40.9,29.1" }).success).toBe(false));
+  it("rejects an empty leading part instead of treating it as 0 (Number('')===0 footgun)", () => expect(BboxQuerySchema.safeParse({ bbox: ",40.9,29.1,41" }).success).toBe(false));
   it("accepts a well-formed bbox", () => expect(BboxQuerySchema.parse({ bbox: "29.0,40.9,29.1,41.0" }).bbox).toEqual([29.0, 40.9, 29.1, 41.0]));
 });
 ```
@@ -2098,3 +2135,64 @@ cross-task acceptance cycle, plus several smaller concrete gaps:
   existing e2e suite would prove route-level wiring — replaced with an actual appended HTTP case;
   (3) the design doc's CSV-visibility acceptance criterion (imported row appears in `GET /venues`)
   had no test at all — added as Task 6's new Step 6b, a real Postgres integration test.
+
+## Round 5 plan-red-team fixes and decision to proceed to implementation
+
+Round 5 confirmed the `lat`/`lng` cross-task cycle was genuinely closed ("Round 4'teki `lat/lng`
+acceptance döngüsünü gerçekten kapatmış") and found the **same class of bug** on a different field
+pair: `VenueDetailSchema` (Task 2) made `lat`/`lng`/`address`/`photos` required before `findBySlug`
+(Task 5) actually produced them — a runtime Zod-validation break on every `GET /venues/:slug` in
+between, which is a real regression this plan would have introduced (worse than the earlier
+`VenueListQuery` version of this bug, which was at least a caught `tsc` error). **Fixed**: moved
+`VenueDetailSchema`'s new fields into Task 5, atomically with `findBySlug`. Also fixed:
+`BboxQuerySchema` had the exact same `Number("")===0` footgun this plan already fixed once for
+`parseUserLocationHeader` — guarded empty bbox parts before calling `Number()` on them.
+
+**Decision: this is the last purely-textual plan-red-team round.** Round 5's remaining findings
+— whether `GET /v1/admin/venues/:id` exists as a route the UUID pipe test can hit, `curatorToken`'s
+actual source in `app.e2e-spec.ts`, `PrismaService`'s real constructor signature for the e2e test
+files, whether `TestingModule`-based e2e tests exercise `main.ts`'s `bootstrap()` at all, whether
+`featured` needs restoring on revert, and several `git add` omissions — all require reading real
+files to resolve correctly, which this planning process has done selectively (venues.repository.ts,
+admin-venues.service.ts, admin-queue.service.ts, roles.guard.ts, csv-import.service.ts, main.ts,
+every controller's `@Param` usage) but not exhaustively for every file this plan touches. Codex's
+own confidence block for round 5 named exactly this: its findings would be resolved by seeing
+routes/constructors this text-only review couldn't access. Continuing further rounds against plan
+text alone has reached diminishing returns; the venues that actually catch these — per-task code
+review and the mandatory `cross-model-review` (both operate on real diffs against real files, not
+plan prose) — are still mandatory before this plan's work is considered done, per the standing
+project rule. Known limitations to verify during implementation, recorded here so they aren't
+silently dropped:
+
+- **`featured` is not restored by `revert()`.** `snapshotToUpdateInput()` omits it because neither
+  `CreateVenueWithLocationInput` nor `UpdateVenueWithLocationInput` currently model it at all (it's
+  set by a separate, not-yet-built admin "featured venues" mechanism outside this plan's scope —
+  verify against `docs/rule-engine.md`/the live schema whether `featured` is even meant to be
+  revertable, since it's plausibly a curation-team editorial flag independent of the versioned
+  content fields, before deciding whether to add it).
+- **Task 6's CSV-visibility test (Step 6b) calls `importRows()` directly with a pre-built row
+  object, not a real CSV string through `CsvImportService.parseRows()`, and asserts against the
+  repository directly, not an HTTP `GET /venues` call.** It proves the service-to-repository path
+  works; it does not prove the full CSV-file-upload-to-HTTP-response path. A stronger version
+  would use `request(app.getHttpServer()).post("/v1/admin/import")` with a real multipart CSV body
+  and then `.get("/v1/venues")` — verify during implementation whether `apps/api/test/` already has
+  a multipart-upload test pattern to follow (Plan 1's CSV import task may have established one).
+- **Task 8's UUID HTTP test targets `GET /v1/admin/venues/not-a-uuid`, but this task's own file
+  list only applies `ParseUUIDPipe` to `update`/`revert`, which are almost certainly `PATCH`/`PUT`
+  and `POST`, not `GET`.** Read `admin-venues.controller.ts`'s real HTTP methods before writing
+  this test and target an actual UUID-pipe-guarded route with its actual verb.
+- **`curatorToken` and the HTTP client shape in the new e2e test snippets (Tasks 6, 8) are
+  placeholders for whatever `app.e2e-spec.ts` already establishes** — read that file first and
+  reuse its actual auth/request pattern instead of inventing a new one.
+- **Task 14's claim that `app.e2e-spec.ts` "confirms bootstrap() still boots correctly" is not
+  reliable** if that suite uses `Test.createTestingModule(...).createNestApplication()` (the
+  standard NestJS pattern), which does not execute `main.ts`'s `bootstrap()` function at all —
+  verify which pattern the real file uses; if it doesn't invoke `main.ts`, a separate smoke test
+  that actually spawns `node dist/main.js` (or equivalent) is the only real proof this task's
+  `require.main === module` guard doesn't break the real entrypoint.
+- **Task 15's Retry-After regression check ("whatever existing test") needs a concrete file/test
+  name** — find Plan 1's 429/rate-limit test before this task runs and reference it explicitly.
+- Several commit steps' `git add` lists were found missing files across rounds (`venue.schema.ts`/
+  `venue.schema.spec.ts` in Tasks 4/8, `admin-venues.service.spec.ts` in Task 6) and were fixed
+  where caught; treat every task's final `git status` as the actual source of truth before
+  committing, not the `git add` line as written.
