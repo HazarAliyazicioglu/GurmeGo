@@ -30,7 +30,10 @@ Plan 4b'yi Task 1'den yürüt (implementer → task reviewer → final review + 
 - Pilot karar metrikleri (Maps/kaydet/paylaş, 4. hafta dönüş) hiçbir yerde ölçülmüyor — ayrı plan.
 - Auth: JWT `user_role` claim'i gerçek projede custom access token hook gerektirir (lokal doğrulandı).
 - RateLimitGuard trustProxy yok, sayaçlar temizlenmiyor; eslint any/unused "warn" kaldı (86 uyarı).
-- Plan 1: open-now filtresi yok. Plan 2/3: birkaç Minor UI bulgusu, gereksiz (zararsız) çift guard.
+- Plan 2/3: birkaç Minor UI bulgusu, gereksiz (zararsız) çift guard.
+- `apps/api/src/common/postgres-cache-store.service.ts` bir `.service.ts` dosyasında `$queryRaw`
+  kullanıyor — ADR 002 ihlali (raw SQL yalnız `*.repository.ts`). Plan 4b Task 5 review'ında
+  bulundu (2026-07-26), Plan 4b kapsamı dışı, ayrı düzeltilmeli.
 - `apps/api/.env.example`'daki varsayılan Supabase portları (54321/54322) bu worktree'nin gerçek
   local stack'iyle (54421/54422) uyuşmuyor, bayat (plan-red-team, 2026-07-26).
 - Railway/Vercel/Supabase provisioning + gerçek deploy hazırlığı: hesap açılınca ayrı bir oturumda
