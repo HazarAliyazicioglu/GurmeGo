@@ -7,25 +7,27 @@ dosya her anlamlı adımdan sonra güncellenir — en yeni durum en üstte "ŞU 
 
 ---
 
-## ŞU AN NEREDEYİZ (en son güncelleme: Plan 4b/4c tasarımı, round 3 PIVOT sonrası düzeltme, round 4 red-team'e gönderildi)
+## ŞU AN NEREDEYİZ (en son güncelleme: Plan 4b/4c tasarımı idea-red-team'den HAZIR aldı, writing-plans'a geçiliyor)
 
-**Aktif iş:** Plan 4b (backend) + Plan 4c (frontend) tasarım dokümanları idea-red-team'den art
-arda **3 kez PIVOT** aldı (her turda daha az/daha küçük bulgu — 7 mimari sorun → 4/7+yeni küçük
-→ 4/7+yeni küçük). Round 3'ün bulguları (pipe kapsamı, dahili filtre tipi, seed.ts çağrı sitesi,
-admin-queue.service.ts'nin ayrı snapshot yolu, open_now regex saat aralığı, isBoutique coerce
-bug'ı, C8 kullanıcı-etkileşim koruması, koşullu "en yakın" etiketi) işlendi, commit `bdb89cc`.
-**Round 4 idea-red-team şu an çalışıyor** (arka planda, `codex exec`, ~500-580s sürebilir).
+**Aktif iş:** Plan 4b (backend) + Plan 4c (frontend) tasarım dokümanları **5 idea-red-team
+turundan** geçti (4 PIVOT + son turda HAZIR). Bulgular her turda küçüldü: round 1 (7 gerçek
+mimari sorun: CSV ayrı şema, repository transaction-farkındalığı yok, findBySlug konum eksik,
+open_now veri şekli uyuşmazlığı, z.coerce.boolean tuzağı, cron isim tutarsızlığı, trustProxy
+riski) → round 2 (header backend'i sehven silinmiş, CSV boş hücre, districts/nearest projeksiyonu,
+snapshot konumu, open_now timezone/malformed) → round 3 (pipe kapsamı, dahili filtre tipi,
+seed.ts çağrı sitesi, admin-queue.service.ts'nin ayrı snapshot yolu, open_now regex saat aralığı,
+isBoutique coerce bug'ı, C8 kullanıcı-etkileşim koruması, koşullu "en yakın" etiketi) → round 4
+(OptionalTrueFlag deseninin KENDİSİ hatalıydı — Codex bunu bizzat çalıştırıp kanıtladı;
+VenueDetailSchema'nın yeni alanları hiç içermemesi; nested district JSON kaybı; AdminQueueService
+DI eksikliği) → **round 5: HAZIR** (kalan 2 küçük implementasyon detayı — header boş-string kenar
+durumu, React-Leaflet immutable center prop'u — uygulandı, commit `aa775d5`).
 
-**Round 4 sonucu geldiğinde:**
-- GO/HAZIR ise → `writing-plans` (önce Plan 4b, sonra Plan 4c) → `plan-red-team` (Codex, HAZIR
-  olana kadar tekrar) → `subagent-driven-development` ile yürütme → final review (Superpowers +
-  bağımsız Codex). Kullanıcıya sorulmayacak (yeni talimat), yalnızca bu dosya güncellenecek.
-- Yine PIVOT ise → bulgular kodda doğrulanıp (körlemesine kabul etme, her seferinde gerçek kod
-  okunarak teyit ediliyor) round 5'e işlenecek. Bulgular küçüldükçe (mimari → implementasyon
-  detayı → tek satırlık düzeltme) yakınsıyoruz, bu normal ve beklenen bir süreç.
-
-Kullanıcı talimatı (2026-07-26): "planları bana sormana gerek yok, direkt harekete geç" — bu
-nedenle red-team döngüsü onay beklemeden devam ediyor.
+**Sıradaki somut adım:** `writing-plans` skill'i ile önce Plan 4b (backend), sonra Plan 4c
+(frontend, 4b'ye bağımlı) için implementasyon planları yazılacak. Ardından zorunlu `plan-red-team`
+(Codex, HAZIR/DÜZELTİLEBİLİR-eşdeğeri bir sonuca kadar tekrar edilecek — Plan 4a'da 3 tur
+gerekmişti, benzer bir döngü beklenmeli). Sonra `subagent-driven-development` ile yürütme, final
+review (Superpowers + bağımsız Codex). **Hiçbirinde kullanıcıya onay sorulmayacak** (2026-07-26
+talimatı) — yalnızca bu dosya her adımdan sonra güncellenecek.
 
 ---
 
