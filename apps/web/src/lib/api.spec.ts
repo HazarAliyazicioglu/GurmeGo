@@ -22,6 +22,7 @@ import {
   createFavoriteList,
   addFavoriteVenue,
   reportVenue,
+  locationHeaders,
   ApiValidationError,
 } from "./api";
 
@@ -43,6 +44,10 @@ const VALID_VENUE_DETAIL = {
   googleRatingCount: 100,
   googlePlaceId: null,
   district: { name: "Kadıköy", slug: "kadikoy" },
+  lat: 40.99,
+  lng: 29.02,
+  address: null,
+  photos: [],
 };
 
 const VALID_VENUE_LIST_ITEM = {
@@ -176,12 +181,46 @@ describe("getDistricts", () => {
 describe("getNearestDistrict", () => {
   it("returns parsed data on a valid response", async () => {
     mockGet.mockResolvedValue(VALID_DISTRICT);
-    await expect(getNearestDistrict(40.99, 29.03)).resolves.toEqual(VALID_DISTRICT);
+    await expect(getNearestDistrict({ lat: 40.99, lng: 29.03 })).resolves.toEqual(VALID_DISTRICT);
   });
 
   it("throws ApiValidationError on an invalid response", async () => {
     mockGet.mockResolvedValue({ id: "not-a-uuid" });
-    await expect(getNearestDistrict(40.99, 29.03)).rejects.toThrow(ApiValidationError);
+    await expect(getNearestDistrict({ lat: 40.99, lng: 29.03 })).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("locationHeaders", () => {
+  it("returns X-User-Location when coords provided", () => {
+    expect(locationHeaders({ lat: 40.99, lng: 29.02 })).toEqual({ "X-User-Location": "40.99,29.02" });
+  });
+  it("returns an empty object when coords is null/undefined", () => {
+    expect(locationHeaders(null)).toEqual({});
+    expect(locationHeaders(undefined)).toEqual({});
+  });
+});
+
+describe("getVenues — new optional coords parameter sends a location header", () => {
+  it("sends the exact X-User-Location header derived from coords", async () => {
+    mockGet.mockResolvedValueOnce({ data: [], meta: { next_cursor: null, has_more: false } });
+    await getVenues({ districtId: "d1" }, { lat: 40.99, lng: 29.02 });
+    expect(mockGet.mock.calls[0][1]).toEqual({ headers: { "X-User-Location": "40.99,29.02" } });
+  });
+
+  it("sends no location header when coords is omitted", async () => {
+    mockGet.mockResolvedValueOnce({ data: [], meta: { next_cursor: null, has_more: false } });
+    await getVenues({ districtId: "d1" });
+    expect(mockGet.mock.calls[0][1]).toEqual({ headers: {} });
+  });
+});
+
+describe("getNearestDistrict — now takes one coords object instead of two number arguments", () => {
+  it("sends the exact X-User-Location header, no lat/lng query params", async () => {
+    mockGet.mockResolvedValueOnce(VALID_DISTRICT);
+    await getNearestDistrict({ lat: 40.99, lng: 29.02 });
+    const [pathArg, optionsArg] = mockGet.mock.calls[0];
+    expect(pathArg).toBe("/districts/nearest");
+    expect(optionsArg).toEqual({ headers: { "X-User-Location": "40.99,29.02" } });
   });
 });
 

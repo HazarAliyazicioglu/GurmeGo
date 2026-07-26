@@ -10,6 +10,7 @@ const venue: VenueDetailType = {
   verifiedAt: "2026-01-01T00:00:00.000Z", source: "MANUAL",
   googleRating: null, googleRatingCount: null, googlePlaceId: null,
   district: { name: "Kadıköy", slug: "kadikoy" },
+  lat: 40.99, lng: 29.02, address: null, photos: [],
 };
 
 describe("whatsappShareUrl", () => {

@@ -20,11 +20,7 @@ export function serializeFilters(filters: FilterState, coords?: Coords | null): 
   if (filters.category) out.category = filters.category;
   if (filters.priceRange) out.priceRange = filters.priceRange;
   if (filters.isBoutique !== undefined) out.isBoutique = String(filters.isBoutique);
-  if (filters.radiusM !== undefined && coords) {
-    out.radiusM = String(filters.radiusM);
-    out.lat = String(coords.lat);
-    out.lng = String(coords.lng);
-  }
+  if (filters.radiusM !== undefined && coords) out.radiusM = String(filters.radiusM);
   return out;
 }
 

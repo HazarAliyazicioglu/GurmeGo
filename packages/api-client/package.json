@@ -5,10 +5,12 @@
   "main": "src/index.ts",
   "scripts": {
     "generate": "openapi-typescript ../../apps/api/openapi.json -o src/generated-types.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "openapi-typescript": "^6.7.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.0"
   }
 }

@@ -1,6 +1,7 @@
 import { createApiClient } from "@gurmego/api-client";
 import { VenueSchema, VenueDetailSchema, DistrictSchema, FavoriteListSchema, FavoriteSchema, type VenueDetail, type District } from "@gurmego/shared";
 import { z } from "zod";
+import type { Coords } from "./use-geolocation";
 
 export class ApiValidationError extends Error {
   constructor(public path: string, public issues: unknown) {
@@ -12,9 +13,18 @@ export class ApiValidationError extends Error {
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1";
 const client = createApiClient(API_BASE);
 
-async function fetchValidated<T>(path: string, schema: z.ZodType<T>, token?: string): Promise<T> {
+export function locationHeaders(coords?: Coords | null): Record<string, string> {
+  return coords ? { "X-User-Location": `${coords.lat},${coords.lng}` } : {};
+}
+
+async function fetchValidated<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  token?: string,
+  headers?: Record<string, string>,
+): Promise<T> {
   const authedClient = token ? createApiClient(API_BASE, () => token) : client;
-  const raw = await authedClient.get<unknown>(path);
+  const raw = await authedClient.get<unknown>(path, { headers });
   const result = schema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(path, result.error.issues);
   return result.data;
@@ -50,9 +60,9 @@ const VenueListResponseSchema = z.object({
   meta: z.object({ next_cursor: z.string().nullable(), has_more: z.boolean() }),
 });
 
-export function getVenues(query: Record<string, string>) {
+export function getVenues(query: Record<string, string>, coords?: Coords | null) {
   const qs = new URLSearchParams(query).toString();
-  return fetchValidated(`/venues?${qs}`, VenueListResponseSchema);
+  return fetchValidated(`/venues?${qs}`, VenueListResponseSchema, undefined, locationHeaders(coords));
 }
 
 // `GET /venues/map` (apps/api's `VenuesController.mapView` -> `VenuesRepository.findInBbox`)
@@ -83,8 +93,8 @@ export function getDistricts(): Promise<District[]> {
   return fetchValidated(`/districts?city=istanbul`, z.array(DistrictSchema));
 }
 
-export function getNearestDistrict(lat: number, lng: number): Promise<District> {
-  return fetchValidated(`/districts/nearest?lat=${lat}&lng=${lng}`, DistrictSchema);
+export async function getNearestDistrict(coords: Coords): Promise<District> {
+  return fetchValidated("/districts/nearest", DistrictSchema, undefined, locationHeaders(coords));
 }
 
 export function getFavoriteLists(token: string) {

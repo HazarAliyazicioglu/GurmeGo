@@ -11,7 +11,7 @@ export function useSuggestedDistrict(currentSlug: string): District | null {
 
   useEffect(() => {
     if (!coords) return;
-    getNearestDistrict(coords.lat, coords.lng)
+    getNearestDistrict(coords)
       .then((nearest) => {
         if (nearest && nearest.slug !== currentSlug) setSuggested(nearest);
       })

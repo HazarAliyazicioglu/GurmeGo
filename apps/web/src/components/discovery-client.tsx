@@ -23,7 +23,7 @@ export function DiscoveryClient({ districtId, initialVenues }: { districtId: str
   // state independently (final-review Finding 3).
   async function applyFilters(next: FilterState) {
     setFilters(next);
-    const { data } = await getVenues({ districtId, ...serializeFilters(next, coords) });
+    const { data } = await getVenues({ districtId, ...serializeFilters(next, coords) }, coords);
     setVenues(data);
   }
 
