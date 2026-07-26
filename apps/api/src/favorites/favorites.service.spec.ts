@@ -37,14 +37,40 @@ describe("FavoritesService", () => {
   });
 
   describe("addVenue — PUBLISHED check", () => {
-    it("rejects adding a DRAFT venue with 404", async () => {
+    it("rejects adding a DRAFT venue with 404 and clean error envelope", async () => {
       const prisma = {
         favoriteList: { findUnique: jest.fn().mockResolvedValue({ id: "l1", userId: "u1" }) },
         venue: { findUnique: jest.fn().mockResolvedValue({ id: "v1", status: "DRAFT" }) },
       } as any;
       const service = new FavoritesService(prisma);
 
-      await expect(service.addVenue("u1", "l1", "v1")).rejects.toThrow("Mekan bulunamadı");
+      try {
+        await service.addVenue("u1", "l1", "v1");
+        throw new Error("expected addVenue to throw");
+      } catch (err: any) {
+        expect(err.getResponse()).toEqual({
+          error: { code: "VENUE_NOT_FOUND", message: "Mekan bulunamadı" },
+        });
+        expect(err.getResponse().message).toBeUndefined();
+      }
+    });
+
+    it("successfully adds a PUBLISHED venue to the favorite list", async () => {
+      const prisma = {
+        favoriteList: { findUnique: jest.fn().mockResolvedValue({ id: "l1", userId: "u1" }) },
+        venue: { findUnique: jest.fn().mockResolvedValue({ id: "v1", status: "PUBLISHED" }) },
+        favorite: { upsert: jest.fn().mockResolvedValue({ listId: "l1", venueId: "v1" }) },
+      } as any;
+      const service = new FavoritesService(prisma);
+
+      const result = await service.addVenue("u1", "l1", "v1");
+
+      expect(prisma.favorite.upsert).toHaveBeenCalledWith({
+        where: { listId_venueId: { listId: "l1", venueId: "v1" } },
+        create: { listId: "l1", venueId: "v1" },
+        update: {},
+      });
+      expect(result).toEqual({ listId: "l1", venueId: "v1" });
     });
   });
 });
