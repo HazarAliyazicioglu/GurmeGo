@@ -119,9 +119,9 @@ confirmed by reading `apps/web/package.json`) + `@testing-library/react`.
 - Modify: `apps/web/src/components/discovery-client.tsx` (only the `getVenues` call site, real
   current line: `const { data } = await getVenues({ districtId, ...serializeFilters(next, coords) });`)
 - Modify: `apps/web/src/components/district-picker.tsx` (only its `getNearestDistrict` call site)
-- Modify: `apps/web/src/components/venue-detail.spec.tsx` (Step 0's pre-flight fixture fix, if this
-  file's own fixtures are also found to be missing `lat`/`lng`/`address`/`photos` — check when
-  running Step 0, list here explicitly rather than leaving it as an unlisted side effect)
+- Modify: `apps/web/src/components/venue-detail.spec.tsx`, `apps/web/src/app/mekan/[slug]/page.spec.ts`,
+  `apps/web/src/components/whatsapp-share-button.spec.tsx` (Step 0's pre-flight fixture fix — all
+  three confirmed to have `VenueDetail`-shaped fixtures missing `lat`/`lng`/`address`/`photos`)
 - Test: `packages/api-client/src/index.spec.ts` (new), `apps/web/src/lib/api.spec.ts` (append —
   using the REAL existing `mockGet`/`mockPost`/`vi.hoisted()` pattern, not a `client` spy),
   `apps/web/src/components/venue-filters.spec.tsx` (append), `apps/web/src/components/discovery-client.spec.tsx` (append — one call-site test only), `apps/web/src/components/district-picker.spec.tsx` (new — confirmed this file does not exist in the repo today, create it, don't "append")
@@ -139,10 +139,12 @@ confirmed by reading `apps/web/package.json`) + `@testing-library/react`.
 Run `cd apps/web && npx vitest run && npx tsc --noEmit`. The real `api.spec.ts`'s
 `VALID_VENUE_DETAIL` fixture (confirmed by reading the file) is MISSING `lat`/`lng`/`address`/
 `photos` — fields Plan 4b's real `VenueDetailSchema` requires (confirmed: `lat: z.number()`, no
-`.optional()`). This is pre-existing drift, not something this plan introduces. Fix ONLY this
-fixture (add valid `lat`/`lng`/`address`/`photos` values matching the schema) as part of this
-step, and check for the same drift in `venue-detail.spec.tsx`'s own fixtures. Do not fold any other
-feature work into this step.
+`.optional()`). This is pre-existing drift, not something this plan introduces. Fix this fixture
+(add valid `lat`/`lng`/`address`/`photos` values matching the schema) as part of this step, **and
+check for the identical drift in every other file with a `VenueDetail`-shaped fixture — round-9
+finding: confirmed also present in `apps/web/src/app/mekan/[slug]/page.spec.ts` and
+`apps/web/src/components/whatsapp-share-button.spec.tsx`, not just `venue-detail.spec.tsx`.** Fix
+all of them here; do not fold any other feature work into this step.
 
 - [ ] **Step 1: Add Vitest to `packages/api-client`, matching the real monorepo version**
 Read `apps/web/package.json`'s Vitest devDependency version first (confirmed elsewhere in this
@@ -334,7 +336,7 @@ change, run — PASS.
       `cd packages/api-client && npx vitest run`.
 - [ ] **Step 13: Commit**
 ```bash
-git add packages/api-client pnpm-lock.yaml apps/web/src/lib/api.ts apps/web/src/lib/api.spec.ts apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-filters.spec.tsx apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx apps/web/src/components/district-picker.tsx apps/web/src/components/district-picker.spec.tsx apps/web/src/components/venue-detail.spec.tsx
+git add packages/api-client pnpm-lock.yaml apps/web/src/lib/api.ts apps/web/src/lib/api.spec.ts apps/web/src/components/venue-filters.tsx apps/web/src/components/venue-filters.spec.tsx apps/web/src/components/discovery-client.tsx apps/web/src/components/discovery-client.spec.tsx apps/web/src/components/district-picker.tsx apps/web/src/components/district-picker.spec.tsx apps/web/src/components/venue-detail.spec.tsx "apps/web/src/app/mekan/[slug]/page.spec.ts" apps/web/src/components/whatsapp-share-button.spec.tsx
 git commit -m "feat(web): add coords parameter + X-User-Location header to getVenues/getNearestDistrict, remove lat/lng from serializeFilters, add Vitest to api-client"
 ```
 
@@ -861,7 +863,12 @@ strings at the call site instead of one object internally). Run the new test —
 
 - [ ] **Step 2: `CategoryQuickRoute`'s widened contract**
 ```typescript
-const venues = [{ id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null }];
+import type { VenueListItem } from "@/lib/api";
+
+// `satisfies VenueListItem[]` (not a bare array literal) prevents TypeScript from widening
+// `priceRange: "BUDGET"` to `string` — round-9 finding — which would otherwise fail to satisfy
+// this component's real, narrower `venues: VenueListItem[]` prop type.
+const venues = [{ id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null }] satisfies VenueListItem[];
 
 describe("CategoryQuickRoute — widened contract: venues, districtName, sortedByDistance, deselect", () => {
   it("calls onSelectCategory(category), then renders a directions link once re-rendered with the new activeCategory, labeled 'En yakın' when sortedByDistance is true", () => {
@@ -1183,12 +1190,18 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { VenueCard } from "./venue-card";
 
-const baseVenue = { id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: 4.3, googleRatingCount: null };
+import type { VenueListItem } from "@/lib/api";
+
+const baseVenue = { id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: 4.3, googleRatingCount: null } satisfies VenueListItem;
 
 describe("VenueCard — Google rating badge attribution text", () => {
-  it("shows '4.3 · 120 Google yorumu' when a count is present", () => {
+  it("shows '4.3' and '· 120 Google yorumu' when a count is present", () => {
+    // round-9 finding: the rating number and the attribution text render in two SEPARATE sibling
+    // <span> elements (see the real markup below) -- a single getByText regex spanning both would
+    // never match any one element's own text content. Assert each span separately instead.
     render(<VenueCard venue={{ ...baseVenue, googleRatingCount: 120 }} />);
-    expect(screen.getByText(/4\.3.*·\s*120 Google yorumu/)).toBeInTheDocument();
+    expect(screen.getByText("4.3")).toBeInTheDocument();
+    expect(screen.getByText(/·\s*120 Google yorumu/)).toBeInTheDocument();
   });
   it("shows unlabeled 'Google yorumu' (no count) when googleRatingCount is null", () => {
     render(<VenueCard venue={{ ...baseVenue, googleRatingCount: null }} />);
@@ -1197,6 +1210,9 @@ describe("VenueCard — Google rating badge attribution text", () => {
   });
 });
 ```
+(`satisfies VenueListItem` on the fixture, rather than a bare object literal, prevents TypeScript
+from widening `priceRange: "BUDGET"` to `string` — round-9 finding — which would otherwise fail to
+satisfy `VenueCard`'s real prop type expecting the narrower price-range enum.)
 (Check `venue-card.tsx`'s real imports/context requirements — e.g. a router mock for its `Link` —
 before assuming a bare `render()` works; this is a NEW spec file, match whatever wrapper this
 component's siblings' spec files use.) Run — FAIL. Update the real badge markup (lines 68-78) to:
