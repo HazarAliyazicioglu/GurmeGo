@@ -20,8 +20,11 @@ yazılamaz). Yakınlık bazlı arama (FR-KA-02, NFR-02: <300ms) ürünün çekir
    (GIST) manuel doğrulanmalı — Prisma bunu garanti etmez.
 
 ## Karar
-Seçenek 3. `apps/api/src/venues/venues.repository.ts` PostGIS sorgularının tek adresi
-(`docs/superpowers/plans/2026-07-24-mvp-backend-foundation.md` Task 6, 8, 9). `development-guidelines.md §2`
+Seçenek 3. PostGIS sorguları yalnızca `*.repository.ts` dosyalarında yazılır — tek bir dosyaya değil,
+bu isim deseniyle biten her dosyaya bağlı bir kural. Başlangıçta bu yalnızca
+`apps/api/src/venues/venues.repository.ts`'ydi (`docs/superpowers/plans/2026-07-24-mvp-backend-foundation.md`
+Task 6, 8, 9); 2026-07-26 güncellemesiyle (Plan 4b, "en yakın ilçe" sorgusu için KNN `<->` operatörü)
+`apps/api/src/districts/districts.repository.ts` de bu kurala tabi ikinci dosya oldu. `development-guidelines.md §2`
 bu kuralı zaten "servis katmanı raw SQL görmez" olarak koymuştu — bu ADR bunu resmileştiriyor.
 
 ## Kabul edilen bedel
