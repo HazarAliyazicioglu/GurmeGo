@@ -7,36 +7,25 @@ dosya her anlamlı adımdan sonra güncellenir — en yeni durum en üstte "ŞU 
 
 ---
 
-## ŞU AN NEREDEYİZ (en son güncelleme: Plan 4b/4c tasarımı, round 2 PIVOT sonrası düzeltme)
+## ŞU AN NEREDEYİZ (en son güncelleme: Plan 4b/4c tasarımı, round 3 PIVOT sonrası düzeltme, round 4 red-team'e gönderildi)
 
-**Aktif iş:** Plan 4b (backend) + Plan 4c (frontend) tasarım dokümanları, idea-red-team'in 2.
-PIVOT verdiğinden sonra 3. kez düzeltiliyor. Kullanıcı "artık bana sormadan devam et" dedi
-(2026-07-26) — bundan sonraki adımlar onay beklemeden yürütülecek, yalnızca bu dosya güncellenecek.
+**Aktif iş:** Plan 4b (backend) + Plan 4c (frontend) tasarım dokümanları idea-red-team'den art
+arda **3 kez PIVOT** aldı (her turda daha az/daha küçük bulgu — 7 mimari sorun → 4/7+yeni küçük
+→ 4/7+yeni küçük). Round 3'ün bulguları (pipe kapsamı, dahili filtre tipi, seed.ts çağrı sitesi,
+admin-queue.service.ts'nin ayrı snapshot yolu, open_now regex saat aralığı, isBoutique coerce
+bug'ı, C8 kullanıcı-etkileşim koruması, koşullu "en yakın" etiketi) işlendi, commit `bdb89cc`.
+**Round 4 idea-red-team şu an çalışıyor** (arka planda, `codex exec`, ~500-580s sürebilir).
 
-**Sıradaki somut adım:** Backend tasarımına şu düzeltmeleri işlemekteyim:
-1. Bölüm 2.5 (yeni): `@UserLocation()` decorator + header parse + sort-varsayılanının şemadan
-   servise taşınması (round 1'de vardı, round 2 yeniden yazımında sehven silindi).
-2. Bölüm 2: CSV `status` boş hücre normalizasyonu (`z.preprocess`).
-3. Bölüm 4: Version snapshot'ın PostGIS konumu içermesi için raw-SQL "tam satır" okuma.
-4. Bölüm 6: `open_now`'a zaman dilimi + malformed-veri koruması.
-5. B10: `/districts/nearest` projeksiyonunun `cityId`+`slug` de seçmesi (önceden bozuk bulundu).
-6. B8: `AdminQueueMutationResultSchema`'nın da `REPORT|EDIT` kabul etmesi.
+**Round 4 sonucu geldiğinde:**
+- GO/HAZIR ise → `writing-plans` (önce Plan 4b, sonra Plan 4c) → `plan-red-team` (Codex, HAZIR
+  olana kadar tekrar) → `subagent-driven-development` ile yürütme → final review (Superpowers +
+  bağımsız Codex). Kullanıcıya sorulmayacak (yeni talimat), yalnızca bu dosya güncellenecek.
+- Yine PIVOT ise → bulgular kodda doğrulanıp (körlemesine kabul etme, her seferinde gerçek kod
+  okunarak teyit ediliyor) round 5'e işlenecek. Bulgular küçüldükçe (mimari → implementasyon
+  detayı → tek satırlık düzeltme) yakınsıyoruz, bu normal ve beklenen bir süreç.
 
-Frontend tasarımına işlenecekler:
-1. C6 (kategori hızlı rota "doğrudan yol tarifi"): `venue-detail.tsx`'teki mevcut isim+ilçe
-   text-search deep-link deseni (`directionsUrl`) paylaşılan bir helper'a çıkarılıp
-   `CategoryQuickRoute`'ta tekrar kullanılacak — koordinat/yeni şema alanı GEREKMİYOR, çünkü
-   `[district]/page.tsx` zaten hangi ilçede olduğunu biliyor, listedeki ilk mekanın adını
-   kullanmak yeterli.
-2. Header client-tarafı implementasyonunun backend'in yeni Bölüm 2.5'iyle senkron olduğunu
-   doğrulamak (aynı header adı/formatı).
-
-**Bu düzeltmeler bitince:** 3. bir idea-red-team turu çalıştırılacak (`codex exec`, stdin pipe,
-büyük prompt — geçmiş derste görüldüğü gibi `-c model_reasoning_effort=high` ile 400-580s
-sürebiliyor). GO/HAZIR-eşdeğeri bir sonuç alınırsa `writing-plans` (Plan 4b, sonra Plan 4c) →
-`plan-red-team` (Codex, HAZIR olana kadar tekrar) → `subagent-driven-development` ile yürütme →
-final review (Superpowers + bağımsız Codex) — bu adımların HİÇBİRİNDE kullanıcıya onay
-sorulmayacak (yeni talimat), yalnızca bu dosya her adımdan sonra güncellenecek.
+Kullanıcı talimatı (2026-07-26): "planları bana sormana gerek yok, direkt harekete geç" — bu
+nedenle red-team döngüsü onay beklemeden devam ediyor.
 
 ---
 
