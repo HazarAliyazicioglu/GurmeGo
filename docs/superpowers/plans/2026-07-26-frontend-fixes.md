@@ -121,7 +121,7 @@ confirmed by reading `apps/web/package.json`) + `@testing-library/react`.
 - Modify: `apps/web/src/components/district-picker.tsx` (only its `getNearestDistrict` call site)
 - Test: `packages/api-client/src/index.spec.ts` (new), `apps/web/src/lib/api.spec.ts` (append —
   using the REAL existing `mockGet`/`mockPost`/`vi.hoisted()` pattern, not a `client` spy),
-  `apps/web/src/components/venue-filters.spec.tsx` (append), `apps/web/src/components/discovery-client.spec.tsx` (append — one call-site test only), `apps/web/src/components/district-picker.spec.tsx` (append)
+  `apps/web/src/components/venue-filters.spec.tsx` (append), `apps/web/src/components/discovery-client.spec.tsx` (append — one call-site test only), `apps/web/src/components/district-picker.spec.tsx` (new — confirmed this file does not exist in the repo today, create it, don't "append")
 
 **Interfaces:**
 - Consumes: nothing new
@@ -315,7 +315,11 @@ change, run — PASS.
 
 - [ ] **Step 10: Update `discovery-client.tsx`'s ONE `getVenues` call site**, adding `coords` as
       the second argument. Write the failing test asserting the exact coords value, confirm fail,
-      fix, confirm pass.
+      fix, confirm pass. **Also read the EXISTING `discovery-client.spec.tsx` in full and update
+      every existing assertion that currently expects `getVenuesMock` to have been called with only
+      ONE argument** (round-6 finding: adding a required second parameter to a call this file
+      already tests against breaks those pre-existing one-argument expectations unless they're
+      explicitly widened to two here, in the same step that introduces the second argument).
 - [ ] **Step 11: Update `district-picker.tsx`'s ONE `getNearestDistrict` call site** — read the
       file first for its exact current call, change to the single `coords` object. Write the
       failing test, confirm fail, fix, confirm pass.
@@ -335,7 +339,7 @@ git commit -m "feat(web): add coords parameter + X-User-Location header to getVe
 - Create: `apps/web/src/lib/location-context.tsx`
 - Modify: `apps/web/src/app/[district]/page.tsx` (wrap `DistrictPicker` + `DiscoveryClient`)
 - Modify: `apps/web/src/components/district-picker.tsx`
-- Test: `apps/web/src/lib/location-context.spec.tsx` (new), `apps/web/src/components/district-picker.spec.tsx` (append)
+- Test: `apps/web/src/lib/location-context.spec.tsx` (new), `apps/web/src/components/district-picker.spec.tsx` (new — confirmed this file does not exist in the repo today, create it, don't "append")
 
 **Interfaces:**
 - Consumes: `useGeolocation(): Coords | null`
@@ -483,7 +487,14 @@ describe("FavoriteButton — real state check and disabled-while-pending", () =>
 (Match mock names to what `favorite-button.spec.tsx` already establishes.) Run — FAIL. Add a
 mount-time fetch of the user's lists (only if `useAuth().user` is truthy) checking whether any
 list's `favorites` contains this `venueId` — disabled until that resolves too — and a `pending`
-state around the toggle call. Run — PASS.
+state around the toggle call. **Before running the full suite, read the EXISTING tests in
+`favorite-button.spec.tsx` in full** (round-6 finding: they click the button immediately after
+`render()` with no `favorites` in their fixtures, which the new mount-time check will race) —
+update each to (a) use a real `FavoriteList`-shaped fixture (even an empty `favorites: []` array,
+not an absent field) and (b) `await` the initial mount-time check resolving (e.g.
+`await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled())`) before
+simulating a click, in the SAME step as the new mount-time check is added — not as a follow-up.
+Run — PASS.
 
 - [ ] **Step 3 (C12): Write the failing test with the real `mode="signin"` value, real field labels, and the real `{ error }` resolution shape**
 ```typescript
@@ -533,17 +544,25 @@ git commit -m "fix(web): handle getSession() failure, real favorite-button state
 Replace `const coords = useGeolocation();` with `const coords = useLocationContext();`, update the
 import and this file's test mocks. Run existing tests to confirm no regression.
 
-- [ ] **Step 2: Write the failing tests for loading/error/race-discarding (C2)**
+- [ ] **Step 2: Write the failing tests for loading/error/race-discarding (C2) — as two SEPARATE
+      tests, not one test named for both but proving only the error path (round-6 finding)**
 ```typescript
 describe("DiscoveryClient — loading, error, and stale-response discarding (C2)", () => {
-  it("shows a loading indicator while a request is in flight and an error message on failure", async () => {
+  it("shows a loading indicator while a request is genuinely still in flight", async () => {
+    let resolveVenues: (v: unknown) => void;
+    getVenuesMock.mockReturnValueOnce(new Promise((resolve) => { resolveVenues = resolve; }));
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/yükleniyor/i));
+    resolveVenues!({ data: [], meta: { next_cursor: null, has_more: false } });
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+  });
+
+  it("shows an error message on failure", async () => {
     getVenuesMock.mockRejectedValueOnce(new Error("500"));
     render(<DiscoveryClient districtId="d1" initialVenues={[]} />);
     fireEvent.click(screen.getByTestId("filter-boutique"));
-    await waitFor(() => {
-      const status = screen.getByRole("status");
-      expect(status).toHaveTextContent(/hata/i);
-    });
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/hata/i));
   });
 
   it("ignores a slow first response if a second request has already started", async () => {
@@ -699,10 +718,17 @@ export const DEFAULT_CENTER: [number, number] = [41.0082, 28.9784];
 - [ ] **Step 4: Create a fresh Leaflet mock harness, using `vi.hoisted()` for anything shared across the mock factory and the test body (round-5 finding), write the failing test for `center`**
 ```typescript
 // apps/web/src/components/venue-map-leaflet.spec.tsx (new)
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const { getVenuesInBboxMock } = vi.hoisted(() => ({ getVenuesInBboxMock: vi.fn() }));
+// `openPopupMock` is unused by this task's own test (Step 4 below only asserts on `center`) but is
+// declared here, in the ONE shared vi.hoisted() block this whole file uses, because Task 12 (C14)
+// appends to this exact block rather than re-declaring it -- keeping every hoisted mock in one
+// place from the start avoids a second, conflicting vi.hoisted() call later.
+const { getVenuesInBboxMock, openPopupMock } = vi.hoisted(() => ({
+  getVenuesInBboxMock: vi.fn(),
+  openPopupMock: vi.fn(),
+}));
 
 vi.mock("react-leaflet", () => ({
   MapContainer: ({ center, children }: { center: [number, number]; children: React.ReactNode }) => (
@@ -711,7 +737,7 @@ vi.mock("react-leaflet", () => ({
   TileLayer: () => null,
   CircleMarker: ({ center, children, eventHandlers }: { center: [number, number]; children: React.ReactNode; eventHandlers?: { add?: (e: unknown) => void } }) => {
     const ref = (el: HTMLDivElement | null) => {
-      if (el && eventHandlers?.add) eventHandlers.add({ target: { getElement: () => el, openPopup: vi.fn() } });
+      if (el && eventHandlers?.add) eventHandlers.add({ target: { getElement: () => el, openPopup: openPopupMock } });
     };
     return <div ref={ref} data-testid="circle-marker" data-center={center.join(",")}>{children}</div>;
   },
@@ -723,7 +749,7 @@ vi.mock("@/lib/api", () => ({ getVenuesInBbox: getVenuesInBboxMock }));
 
 import { VenueMapCanvas } from "./venue-map-leaflet";
 
-beforeEach(() => { getVenuesInBboxMock.mockReset().mockResolvedValue([]); });
+beforeEach(() => { getVenuesInBboxMock.mockReset().mockResolvedValue([]); openPopupMock.mockReset(); });
 
 describe("VenueMapCanvas — center prop replaces the hardcoded KADIKOY_CENTER", () => {
   it("passes the given center prop through to the map container", () => {
@@ -751,7 +777,10 @@ const center = DISTRICT_CENTERS[params.district] ?? DEFAULT_CENTER;
 // <DiscoveryClient key={current.id} districtId={current.id} initialVenues={venues} center={center} />
 ```
 Write the failing test asserting `DiscoveryClient` forwards `center` to a mocked `VenueMap`,
-confirm fail, wire, confirm pass.
+confirm fail, wire, confirm pass. **`center` becomes a required prop on `DiscoveryClient` — before
+running the full suite, grep `discovery-client.spec.tsx` for every existing `render(<DiscoveryClient ...>)`
+call (round-6 finding: `tsc` fails on any existing render call missing a newly-required prop) and
+add `center={[40.99, 29.02]}` (or an equivalent fixed value) to each one, in this same step.**
 
 - [ ] **Step 6:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
 - [ ] **Step 7: Commit**
@@ -859,24 +888,36 @@ export function DiscoveryClient({ districtId, initialVenues, center, districtNam
 // [district]/page.tsx
 // <DiscoveryClient key={current.id} districtId={current.id} initialVenues={venues} center={center} districtName={current.name} />
 ```
+**`districtName` becomes a required prop on `DiscoveryClient` (alongside Task 5's `center`) —
+before running the full suite, grep `discovery-client.spec.tsx` for every existing
+`render(<DiscoveryClient ...>)` call and add `districtName="Kadıköy"` (or an equivalent fixed
+value) to each one that doesn't already have it from this task's own new tests, in this same step.**
+
 Write the failing test (this is `sortedByDistance`'s real, complete proof — closing round 5's
-"dead state" finding):
+"dead state" finding). **Round-6 finding: `vi.mock()` is hoisted and file-scoped in Vitest — a
+per-test mock of `CategoryQuickRoute` would silently apply to every other test in this file,
+including ones that need the real component's rendering/click behavior.** Rather than mocking
+`CategoryQuickRoute` at all, assert through its REAL rendered DOM output (the real component is
+already exercised directly by Task 6, Step 2's own tests, so this is consistent, not a new mocking
+strategy introduced only for this one test):
 ```typescript
-describe("DiscoveryClient — sortedByDistance reaches CategoryQuickRoute correctly", () => {
-  it("passes sortedByDistance=false initially, true after a successful coords-driven fetch", async () => {
+describe("DiscoveryClient — sortedByDistance reaches CategoryQuickRoute correctly (via real rendered output, not a mock)", () => {
+  it("shows neutral quick-route copy before coords resolve, 'En yakın' copy after a successful coords-driven fetch", async () => {
+    const venue = { id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null };
     vi.mocked(useLocationContextMock).mockReturnValue(null);
-    const { rerender } = render(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[]} />);
-    expect(CategoryQuickRouteMock).toHaveBeenCalledWith(expect.objectContaining({ sortedByDistance: false }), expect.anything());
+    getVenuesMock.mockResolvedValue({ data: [venue], meta: { next_cursor: null, has_more: false } });
+    const { rerender } = render(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[venue]} />);
+    fireEvent.click(screen.getByTestId("quick-category-cafe"));
+    await waitFor(() => expect(screen.getByRole("link", { name: /cafe mekana git/i })).toBeInTheDocument());
+    expect(screen.queryByText(/en yakın/i)).not.toBeInTheDocument();
+
     vi.mocked(useLocationContextMock).mockReturnValue({ lat: 40.99, lng: 29.02 });
-    getVenuesMock.mockResolvedValueOnce({ data: [], meta: { next_cursor: null, has_more: false } });
-    rerender(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[]} />);
-    await waitFor(() => expect(CategoryQuickRouteMock).toHaveBeenCalledWith(expect.objectContaining({ sortedByDistance: true }), expect.anything()));
+    rerender(<DiscoveryClient districtId="d1" districtName="Kadıköy" center={[40.99, 29.02]} initialVenues={[venue]} />);
+    await waitFor(() => expect(screen.getByRole("link", { name: /en yakın cafe mekana git/i })).toBeInTheDocument());
   });
 });
 ```
-(Mock `CategoryQuickRoute` for this specific test if the file doesn't already do so elsewhere —
-check the existing mocking pattern in `discovery-client.spec.tsx` first.) Confirm fail, wire,
-confirm pass.
+Confirm fail, wire, confirm pass.
 
 - [ ] **Step 4:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
 - [ ] **Step 5: Commit**
@@ -898,31 +939,62 @@ git commit -m "feat(web): category quick-route real directions deep link + desel
 
 **Interfaces:**
 - Produces: `VenueMapCanvas`/`VenueMap` gain an optional
-  `focusVenue?: { id: string; name: string; lat: number; lng: number }` prop — when present, the
-  effective center is ALWAYS `[focusVenue.lat, focusVenue.lng]` (priority over `center`, tested),
-  the bbox fetch is skipped, exactly one marker renders (using the SAME accessible-marker rendering
-  path Task 12 makes keyboard-accessible, not a separate copy); address/photo-grid rendering.
+  `focusVenue?: { id: string; name: string; slug: string; category: string; lat: number; lng: number }`
+  prop — round-6 finding: the shared marker/popup renderer needs `slug`/`category` (the same
+  fields a bbox-derived `LocatedVenue` has) to render an identical popup, not just `{id,name,lat,lng}`.
+  When present: the effective center is ALWAYS `[focusVenue.lat, focusVenue.lng]` (priority over
+  `center`, tested); the bbox fetch AND its `BoundsVenueLoader` mount are skipped entirely; exactly
+  one marker renders via the SAME accessible-marker rendering path Task 12 makes keyboard-accessible;
+  `loadState`'s initial value is `"ready"` when `focusVenue` is given (round-6 finding: otherwise it
+  stays stuck at its default `"loading"` forever, since nothing ever calls `onLoadStateChange`,
+  showing a permanent "Bu alandaki mekanlar aranıyor" banner over a single-venue map that has
+  nothing to search for); `VenueMap`'s venue-count header (round-6 finding: it currently reads
+  `venues.length`, confirmed) shows `1` when `focusVenue` is given, not `venues.length` (which is
+  `0` in this usage, producing a contradictory "0 mekan" header next to a real marker).
 
-- [ ] **Step 1: `focusVenue` bypass + center priority — write the failing test**
+- [ ] **Step 1: `focusVenue` bypass + center priority + loadState + count — write the failing test**
 ```typescript
-describe("VenueMapCanvas — focusVenue bypasses the bbox fetch, wins over center, shows exactly one marker", () => {
-  it("centers on focusVenue's coordinates even when a different center is given, renders only that marker, never calls getVenuesInBbox", async () => {
-    render(<VenueMapCanvas venues={[]} center={[41.0, 29.0]} focusVenue={{ id: "v1", name: "Cafe Test", lat: 40.99, lng: 29.02 }} />);
+describe("VenueMapCanvas — focusVenue bypasses the bbox fetch, wins over center, shows exactly one marker, starts ready (not stuck loading)", () => {
+  it("centers on focusVenue's coordinates even when a different center is given, renders only that marker, never calls getVenuesInBbox, and never shows the loading banner", async () => {
+    render(<VenueMapCanvas venues={[]} center={[41.0, 29.0]} focusVenue={{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", lat: 40.99, lng: 29.02 }} />);
     expect(screen.getByTestId("map-container")).toHaveAttribute("data-center", "40.99,29.02");
     expect(screen.getAllByTestId("circle-marker")).toHaveLength(1);
     expect(getVenuesInBboxMock).not.toHaveBeenCalled();
+    expect(screen.queryByText(/aranıyor/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("VenueMap — venue-count header reflects focusVenue, not venues.length", () => {
+  it("shows '1 mekan' (not '0 mekan') when focusVenue is given with an empty venues array", () => {
+    render(<VenueMap venues={[]} center={[40.99, 29.02]} focusVenue={{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", lat: 40.99, lng: 29.02 }} />);
+    expect(screen.getByText(/1 mekan/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0 mekan/i)).not.toBeInTheDocument();
   });
 });
 ```
 (Reuse Task 5's mock harness in this same file — `getVenuesInBboxMock` is already hoisted there.)
 Run — FAIL. Implement: effective center = `focusVenue ? [focusVenue.lat, focusVenue.lng] : center`;
-when `focusVenue` present, skip `BoundsVenueLoader` entirely, render one `CircleMarker` at
-`[focusVenue.lat, focusVenue.lng]` using the SAME marker-rendering code path as the bbox-driven
-case (extract a small shared render helper if needed, so Task 12's keyboard-accessibility fix
-automatically applies to both). Thread `focusVenue` through `VenueMap`. Run — PASS.
+when `focusVenue` present, skip mounting `BoundsVenueLoader` entirely and initialize
+`useState<LoadState>(focusVenue ? "ready" : "loading")` instead of always defaulting to
+`"loading"`; render one marker via the shared marker-rendering helper (Step 1 of Task 12 defines
+this helper — if Task 12 hasn't landed yet when this task is implemented, inline the marker JSX
+here and Task 12 refactors it into the shared helper then, updating this task's call site).
+Thread `focusVenue` through `VenueMap`, and update `VenueMap`'s header count expression from
+`venues.length` to `focusVenue ? 1 : venues.length`. Run — PASS.
 
-- [ ] **Step 2: Write the failing test for address/map/photos**
+- [ ] **Step 2: Write the failing test for address/map/photos, mocking `VenueMap` explicitly so its `data-testid="map-container"`/`data-center` attributes are actually present for the assertions below**
 ```typescript
+// venue-detail.spec.tsx (append) -- mock VenueMap the same way this file already mocks its other
+// child components (FavoriteButton, ReportForm, WhatsappShareButton -- read their real mock setup
+// first and match it), rendering a stand-in that exposes the same test hooks Task 5/7's real
+// component does:
+vi.mock("@/components/venue-map", () => ({
+  VenueMap: ({ center, focusVenue }: { center: [number, number]; focusVenue?: { lat: number; lng: number } }) => {
+    const effectiveCenter = focusVenue ? [focusVenue.lat, focusVenue.lng] : center;
+    return <div data-testid="map-container" data-center={effectiveCenter.join(",")} />;
+  },
+}));
+
 describe("VenueDetail — address, single-marker map, photo grid (net-new section, existing decorative directions section untouched)", () => {
   const baseVenue = { /* existing fixture, extended with: */ address: "Bahariye Cd. No:1", lat: 40.99, lng: 29.02, photos: ["https://x/1.jpg", "https://x/2.jpg"] };
 
@@ -952,11 +1024,11 @@ describe("VenueDetail — address, single-marker map, photo grid (net-new sectio
   });
 });
 ```
-(Read how this spec file currently mocks sibling child components like `FavoriteButton`/
-`ReportForm`, apply the same pattern to mock `VenueMap`.) Run — FAIL. Add a new section (separate
-from, not replacing, the existing "Sıradaki durak" block): conditionally render `venue.address`
-(`data-testid="venue-address"`); `<VenueMap venues={[]} center={[venue.lat, venue.lng]} focusVenue={{ id: venue.id, name: venue.name, lat: venue.lat, lng: venue.lng }} />`;
-a photo grid or empty state. Run — PASS.
+Run — FAIL. Add a new section (separate from, not replacing, the existing "Sıradaki durak"
+block): conditionally render `venue.address` (`data-testid="venue-address"`);
+`<VenueMap venues={[]} center={[venue.lat, venue.lng]} focusVenue={{ id: venue.id, name: venue.name, slug: venue.slug, category: venue.category, lat: venue.lat, lng: venue.lng }} />`
+(note `slug`/`category` now included, per this task's widened `focusVenue` type above — both
+already exist on `VenueDetailType`); a photo grid or empty state. Run — PASS.
 
 - [ ] **Step 3:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
 - [ ] **Step 4: Commit**
@@ -1180,10 +1252,10 @@ mock layer). Produces: each marker's underlying element gains `tabindex="0"`, `r
 `aria-label`, and Enter/Space opens its popup — for BOTH the bbox-driven multi-marker case and
 Task 7's `focusVenue` single-marker case, via one shared marker-rendering path (not two copies).
 
-- [ ] **Step 1: Write the failing test, with a bbox mock that actually returns a matching venue (round-5 finding: `[]` proves nothing)**
+- [ ] **Step 1: Write the failing test, with a bbox mock that actually returns a matching venue (round-5 finding: `[]` proves nothing), and a real assertion on `openPopupMock` (round-6 finding: the prior draft left a comment instead of an assertion; `openPopupMock` is already declared in this file's ONE shared `vi.hoisted()` block from Task 5, Step 4 — no second mock setup needed here)**
 ```typescript
 describe("VenueMapCanvas — real keyboard accessibility for markers (C14)", () => {
-  it("gives each marker's underlying element a tabindex/role/aria-label, and Enter opens its popup", async () => {
+  it("gives each marker's underlying element a tabindex/role/aria-label", async () => {
     getVenuesInBboxMock.mockResolvedValueOnce([{ id: "v1", name: "Cafe Test", category: "cafe", lat: 40.99, lng: 29.02 }]);
     render(<VenueMapCanvas venues={[{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null }]} center={[40.99, 29.02]} />);
     const marker = await screen.findByTestId("circle-marker");
@@ -1192,20 +1264,22 @@ describe("VenueMapCanvas — real keyboard accessibility for markers (C14)", () 
     expect(marker).toHaveAttribute("aria-label", "Cafe Test");
   });
 
-  it("opens the popup on both Enter and Space", async () => {
+  it("opens the popup on both Enter and Space, proven via a real assertion on the hoisted openPopupMock", async () => {
     getVenuesInBboxMock.mockResolvedValueOnce([{ id: "v1", name: "Cafe Test", category: "cafe", lat: 40.99, lng: 29.02 }]);
     render(<VenueMapCanvas venues={[{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null }]} center={[40.99, 29.02]} />);
     const marker = await screen.findByTestId("circle-marker");
     fireEvent.keyDown(marker, { key: "Enter" });
+    expect(openPopupMock).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(marker, { key: " " });
-    // this file's mock harness's eventHandlers.add stub exposes a spy-able openPopup on the mock
-    // layer -- assert against that spy, extending the Task 5 mock to expose it for assertions.
+    expect(openPopupMock).toHaveBeenCalledTimes(2);
   });
 
   it("the focusVenue single-marker case (Task 7) uses the same accessible marker path", async () => {
-    render(<VenueMapCanvas venues={[]} center={[40.99, 29.02]} focusVenue={{ id: "v1", name: "Cafe Test", lat: 40.99, lng: 29.02 }} />);
+    render(<VenueMapCanvas venues={[]} center={[40.99, 29.02]} focusVenue={{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", lat: 40.99, lng: 29.02 }} />);
     const marker = await screen.findByTestId("circle-marker");
     expect(marker).toHaveAttribute("role", "button");
+    fireEvent.keyDown(marker, { key: "Enter" });
+    expect(openPopupMock).toHaveBeenCalledTimes(1);
   });
 });
 ```
@@ -1253,13 +1327,34 @@ git commit -m "fix(web): real keyboard focus + Enter/Space popup activation for 
 **Interfaces:** Consumes the real `createFavoriteList(token: string, name: string): Promise<FavoriteList>`.
 Produces a create-list form appending to the existing `lists` state.
 
-- [ ] **Step 1: Write the failing test, with a fixture matching the real `FavoriteList` shape (`userId`/`createdAt` included)**
+**Round-6 finding (design doc vs. implementation — resolved as a documented scope reduction, not a
+gap):** the design doc's C5 section asks for a tab/dropdown switcher across multiple lists. The
+real `favoriler/page.tsx` (confirmed) already renders EVERY list as its own `<article>` card in a
+grid, each showing its own favorited venues inline — functionally equivalent to a switcher for the
+pilot's expected list count (a handful of lists per user), and simpler. Building a separate
+tab/dropdown UI on top of an already-adequate all-lists-visible grid would be over-engineering per
+this project's own YAGNI convention. This is recorded as an accepted, reasoned deviation:
+
+```markdown
+## Red-team bulguları — reddedilenler
+- C5'in design doc'taki tab/dropdown switcher isteği: reddedildi. Gerekçe: favoriler sayfası
+  zaten TÜM listeleri ayrı kart olarak gösteriyor (grid), bu pilot ölçeğinde (kullanıcı başına
+  az sayıda liste) bir switcher'dan daha basit ve en az o kadar kullanılabilir. Bu yanlışsa ne
+  olur: kullanıcı sayısı/liste sayısı arttıkça grid kalabalıklaşır, o zaman gerçek bir switcher
+  eklenir (Faz 2).
+```
+
+- [ ] **Step 1: Write the failing test, with a fixture matching the real `FavoriteList` shape (`userId`/`createdAt` included), and correct sequencing around the page's real `lists === null` loading state**
 ```typescript
 describe("Favoriler page — create a new list", () => {
   it("submits a new list name via createFavoriteList(token, name) and shows it as a new card once appended", async () => {
+    getFavoriteListsMock.mockResolvedValue([]); // real initial load -- must resolve to a real array before lists stops being null
     createFavoriteListMock.mockResolvedValue({ id: "l2", userId: "u1", name: "Kadıköy Kahveleri", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] });
     render(<FavorilerPage />);
-    await waitFor(() => screen.getByTestId("favoriler-page"));
+    // wait for the real initial getFavoriteLists() load to resolve (lists: null -> []) before
+    // interacting -- the create form only exists once lists has loaded, matching the page's real
+    // three-state (null/empty/populated) rendering already confirmed by reading the file.
+    await waitFor(() => expect(screen.getByLabelText(/liste adı/i)).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/liste adı/i), { target: { value: "Kadıköy Kahveleri" } });
     fireEvent.click(screen.getByRole("button", { name: /oluştur/i }));
     await waitFor(() => expect(createFavoriteListMock).toHaveBeenCalledWith(expect.any(String), "Kadıköy Kahveleri"));
@@ -1267,8 +1362,10 @@ describe("Favoriler page — create a new list", () => {
   });
 });
 ```
-Run — FAIL. Add a name input + submit button calling
-`createFavoriteList(session.access_token, name)`, appending the result to `lists` on success. Run — PASS.
+(This page's test file mocks `@/lib/api` statically — read its real current mock object and ADD
+`createFavoriteList: vi.fn()` to it in this same step, since the mock doesn't include it yet.) Run
+— FAIL. Add a name input + submit button calling `createFavoriteList(session.access_token, name)`,
+appending the result to `lists` on success. Run — PASS.
 
 - [ ] **Step 2:** Run: `cd apps/web && npx vitest run && npx tsc --noEmit`.
 - [ ] **Step 3: Commit**
@@ -1429,3 +1526,42 @@ git commit -m "docs: Plan 4c complete, ready for final whole-branch review"
 - **The admin `kuyruk`/`layout` loading tests now match their real distinct loading sources**
   (queue-fetch vs. auth) and real mocking conventions (`vi.doMock` + dynamic import for the
   layout), rather than assuming a uniform, simpler pattern.
+
+## Self-Review Notes (round 7 — DÜZELTİLEBİLİR fixes applied in place, no re-split needed)
+
+Round 6's verdict was **DÜZELTİLEBİLİR** (a first, after six rounds of YENİDEN BÖL) — the C1-C14
+completeness table held up, and the task-level structure was accepted as reasonable. The specific,
+local fixes it required are applied directly above, at each location:
+
+- **Task 7's `focusVenue` type widened to `{id,name,slug,category,lat,lng}`** (was missing
+  `slug`/`category`, which the shared marker/popup renderer needs); **`loadState` now initializes
+  to `"ready"` when `focusVenue` is given** (was stuck at `"loading"` forever, since nothing calls
+  `onLoadStateChange` in the bypass path); **`VenueMap`'s venue-count header now accounts for
+  `focusVenue`** (was reading `venues.length`, showing a contradictory "0 mekan" next to a real
+  marker).
+- **Task 7's `venue-detail.spec.tsx` test now explicitly mocks `VenueMap`**, so its `map-container`/
+  `data-center` assertions have something real to assert against.
+- **Task 12 (C14)'s Enter/Space test now asserts against a real, shared `vi.hoisted()`
+  `openPopupMock`** (declared once, in Task 5's own mock setup, not re-declared) instead of leaving
+  a comment where an assertion belonged.
+- **Task 5's mock harness now imports `beforeEach`** (was used but not imported).
+- **Task 4's C2 test is now two separate tests** — one genuinely proving the loading indicator via
+  an unresolved promise, one proving the error path — instead of one test named for both that only
+  exercised the error case.
+- **Task 6's `sortedByDistance` proof no longer proposes a per-test `vi.mock`** (Vitest's mocks are
+  file-hoisted and would have silently altered every other test in the file) — it now asserts
+  through the real `CategoryQuickRoute`'s rendered DOM output instead.
+- **Task 1 (getVenues' new second argument) and Task 3 (favorite-button's mount-time check) now
+  explicitly instruct updating every pre-existing test call site/fixture in the same step**, not
+  as an implied afterthought — closing a real `tsc`/test-breakage gap in both.
+- **Task 5 and Task 6 now explicitly instruct adding the newly-required `center`/`districtName`
+  props to every pre-existing `render(<DiscoveryClient ...>)` call** in `discovery-client.spec.tsx`.
+- **Task 1/Task 2's `district-picker.spec.tsx` now says "create," not "append"** — confirmed absent
+  from the repo today.
+- **C5's design-doc/implementation gap (a tab/dropdown switcher vs. the real page's existing
+  all-lists-as-cards grid) is resolved as a documented, reasoned scope reduction** (Task 13),
+  following this project's own convention for recording rejected red-team findings with rationale,
+  rather than building a switcher that duplicates already-adequate functionality.
+- **Task 13's test now waits for the real `lists === null → []` initial load to resolve** before
+  looking for the create-list form (which only renders once `lists` has loaded), and adds
+  `createFavoriteList` to the page's existing static API mock, which didn't include it.
