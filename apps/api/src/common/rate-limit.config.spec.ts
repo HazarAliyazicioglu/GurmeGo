@@ -11,24 +11,31 @@ describe("RATE_LIMITS — env override", () => {
   it("uses the env value when set", () => {
     process.env.RATE_LIMIT_READ_PER_MINUTE = "42";
     jest.resetModules();
+    // require() (not import) is required here: after jest.resetModules(), only a fresh
+    // require() call re-evaluates the module against the mutated process.env; a static ESM
+    // import is resolved once and cached, so it would never see the new env value.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     expect(require("./rate-limit.config").RATE_LIMITS.read.limit).toBe(42);
   });
 
   it("falls back to 100 when unset", () => {
     delete process.env.RATE_LIMIT_READ_PER_MINUTE;
     jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     expect(require("./rate-limit.config").RATE_LIMITS.read.limit).toBe(100);
   });
 
   it("uses env value for report limit when set", () => {
     process.env.RATE_LIMIT_REPORT_PER_DAY = "5";
     jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     expect(require("./rate-limit.config").RATE_LIMITS.report.limit).toBe(5);
   });
 
   it("falls back to 10 for report limit when unset", () => {
     delete process.env.RATE_LIMIT_REPORT_PER_DAY;
     jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     expect(require("./rate-limit.config").RATE_LIMITS.report.limit).toBe(10);
   });
 });
