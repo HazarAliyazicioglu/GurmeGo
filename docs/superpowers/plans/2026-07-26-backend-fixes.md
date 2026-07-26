@@ -219,24 +219,27 @@ and to the row object:
 
 - [ ] **Step 8: Write the failing test — `venue.schema.spec.ts`** (add `import { z } from "zod";` at
       the top of this test file alongside the other imports — needed for the inline `z.object(...)`
-      wrapper used to test `OptionalTrueFlag` in isolation):
+      wrapper used to test `OptionalTrueFlag` in isolation). **This step deliberately does NOT
+      touch `VenueListQuerySchema`'s `lat`/`lng`/`isBoutique`/`openNow` fields** — round 4's
+      plan-red-team found that removing `lat`/`lng` here breaks `VenuesRepository.searchPublished`
+      (which still reads `filters.lat`/`filters.lng` off `VenueListQuery` until Task 4 rewrites
+      it), and that break sits in `apps/api`, not `packages/shared`, so this task's own
+      `npx tsc --noEmit` (Step 14, scoped to `packages/shared`) would pass while silently leaving
+      `apps/api` broken until Task 4. That entire query-shape change (removal + `openNow` +
+      `isBoutique` correction) now happens in Task 4, atomically with the `searchPublished`
+      rewrite that is its only consumer. This step only adds the `OptionalTrueFlag` helper
+      (a pure addition, no existing field touched) and `VenueDetailSchema`'s new fields (also
+      additive — `VenuesService.detail()`'s caller code is unaffected until Task 5 populates
+      `lat`/`lng`/`address`/`photos`, and Zod validation of a still-incomplete object failing is
+      an existing, unrelated behavior this task doesn't change):
 ```typescript
 import { z } from "zod";
-import { OptionalTrueFlag, VenueListQuerySchema, VenueDetailSchema } from "./venue.schema";
+import { OptionalTrueFlag, VenueDetailSchema } from "./venue.schema";
 
 describe("OptionalTrueFlag", () => {
   it("stays undefined when absent", () => expect(z.object({ flag: OptionalTrueFlag }).parse({}).flag).toBeUndefined());
   it("parses 'true' as true", () => expect(z.object({ flag: OptionalTrueFlag }).parse({ flag: "true" }).flag).toBe(true));
   it("rejects 'false'", () => expect(z.object({ flag: OptionalTrueFlag }).safeParse({ flag: "false" }).success).toBe(false));
-});
-
-describe("VenueListQuerySchema", () => {
-  it("no longer accepts lat/lng", () => expect((VenueListQuerySchema.parse({ lat: "40.99", lng: "29.02" }) as any).lat).toBeUndefined());
-  it("openNow=true parses, openNow=false rejects", () => {
-    expect(VenueListQuerySchema.parse({ openNow: "true" }).openNow).toBe(true);
-    expect(VenueListQuerySchema.safeParse({ openNow: "false" }).success).toBe(false);
-  });
-  it("isBoutique=false rejects", () => expect(VenueListQuerySchema.safeParse({ isBoutique: "false" }).success).toBe(false));
 });
 
 describe("VenueDetailSchema", () => {
@@ -260,23 +263,24 @@ describe("VenueDetailSchema", () => {
   });
 });
 ```
-- [ ] **Step 9:** Run — FAIL, then in `venue.schema.ts` add:
+- [ ] **Step 9:** Run — FAIL, then in `venue.schema.ts` add ONLY:
 ```typescript
 // z.coerce.boolean() is a footgun: Boolean("false") is true. A naive
 // z.literal("true").optional().transform(v => v === "true") is ALSO wrong -- absent -> v is
 // undefined -> undefined === "true" is false, collapsing "not requested" into "explicitly off".
+// Not yet applied to VenueListQuerySchema here -- see this task's Step 8 note; that happens
+// atomically with its consumer in Task 4.
 export const OptionalTrueFlag = z.literal("true").optional().transform((v) => (v === undefined ? undefined : true));
 ```
-Read the current file, remove `lat`/`lng` and any sort-default `.transform()` from
-`VenueListQuerySchema` (moves to `VenuesService`, Task 4), replace
-`isBoutique: z.coerce.boolean().optional()` with `OptionalTrueFlag`, add `openNow: OptionalTrueFlag`.
-Preserve every other field exactly. Add to `VenueDetailSchema` after `district`:
+and to `VenueDetailSchema`, after `district`:
 ```typescript
   lat: z.number(),
   lng: z.number(),
   address: z.string().nullable(),
   photos: z.array(z.string()),
 ```
+`VenueListQuerySchema` itself is untouched by this task — Task 4 removes its `lat`/`lng`, replaces
+`isBoutique: z.coerce.boolean().optional()` with `OptionalTrueFlag`, and adds `openNow: OptionalTrueFlag`.
 - [ ] **Step 10:** Run — PASS.
 
 - [ ] **Step 11: Write the failing test — `admin-queue.schema.spec.ts`**, matching the REAL
@@ -307,8 +311,13 @@ describe("AdminQueueItemSchema / AdminQueueMutationResultSchema type enum", () =
 });
 ```
 - [ ] **Step 12:** Run — FAIL, then change both schemas' `type` field from `z.literal("REPORT")`
-      to `z.enum(["REPORT", "EDIT"])` (update the stale comment above `AdminQueueItemSchema.type`
-      that says "this app only ever queries type=REPORT" — it no longer will after Task 3).
+      to `z.enum(["REPORT", "EDIT"])`. Update the stale comment above `AdminQueueItemSchema.type`
+      — it currently says "this app only ever queries type=REPORT," which conflates two different
+      things: `AdminQueueService.list()`/`getQueue()` still filters by `type=REPORT` by design
+      (the design doc's queue UI is REPORT-focused; this is unchanged), but an individual item
+      fetched or mutated by id (`approve`/`reject`, Task 3) can now genuinely be an `EDIT` item.
+      Reword the comment to state that distinction rather than deleting the REPORT-only claim
+      about `list()`/`getQueue()`, which remains true.
 - [ ] **Step 13:** Run — PASS.
 
 - [ ] **Step 14:** Run: `cd packages/shared && npx vitest run && npx tsc --noEmit` — all pass.
@@ -495,10 +504,23 @@ async createWithLocation(client: Pick<PrismaService, "$queryRaw">, input: Create
 ```
 Remove the constructor-injected `this.prisma` usage inside this method — it uses `client` only.
 
-- [ ] **Step 5: Rewrite `updateWithLocation`** — same signature change, add the four new
-      assignments (Google fields, `address`); the existing `lat`/`lng` combined check
-      (`input.lat !== undefined && input.lng !== undefined`, confirmed already correct in the
-      real file — this is NOT the B11 bug, that's on the search side, fixed in Task 4) stays as-is:
+- [ ] **Step 5: Rewrite `updateWithLocation`** — same signature change, add FIVE new assignments
+      (Google fields, `address`, AND `photos` — round 4's plan-red-team caught that an earlier
+      draft of this step added `address` but silently dropped `photos`, meaning
+      `UpdateVenueWithLocationInput.photos` would type-check but never actually reach the
+      database); the existing `lat`/`lng` combined check (`input.lat !== undefined && input.lng !== undefined`,
+      confirmed already correct in the real file — this is NOT the B11 bug, that's on the search
+      side, fixed in Task 4) stays as-is. Add a test for `photos` alongside the existing
+      Google-fields test from Step 1, since this exact omission has no other coverage:
+```typescript
+  it("includes photos in the UPDATE (round 4 catch: previously silently dropped)", async () => {
+    const client = { $queryRaw: jest.fn().mockResolvedValue([{ id: "v1" }]) } as any;
+    await new VenuesRepository({} as any).updateWithLocation(client, "v1", { photos: ["p1", "p2"] });
+    const call = client.$queryRaw.mock.calls[0][0];
+    expect(call.strings.join("")).toContain("photos");
+    expect(call.values).toEqual(expect.arrayContaining([["p1", "p2"]]));
+  });
+```
 ```typescript
 async updateWithLocation(client: Pick<PrismaService, "$queryRaw">, id: string, input: UpdateVenueWithLocationInput): Promise<AdminVenueRow> {
     // ...existing per-field assignments unchanged, plus:
@@ -506,9 +528,10 @@ async updateWithLocation(client: Pick<PrismaService, "$queryRaw">, id: string, i
     if (input.googleRatingCount !== undefined) assignments.push(Prisma.sql`"googleRatingCount" = ${input.googleRatingCount}`);
     if (input.googlePlaceId !== undefined) assignments.push(Prisma.sql`"googlePlaceId" = ${input.googlePlaceId}`);
     if (input.address !== undefined) assignments.push(Prisma.sql`address = ${input.address}`);
+    if (input.photos !== undefined) assignments.push(Prisma.sql`photos = ${input.photos}`);
     // ...replace this.prisma.$queryRaw with client.$queryRaw in the final query call
 ```
-- [ ] **Step 6:** Run — PASS (4 tests).
+- [ ] **Step 6:** Run — PASS (5 tests: the 4 from Step 1 + the `photos` test above).
 
 - [ ] **Step 7: Write the failing test for `findRawForSnapshot`**
 ```typescript
@@ -733,13 +756,43 @@ Run — PASS.
 
 - [ ] **Step 16: Write a real integration test proving the transaction actually rolls back**
       (a mock cannot prove this — the prior round correctly rejected the mock-based version).
-      New file `apps/api/test/admin-venues-rollback.e2e-spec.ts`, using the real local Supabase
-      stack (same pattern as `apps/api/test/app.e2e-spec.ts`) and the repository's own
+      New file `apps/api/test/admin-venues-rollback.e2e-spec.ts`, using a real `PrismaClient`
+      against the local Supabase stack directly (this avoids depending on `app.e2e-spec.ts`'s
+      internal harness shape, which this plan hasn't read) and the repository's own
       `createWithLocation` (never `prisma.venue.create` — ADR 002 means the Prisma Client's model
       API cannot write the required `location` column, so seeding for this test must go through
-      the repository, not a bare `prisma.venue.create`):
+      the repository):
 ```typescript
+import { PrismaClient } from "@prisma/client";
+import { PrismaService } from "../src/prisma/prisma.service";
+import { VenuesRepository } from "../src/venues/venues.repository";
+import { AdminVenuesService } from "../src/admin/venues/admin-venues.service";
+import { BoutiqueService } from "../src/rule-engine/boutique.service";
+
 describe("AdminVenuesService.update — real rollback", () => {
+  let prisma: PrismaClient;
+  let venuesRepository: VenuesRepository;
+  let adminVenuesService: AdminVenuesService;
+  let seededVenueIds: string[] = [];
+
+  beforeAll(() => {
+    prisma = new PrismaService();
+    venuesRepository = new VenuesRepository(prisma as unknown as PrismaService);
+    adminVenuesService = new AdminVenuesService(prisma as unknown as PrismaService, new BoutiqueService(), venuesRepository);
+  });
+
+  afterEach(async () => {
+    if (seededVenueIds.length > 0) {
+      await prisma.venueVersion.deleteMany({ where: { venueId: { in: seededVenueIds } } });
+      await prisma.venue.deleteMany({ where: { id: { in: seededVenueIds } } });
+      seededVenueIds = [];
+    }
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
   it("does not persist a VenueVersion snapshot when updateWithLocation fails mid-transaction", async () => {
     const district = await prisma.district.findFirstOrThrow();
     const venue = await venuesRepository.createWithLocation(prisma, {
@@ -748,6 +801,7 @@ describe("AdminVenuesService.update — real rollback", () => {
       isBoutique: false, branchCount: 1, franchiseFlag: false, source: "MANUAL",
       verifiedAt: new Date(), status: "DRAFT", lat: 40.99, lng: 29.02,
     });
+    seededVenueIds.push(venue.id);
     const versionsBefore = await prisma.venueVersion.count({ where: { venueId: venue.id } });
     // An invalid districtId FK forces updateWithLocation's UPDATE statement to fail after the
     // snapshot has already been created inside the same transaction -- this is the exact ordering
@@ -759,7 +813,9 @@ describe("AdminVenuesService.update — real rollback", () => {
 });
 ```
 Run: `cd apps/api && npx jest test/admin-venues-rollback.e2e-spec.ts` — PASS (requires the local
-Supabase stack up; confirm with `npx supabase status` first).
+Supabase stack up; confirm with `npx supabase status` first, and confirm `PrismaService`'s real
+constructor signature takes no required arguments before using `new PrismaService()` directly —
+adjust if it does).
 
 - [ ] **Step 17: `AdminQueueService`** — write the failing tests, then implement (this closes the
       round-3 `tx: any` finding by typing the transaction client properly):
@@ -828,10 +884,16 @@ to inject `venuesRepository`).
 
 - [ ] **Step 19: Run this task's full scoped suite and commit**
 Run: `cd apps/api && npx jest src/venues/venues.repository.spec.ts src/admin/venues src/rule-engine/boutique.service.spec.ts src/admin/queue test/app.e2e-spec.ts test/admin-venues-rollback.e2e-spec.ts && npx tsc --noEmit`
-(This is NOT yet a full-project gate — `VenuesController`/`VenuesService`/`DistrictsController`
-still reference the pre-Task-4 `searchPublished` shape, which Task 4 hasn't touched yet, so they
-remain unaffected and already compile. The `tsc --noEmit` above should already be fully green,
-since nothing outside this task's own files referenced the signatures changed here.)
+Expected: this whole-project `tsc --noEmit` is a legitimately valid gate at this exact point,
+because Task 2 (packages/shared) deliberately did NOT remove `lat`/`lng` from `VenueListQuery` or
+touch `isBoutique`/`openNow` on it yet — round 4's plan-red-team caught that an earlier draft
+removed them in Task 2 while `VenuesRepository.searchPublished` (which reads `filters.lat`/
+`filters.lng` off exactly that type) wasn't fixed until Task 4, which would have made this exact
+step's `tsc --noEmit` claim false. That removal now happens in Task 4, atomically with
+`searchPublished`'s rewrite. `VenuesController`/`VenuesService`/`DistrictsController` are
+therefore genuinely untouched and already compiling at this point in the plan — nothing outside
+this task's own files (`venues.repository.ts`'s write methods, `AdminVenuesService`, `seed.ts`,
+`BoutiqueService`, `AdminQueueService`) referenced a signature changed here.
 ```bash
 git add apps/api/src/venues/venues.repository.ts apps/api/src/admin/venues apps/api/src/admin/queue apps/api/src/rule-engine/boutique.service.ts apps/api/src/rule-engine/boutique.service.spec.ts apps/api/prisma/seed.ts apps/api/test
 git commit -m "feat(api): transaction-aware venue writes, status-aware admin create/update/revert, REPORT/EDIT queue branching
@@ -857,18 +919,45 @@ it produces. `DistrictsController` is included because it's the other consumer o
 decorator, not because it depends on `searchPublished`.
 
 **Files:**
-- Modify: `apps/api/src/venues/venues.repository.ts` (search method only), `venues.service.ts`,
-  `venues.controller.ts`
+- Modify: `packages/shared/src/schemas/venue.schema.ts` (`VenueListQuerySchema` — moved here from
+  Task 2, see below), `apps/api/src/venues/venues.repository.ts` (search method only),
+  `venues.service.ts`, `venues.controller.ts`
 - Create: `apps/api/src/common/user-location.decorator.ts`
 - Modify: `apps/api/src/districts/districts.controller.ts`
-- Test: `venues.repository.spec.ts`, `venues.service.spec.ts`, `venues.controller.spec.ts`,
-  `common/user-location.decorator.spec.ts`, `districts.controller.spec.ts`
+- Test: `packages/shared/src/schemas/venue.schema.spec.ts` (append), `venues.repository.spec.ts`,
+  `venues.service.spec.ts`, `venues.controller.spec.ts`, `common/user-location.decorator.spec.ts`,
+  `districts.controller.spec.ts`
 
 **Interfaces:**
-- Consumes: Task 2's `VenueListQuerySchema` (no `lat`/`lng`, has `openNow`)
-- Produces: `searchPublished(filters: VenueSearchFilters)` with the internal
+- Consumes: Task 2's `OptionalTrueFlag` helper (defined but not yet applied to
+  `VenueListQuerySchema` — Task 2's Step 8 deliberately left this schema untouched; round 4's
+  plan-red-team found that removing `lat`/`lng` in Task 2 broke `searchPublished` (which reads
+  them) until this task ran, making Task 2/3's own acceptance gates false in between)
+- Produces: `VenueListQuerySchema` with `lat`/`lng` removed, `isBoutique`/`openNow` on
+  `OptionalTrueFlag`; `searchPublished(filters: VenueSearchFilters)` with the internal
   `VenueSearchFilters` type and a real `openNow` filter; `UserLocationParam`/
   `parseUserLocationHeader`; `VenuesService.list(query, location)` with sort-default logic.
+
+- [ ] **Step 0: Write the failing test and change `VenueListQuerySchema`** (this is the schema
+      change round 4 required be co-located with its consumer, not left in Task 2)
+```typescript
+// packages/shared/src/schemas/venue.schema.spec.ts (append)
+describe("VenueListQuerySchema", () => {
+  it("no longer accepts lat/lng", () => expect((VenueListQuerySchema.parse({ lat: "40.99", lng: "29.02" }) as any).lat).toBeUndefined());
+  it("openNow=true parses, openNow=false rejects", () => {
+    expect(VenueListQuerySchema.parse({ openNow: "true" }).openNow).toBe(true);
+    expect(VenueListQuerySchema.safeParse({ openNow: "false" }).success).toBe(false);
+  });
+  it("isBoutique=false rejects", () => expect(VenueListQuerySchema.safeParse({ isBoutique: "false" }).success).toBe(false));
+});
+```
+Run: `cd packages/shared && npx vitest run src/schemas/venue.schema.spec.ts` — FAIL, then read the
+current `VenueListQuerySchema`, remove `lat`/`lng` and any sort-default `.transform()` (moves to
+`VenuesService.list`, Step 11 below), replace `isBoutique: z.coerce.boolean().optional()` with
+`OptionalTrueFlag` (defined in Task 2), add `openNow: OptionalTrueFlag`. Preserve every other
+field (`districtId`/`category`/`priceRange`/`radiusM`/`sort`/`limit`/`cursor`) exactly. Run again
+— PASS. This is the moment `searchPublished` (still reading `filters.lat`/`filters.lng` off this
+type) breaks — fixed in the very next steps of this same task, before this task's own commit.
 
 - [ ] **Step 1: Write the failing tests for B11 on the search side**
 ```typescript
@@ -953,15 +1042,54 @@ Add:
 ```
 - [ ] **Step 7:** Run — PASS (2 tests).
 
-- [ ] **Step 8: Real-DB test for malformed `openingHours` fail-open**
-      New/append to `apps/api/test/app.e2e-spec.ts` or a new `apps/api/test/venues-open-now.e2e-spec.ts`:
+- [ ] **Step 7b: Unit test the regex boundary directly** (round 4 finding: the "00-23 regex" and
+      the design doc's explicit `""`/`"29:00-10:00"` malformed-value examples had no dedicated
+      test — add them as pure regex assertions, independent of which day the suite runs on):
+```typescript
+describe("open_now opening-hours format regex (extracted for direct testing)", () => {
+  const HOURS_FORMAT = /^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$/;
+  it("accepts a valid HH:MM-HH:MM range", () => expect(HOURS_FORMAT.test("09:00-18:00")).toBe(true));
+  it("accepts the boundary hour 23", () => expect(HOURS_FORMAT.test("00:00-23:59")).toBe(true));
+  it("rejects an out-of-range hour", () => expect(HOURS_FORMAT.test("29:00-10:00")).toBe(false));
+  it("rejects an empty string", () => expect(HOURS_FORMAT.test("")).toBe(false));
+  it("rejects a non-numeric value", () => expect(HOURS_FORMAT.test("kapalı")).toBe(false));
+});
+```
+(This regex is inlined directly into the SQL in Step 6, not extracted to a shared TS constant —
+this test exists to prove the pattern itself is correct in isolation, copy-pasted identically.)
+
+- [ ] **Step 8: Real-DB test for malformed `openingHours` fail-open — day-independent**
+      New/append to `apps/api/test/app.e2e-spec.ts` or a new `apps/api/test/venues-open-now.e2e-spec.ts`.
+      Round 4's plan-red-team correctly flagged that a fixed `openingHours: { mon_fri: "kapalı" }`
+      fixture only actually exercises the fail-open path on Mon-Fri; run on a Saturday, the SQL
+      evaluates the `sat_sun` branch instead, the malformed `mon_fri` value is never looked at, and
+      the venue passes for the wrong reason (missing `sat_sun` key → `ELSE true`, not because the
+      malformed-value regex-mismatch path was exercised). Fix: compute which bucket is "today" in
+      the test itself and put the malformed value there, so the test is deterministic on every day:
 ```typescript
 describe("GET /venues?openNow=true — fail-open on malformed data", () => {
   it("includes venues with unparseable or missing openingHours instead of excluding them", async () => {
     const district = await prisma.district.findFirstOrThrow();
+    // ISODOW: 1=Monday...7=Sunday. Match the SQL's own bucket selection exactly so the malformed
+    // value actually lands in the branch the query will evaluate today, on any day of the week.
+    const isoDow = ((new Date().getDay() + 6) % 7) + 1; // JS getDay(): 0=Sunday -> ISODOW 7
+    const todaysBucket: "mon_fri" | "sat_sun" = isoDow >= 1 && isoDow <= 5 ? "mon_fri" : "sat_sun";
+
     const malformed = await venuesRepository.createWithLocation(prisma, {
       name: "Malformed Hours Venue", slug: `malformed-hours-${Date.now()}`, districtId: district.id,
-      category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: { mon_fri: "kapalı" },
+      category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: { [todaysBucket]: "kapalı" },
+      isBoutique: false, branchCount: 1, franchiseFlag: false, source: "MANUAL",
+      verifiedAt: new Date(), status: "PUBLISHED", lat: 40.99, lng: 29.02,
+    });
+    const emptyString = await venuesRepository.createWithLocation(prisma, {
+      name: "Empty String Hours Venue", slug: `empty-hours-${Date.now()}`, districtId: district.id,
+      category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: { [todaysBucket]: "" },
+      isBoutique: false, branchCount: 1, franchiseFlag: false, source: "MANUAL",
+      verifiedAt: new Date(), status: "PUBLISHED", lat: 40.99, lng: 29.02,
+    });
+    const outOfRange = await venuesRepository.createWithLocation(prisma, {
+      name: "Out Of Range Hours Venue", slug: `oor-hours-${Date.now()}`, districtId: district.id,
+      category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: { [todaysBucket]: "29:00-10:00" },
       isBoutique: false, branchCount: 1, franchiseFlag: false, source: "MANUAL",
       verifiedAt: new Date(), status: "PUBLISHED", lat: 40.99, lng: 29.02,
     });
@@ -972,11 +1100,13 @@ describe("GET /venues?openNow=true — fail-open on malformed data", () => {
       verifiedAt: new Date(), status: "PUBLISHED", lat: 40.99, lng: 29.02,
     });
     const { items } = await venuesRepository.searchPublished({ sort: "newest", limit: 50, openNow: true } as any);
-    expect(items.map((i: any) => i.id)).toEqual(expect.arrayContaining([malformed.id, missing.id]));
+    const ids = items.map((i: any) => i.id);
+    expect(ids).toEqual(expect.arrayContaining([malformed.id, emptyString.id, outOfRange.id, missing.id]));
   });
 });
 ```
-Run — PASS (requires local Supabase stack).
+Run — PASS (requires local Supabase stack up; confirm with `npx supabase status` first). This
+test is now correct regardless of which day of the week it happens to run on.
 
 - [ ] **Step 9: Write the failing test — `user-location.decorator.spec.ts`** (new)
 ```typescript
@@ -1069,11 +1199,25 @@ describe("VenuesController.list — pipe scoping doesn't corrupt the location pa
   });
 });
 ```
-Run: `cd apps/api && npx jest src/venues/venues.controller.spec.ts` — PASS. (This test exercises
-the controller method as a plain function, which is sufficient to prove the pipe-scoping fix
-didn't change the method's own argument-passing behavior; it does not exercise Nest's actual
-runtime pipe execution — that is covered instead by `test/app.e2e-spec.ts`'s existing real-HTTP
-coverage of this endpoint, which continues to run unmodified after this change.)
+Run: `cd apps/api && npx jest src/venues/venues.controller.spec.ts` — PASS. This test exercises the
+controller method as a plain function, which proves the method's own argument-passing didn't
+change — it does NOT exercise Nest's actual runtime pipe execution. Round 4's plan-red-team
+correctly rejected assuming `app.e2e-spec.ts` already covers this without checking; add a real
+HTTP test instead of assuming it exists:
+```typescript
+// apps/api/test/app.e2e-spec.ts (append)
+describe("GET /v1/venues — header doesn't get corrupted by the query pipe", () => {
+  it("returns 200 with both a query filter and the X-User-Location header present", async () => {
+    const response = await request(app.getHttpServer())
+      .get("/v1/venues?limit=5")
+      .set("X-User-Location", "40.99,29.02");
+    expect(response.status).toBe(200);
+  });
+});
+```
+(Match this to whatever HTTP client `app.e2e-spec.ts` already uses — read it first.) Run:
+`cd apps/api && npx jest test/app.e2e-spec.ts` — PASS. A 500 here would mean the method-level
+`@UsePipes` bug (Task 4's whole reason for existing) is still present.
 
 - [ ] **Step 13: `DistrictsController.findNearest`** — write the failing test, then require the header:
 ```typescript
@@ -1103,9 +1247,9 @@ Remove the old `@Query("lat")`/`@Query("lng")` params and their `parseFloat` cal
 Run: `cd apps/api && npx jest src/districts/districts.controller.spec.ts` — PASS.
 
 - [ ] **Step 14: Run this task's full scoped suite and commit**
-Run: `cd apps/api && npx jest src/venues src/districts src/common && npx tsc --noEmit`
+Run: `cd packages/shared && npx vitest run && npx tsc --noEmit && cd ../../apps/api && npx jest src/venues src/districts src/common test/app.e2e-spec.ts && npx tsc --noEmit`
 ```bash
-git add apps/api/src/venues apps/api/src/common/user-location.decorator.ts apps/api/src/common/user-location.decorator.spec.ts apps/api/src/districts apps/api/test
+git add packages/shared/src/schemas/venue.schema.ts apps/api/src/venues apps/api/src/common/user-location.decorator.ts apps/api/src/common/user-location.decorator.spec.ts apps/api/src/districts apps/api/test
 git commit -m "feat(api): X-User-Location header (ADR 004) replaces lat/lng query params, open_now filter, B11 fix on the search side
 
 searchPublished's distanceSelect/radiusFilter/orderBy used truthiness
@@ -1148,10 +1292,36 @@ describe("VenuesRepository.findBySlug — location and new fields", () => {
 });
 ```
 - [ ] **Step 2:** Run — FAIL (current `findBySlug` uses `prisma.venue.findFirst`, no lat/lng),
-      then replace with:
+      then replace with a named row type instead of `$queryRaw<any[]>` (round 4's plan-red-team
+      correctly flagged `any[]` here as an unjustified use of the forbidden type — this row shape
+      is exactly enumerable from the `SELECT` list, so there is no reason not to name it):
 ```typescript
-async findBySlug(slug: string) {
-    const rows = await this.prisma.$queryRaw<any[]>(Prisma.sql`
+interface VenueDetailRow {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  cuisineType: string | null;
+  priceRange: string;
+  signatureItems: string[];
+  transportNote: string | null;
+  openingHours: Prisma.JsonValue;
+  editorialNote: string | null;
+  isBoutique: boolean;
+  verifiedAt: Date;
+  source: string;
+  googleRating: number | null;
+  googleRatingCount: number | null;
+  googlePlaceId: string | null;
+  address: string | null;
+  photos: string[];
+  lat: number;
+  lng: number;
+  district: { name: string; slug: string };
+}
+
+async findBySlug(slug: string): Promise<VenueDetailRow | undefined> {
+    const rows = await this.prisma.$queryRaw<VenueDetailRow[]>(Prisma.sql`
       SELECT v.id, v.slug, v.name, v.category, v."cuisineType", v."priceRange", v."signatureItems",
         v."transportNote", v."openingHours", v."editorialNote", v."isBoutique", v."verifiedAt",
         v.source, v."googleRating", v."googleRatingCount", v."googlePlaceId", v.address, v.photos,
@@ -1164,7 +1334,9 @@ async findBySlug(slug: string) {
     return rows[0];
 }
 ```
-- [ ] **Step 3:** Run — PASS (2 tests).
+- [ ] **Step 3:** Run — PASS (2 tests). Confirm `VenuesService.detail()`'s existing call site
+      still compiles against the new `VenueDetailRow | undefined` return type (it should — this is
+      strictly narrower than the previous untyped `any`, not a shape change).
 - [ ] **Step 4:** Run: `cd apps/api && npx jest src/venues/venues.repository.spec.ts src/venues/venues.service.spec.ts` — confirm `VenuesService.detail()`'s existing tests still pass unchanged.
 - [ ] **Step 5:** Commit
 ```bash
@@ -1242,10 +1414,65 @@ describe("AdminVenuesService.importRows — status/address default", () => {
           address: row.address,
 ```
 - [ ] **Step 6:** Run — PASS (all).
+
+- [ ] **Step 6b: Write the real end-to-end proof — CSV import result is visible in `GET /venues`.**
+      Round 4's plan-red-team correctly flagged that the design doc's actual acceptance criterion
+      for A1 ("CSV path publishes a venue visibly") was not met by unit/mock tests alone. New file
+      `apps/api/test/csv-import-visibility.e2e-spec.ts`, same real-`PrismaClient` pattern as Task
+      3's rollback test:
+```typescript
+import { PrismaClient } from "@prisma/client";
+import { PrismaService } from "../src/prisma/prisma.service";
+import { VenuesRepository } from "../src/venues/venues.repository";
+import { AdminVenuesService } from "../src/admin/venues/admin-venues.service";
+import { BoutiqueService } from "../src/rule-engine/boutique.service";
+
+describe("CSV import -> GET /venues visibility", () => {
+  let prisma: PrismaClient;
+  let adminVenuesService: AdminVenuesService;
+  let seededSlug: string;
+
+  beforeAll(() => {
+    prisma = new PrismaService();
+    const venuesRepository = new VenuesRepository(prisma as unknown as PrismaService);
+    adminVenuesService = new AdminVenuesService(prisma as unknown as PrismaService, new BoutiqueService(), venuesRepository);
+  });
+
+  afterEach(async () => {
+    if (seededSlug) await prisma.venue.deleteMany({ where: { slug: seededSlug } });
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  it("a CSV row with no status column becomes PUBLISHED and appears in searchPublished", async () => {
+    const district = await prisma.district.findFirstOrThrow();
+    seededSlug = `csv-visibility-${Date.now()}`;
+    const { rowErrors } = await adminVenuesService.importRows([{
+      row: 1,
+      data: {
+        name: "CSV Visibility Test", slug: seededSlug, districtSlug: district.slug, category: "cafe",
+        priceRange: "MODERATE", branchCount: 1, franchiseFlag: false, lat: 40.99, lng: 29.02,
+        openingHours: {},
+      } as any,
+    }]);
+    expect(rowErrors).toEqual([]);
+    const created = await prisma.venue.findUniqueOrThrow({ where: { slug: seededSlug } });
+    expect(created.status).toBe("PUBLISHED");
+    const venuesRepository = new VenuesRepository(prisma as unknown as PrismaService);
+    const { items } = await venuesRepository.searchPublished({ sort: "newest", limit: 50 } as any);
+    expect(items.map((i: any) => i.slug)).toContain(seededSlug);
+  });
+});
+```
+Run: `cd apps/api && npx jest test/csv-import-visibility.e2e-spec.ts` — PASS (requires the local
+Supabase stack up).
+
 - [ ] **Step 7:** Commit
 ```bash
-git add apps/api/src/admin/venues/admin-venues.service.ts apps/api/src/admin/venues/csv-import.service.spec.ts
-git commit -m "feat(api): CSV import defaults venues to PUBLISHED, passes status/address through"
+git add apps/api/src/admin/venues/admin-venues.service.ts apps/api/src/admin/venues/csv-import.service.spec.ts apps/api/test/csv-import-visibility.e2e-spec.ts
+git commit -m "feat(api): CSV import defaults venues to PUBLISHED, passes status/address through, e2e-proven visible in GET /venues"
 ```
 
 ---
@@ -1419,14 +1646,32 @@ submit(@Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) venueId: st
 (`venues.controller.ts`'s `detail(@Param("slug") slug: string)` is unchanged.)
 
 - [ ] **Step 5:** Run: `cd apps/api && npx jest src/venues src/admin src/favorites src/reports` — PASS.
-- [ ] **Step 6:** Run: `cd apps/api && npx jest test/app.e2e-spec.ts` — confirms a real HTTP request
-      with a malformed `:id` actually gets a 400 through Nest's real pipe execution (the direct
-      `.transform()` test above proves the pipe class works in isolation; this proves it's wired
-      up correctly at the route level).
+
+- [ ] **Step 6: Add a real HTTP test proving the pipe is actually wired at the route level** —
+      round 4's plan-red-team correctly noted that simply re-running the existing
+      `app.e2e-spec.ts` proves nothing new about this task's change, since that file doesn't yet
+      contain a request exercising these routes with a malformed id. Append one concrete case to
+      `apps/api/test/app.e2e-spec.ts` (using whatever HTTP test client that file already sets up —
+      read it first to match its existing request-building pattern; the shape below assumes a
+      `supertest`-style `app.inject` or `request(app.getHttpServer())` call, adjust to match):
+```typescript
+describe("UUID path-param validation — wired at the route level", () => {
+  it("GET /v1/admin/venues/not-a-uuid returns 400, not a PostGIS/Prisma error", async () => {
+    const response = await request(app.getHttpServer())
+      .get("/v1/admin/venues/not-a-uuid")
+      .set("Authorization", `Bearer ${curatorToken}`); // reuse whatever auth setup app.e2e-spec.ts already has for admin routes
+    expect(response.status).toBe(400);
+  });
+});
+```
+Run: `cd apps/api && npx jest test/app.e2e-spec.ts` — PASS. This is the test that actually proves
+route-level wiring; the direct `.transform()` test in Step 4 only proves the `ParseUUIDPipe` class
+itself behaves correctly in isolation.
+
 - [ ] **Step 7:** Commit
 ```bash
-git add packages/shared/src/schemas/venue.schema.ts apps/api/src/venues apps/api/src/admin apps/api/src/favorites apps/api/src/reports
-git commit -m "fix(api): bbox and UUID path-param validation (B12), Zod-driven bbox errors instead of PostGIS crashes"
+git add packages/shared/src/schemas/venue.schema.ts apps/api/src/venues apps/api/src/admin apps/api/src/favorites apps/api/src/reports apps/api/test/app.e2e-spec.ts
+git commit -m "fix(api): bbox and UUID path-param validation (B12), Zod-driven bbox errors instead of PostGIS crashes, route-level wiring proven via real HTTP test"
 ```
 
 ---
@@ -1820,4 +2065,36 @@ check, not the acceptance criterion.
   from `packages/shared/src/schemas/admin-queue.schema.ts`.
 - **Rollback proof is now a real Postgres integration test** seeded via the repository's own
   `createWithLocation` (never `prisma.venue.create`, which cannot write the required `location`
-  column per ADR 002) instead of a circular mock.
+  column per ADR 002) instead of a circular mock, with concrete `beforeAll`/`afterEach`/`afterAll`
+  setup and cleanup instead of a "same pattern as..." placeholder.
+
+## Round 4 plan-red-team fixes (applied after this document's initial round-4 draft)
+
+Codex's fourth pass found the write/read task split was directionally correct but still had a real
+cross-task acceptance cycle, plus several smaller concrete gaps:
+
+- **The actual remaining sözleşme bug:** Task 2 removed `lat`/`lng` from `VenueListQuerySchema`,
+  but `searchPublished` (which reads them) wasn't fixed until Task 4 — meaning Task 3's own
+  `tsc --noEmit` claim, sitting in between, was false. Fixed by moving the `VenueListQuerySchema`
+  change itself into Task 4 (now its own Step 0), atomically with `searchPublished`'s rewrite.
+  Task 2 now only adds the `OptionalTrueFlag` helper (unapplied) and `VenueDetailSchema`'s new
+  fields — both purely additive, breaking nothing.
+- **`updateWithLocation` was missing the `photos` assignment** (added `googleRating`/
+  `googleRatingCount`/`googlePlaceId`/`address` but not `photos`, despite the type accepting it) —
+  fixed with its own dedicated test.
+- **`findBySlug`'s `$queryRaw<any[]>`** replaced with a named `VenueDetailRow` interface — the
+  global "any forbidden unless justified" rule had no justification for this one, since the row
+  shape is fully enumerable from the `SELECT` list.
+- **The admin-queue schema comment instruction was wrong**: it implied `list()`/`getQueue()` would
+  no longer be REPORT-only after Task 3, which contradicts the design doc — only `approve`/`reject`
+  by id can now see an `EDIT` item; the list/queue view stays REPORT-focused by design. Reworded.
+- **The real-DB `openNow` fail-open test was day-of-week-flaky**: a fixed `{ mon_fri: "kapalı" }`
+  fixture only exercises the malformed-value path on weekdays. Fixed to compute "today's bucket"
+  in the test itself, plus added the design doc's explicit empty-string and `"29:00-10:00"` cases
+  and a standalone regex unit test for the 00-23 boundary.
+- **Three test claims were unverified assumptions** rather than real tests: (1) Task 4's location
+  header test assumed `app.e2e-spec.ts` already exercises this endpoint with the header present —
+  replaced with an actual appended case; (2) Task 8's UUID validation assumed re-running the
+  existing e2e suite would prove route-level wiring — replaced with an actual appended HTTP case;
+  (3) the design doc's CSV-visibility acceptance criterion (imported row appears in `GET /venues`)
+  had no test at all — added as Task 6's new Step 6b, a real Postgres integration test.
