@@ -94,7 +94,13 @@ export function snapshotToUpdateInput(row: AdminVenueRow): UpdateVenueWithLocati
   return {
     name: row.name, slug: row.slug, districtId: row.districtId, category: row.category,
     cuisineType: row.cuisineType, priceRange: row.priceRange, signatureItems: row.signatureItems,
-    transportNote: row.transportNote, openingHours: row.openingHours as Record<string, unknown>,
+    transportNote: row.transportNote,
+    // `row.openingHours` is a Prisma `Json` column (`Prisma.JsonValue`) -- its static type is a
+    // union of primitives/objects/arrays and carries no domain knowledge that opening hours are
+    // always stored as a JSON object (never a bare string/number/array). No narrower type is
+    // possible without a runtime shape check nothing downstream needs (same reasoning as the
+    // `version.snapshot` cast in admin-venues.service.ts's revert()).
+    openingHours: row.openingHours as Record<string, unknown>,
     editorialNote: row.editorialNote, isBoutique: row.isBoutique, branchCount: row.branchCount,
     franchiseFlag: row.franchiseFlag, status: row.status, source: row.source,
     googleRating: row.googleRating, googleRatingCount: row.googleRatingCount,

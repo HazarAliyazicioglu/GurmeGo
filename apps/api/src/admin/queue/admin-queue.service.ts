@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { ContributionStatus, ContributionType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { VenuesRepository } from "../../venues/venues.repository";
 import { getUrgentReportThreshold } from "../../common/rule-config";
@@ -22,7 +22,16 @@ export class AdminQueueService {
 
   async list(type?: string, status?: string) {
     const items = await this.prisma.contributionQueue.findMany({
-      where: { type: type as any, status: (status as any) ?? "PENDING" },
+      where: {
+        // `type`/`status` arrive as unvalidated `@Query()` strings (admin-queue.controller.ts has
+        // no zod/enum pipe on this route yet) -- Prisma's generated `where` type requires the real
+        // enum type, which is narrower than `string`. There's no type-level narrowing available
+        // without adding runtime validation (out of scope for this fix); an invalid value reaches
+        // Postgres as literal enum text and fails there (22P02 invalid input value for enum),
+        // surfacing as a 500 on this admin-only endpoint.
+        type: type as ContributionType | undefined,
+        status: (status as ContributionStatus | undefined) ?? "PENDING",
+      },
       orderBy: { createdAt: "asc" },
       include: { venue: { select: { name: true, slug: true } } },
     });
