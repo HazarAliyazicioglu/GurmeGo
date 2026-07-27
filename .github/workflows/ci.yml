@@ -41,3 +41,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           SUPABASE_JWKS_URL: http://localhost:54321/auth/v1/.well-known/jwks.json
+          # BLOCKER fix (final whole-branch review): rule-config.ts (Task 20) made these three
+          # required at apps/api module-load time (throws if absent) -- intentional, closing a
+          # "silently hardcoded threshold" architecture violation. The smoke-API step boots the
+          # real app, so it needs them too, same as local dev's apps/api/.env.example. Values match
+          # that file's documented real-deployment defaults (also mirrored in
+          # apps/api/test/env-defaults.setup.ts for the Jest step above).
+          RULES_BOUTIQUE_MAX_BRANCHES: "3"
+          RULES_STALE_DAYS: "90"
+          RULES_MOD_AUTO_HIDE_REPORTS: "3"
