@@ -8,7 +8,9 @@ describe("BoutiqueService.evaluate", () => {
   });
 
   it("returns false when branch count exceeds RULES_BOUTIQUE_MAX_BRANCHES", () => {
-    process.env.RULES_BOUTIQUE_MAX_BRANCHES = "3";
+    // RULES_BOUTIQUE_MAX_BRANCHES is set to "3" by test/env-defaults.setup.ts before this file's
+    // static import of rule-config.ts ever runs, so a per-test assignment here would be a no-op
+    // (rule-config.ts reads and freezes the value at module load, not per-call).
     expect(service.evaluate({ branchCount: 5, franchiseFlag: false, hasEditorialNote: true, status: "PUBLISHED" })).toBe(false);
   });
 

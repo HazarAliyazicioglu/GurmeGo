@@ -5,7 +5,9 @@ import { PrismaService } from "../prisma/prisma.service";
 
 describe("ReVerifyService.enqueueStale", () => {
   it("creates EDIT-type re_verify contributions for venues older than RULES_STALE_DAYS, skipping existing pending ones", async () => {
-    process.env.RULES_STALE_DAYS = "90";
+    // RULES_STALE_DAYS is set to "90" by test/env-defaults.setup.ts before this file's static
+    // import of rule-config.ts (via re-verify.service.ts) ever runs, so a per-test assignment
+    // here would be a no-op (rule-config.ts reads and freezes the value at module load).
     const staleVenues = [{ id: "v1" }, { id: "v2" }];
     const prisma = {
       venue: { findMany: jest.fn().mockResolvedValue(staleVenues) },
