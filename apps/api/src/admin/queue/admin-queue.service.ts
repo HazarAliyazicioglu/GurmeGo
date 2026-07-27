@@ -25,6 +25,22 @@ function notFoundError() {
   return ex;
 }
 
+// Bounded internal candidate-fetch cap -- deliberately much larger than any client-requested
+// `limit` (max 500, see `AdminQueueListQuerySchema`). FINAL WHOLE-BRANCH REVIEW FINDING (MAJOR 1):
+// urgency/priority used to be computed AFTER a DB-level `take: limit`, which meant an urgent (or
+// re_verify) row ranked past `limit` in raw `createdAt asc` insertion order was never even
+// fetched, so it could never surface at the top regardless of priority -- the sort only reordered
+// whatever page happened to be fetched. Fetching this larger bounded candidate set FIRST, then
+// computing priority and sorting, and ONLY THEN slicing to the client's `limit`, fixes that: the
+// content of the returned array (up to `limit` items) is now genuinely the highest-priority items,
+// not an artifact of DB insertion order. A real cursor-based pagination scheme was explicitly
+// deferred in Task 19 because it would break apps/admin's existing bare-array response parsing;
+// this cap is a pragmatic middle ground given the MVP scale assumption in docs/rule-engine.md §5-6
+// (only the single "bilgi yanlış" report flow + automatic re_verify feed the queue -- no
+// user-submitted-contribution volume yet), not a genuine offset/cursor pagination replacement. If
+// the PENDING queue ever plausibly exceeds this cap, revisit with real keyset pagination.
+const CANDIDATE_FETCH_CAP = 2000;
+
 @Injectable()
 export class AdminQueueService {
   constructor(private prisma: PrismaService, private venuesRepository: VenuesRepository) {}
@@ -33,9 +49,10 @@ export class AdminQueueService {
   // all, and (b) run one SEPARATE `count()` query per REPORT row to compute urgency -- the same
   // venue's report count getting recomputed redundantly across its own multiple queue rows, and
   // the whole endpoint getting slower (both in row count and query count) as the queue grows.
-  // `limit` (default 100, validated by `AdminQueueListQuerySchema`) caps (a); a single `groupBy`
-  // over all REPORT rows' distinct venueIds in the current page -- computed once, not once per
-  // row -- replaces the N separate `count()` calls for (b).
+  // `CANDIDATE_FETCH_CAP` (see above) now caps (a) instead of the client-facing `limit` -- see that
+  // constant's comment for why. A single `groupBy` over all REPORT rows' distinct venueIds in the
+  // candidate set -- computed once, not once per row -- replaces the N separate `count()` calls
+  // for (b).
   async list(type?: ContributionType, status?: ContributionStatus, limit = 100) {
     const items = await this.prisma.contributionQueue.findMany({
       where: {
@@ -49,7 +66,7 @@ export class AdminQueueService {
         status: status ?? "PENDING",
       },
       orderBy: { createdAt: "asc" },
-      take: limit,
+      take: CANDIDATE_FETCH_CAP,
       include: { venue: { select: { name: true, slug: true } } },
     });
 
@@ -57,9 +74,9 @@ export class AdminQueueService {
     const reportVenueIds = Array.from(
       new Set(items.filter((item) => item.type === "REPORT" && item.venueId).map((item) => item.venueId as string)),
     );
-    // Only queried when the current page actually contains REPORT rows -- an empty `in: []` filter
-    // would still be a valid (if pointless) query, but skipping it entirely avoids a round-trip
-    // when the page is all EDIT/NEW_VENUE/OWNER_VERIFICATION items.
+    // Only queried when the candidate set actually contains REPORT rows -- an empty `in: []`
+    // filter would still be a valid (if pointless) query, but skipping it entirely avoids a
+    // round-trip when the candidate set is all EDIT/NEW_VENUE/OWNER_VERIFICATION items.
     const grouped = reportVenueIds.length
       ? await this.prisma.contributionQueue.groupBy({
           by: ["venueId"],
@@ -69,20 +86,39 @@ export class AdminQueueService {
       : [];
     const countByVenueId = new Map(grouped.map((g) => [g.venueId as string, g._count._all]));
 
-    // Sort: urgent REPORT items (>= threshold pending REPORTs on the same venue) first, everything
-    // else (re_verify EDIT items, other EDIT/NEW_VENUE/OWNER_VERIFICATION items, and non-urgent
-    // REPORTs) after, in the `createdAt asc` order the initial `findMany` already produced --
-    // `Array.prototype.sort` is stable, so ties on `urgent` preserve that relative order. There is
-    // no dedicated re_verify tier: a re_verify item does not get pulled ahead of an older
-    // non-urgent REPORT/EDIT/etc. just for being a re_verify. (MINOR finding: this comment
-    // previously claimed a "then re_verify, then rest" second tier that the code below never
-    // implemented -- corrected to describe the actual two-tier urgent/non-urgent behavior; no
-    // sorting logic changed, since no doc under docs/ requires a separate re_verify priority tier.)
-    const withUrgency = items.map((item) => {
+    // Priority tiers, per docs/rule-engine.md §6 "Kürasyon Kuyruğu Öncelik Kuralları" (FR-AP-01),
+    // MVP scope:
+    //   1. "Acil" REPORT items (>= threshold pending REPORTs on the same venue, see §5)
+    //   2. `re_verify` EDIT items (staleness re-verification, created by RuleEngine's re-verify
+    //      cron -- identified by `payload.kind === "re_verify"`, the same shape re-verify.service.ts
+    //      writes)
+    //   3. everything else (other EDIT/NEW_VENUE/OWNER_VERIFICATION items, non-urgent REPORTs)
+    // Within a tier, the `createdAt asc` order the `findMany` above already produced is preserved
+    // (`Array.prototype.sort` is stable). (MAJOR finding, final whole-branch review: a prior
+    // version of this comment claimed "no document under docs/ requires a re_verify tier" -- that
+    // claim was FALSE; docs/rule-engine.md §6 explicitly lists re_verify as priority tier 2. The
+    // sort below implements it; only `urgent` (tier-1 REPORT items) is surfaced as its own boolean
+    // on the response shape, per `AdminQueueItemSchema` -- re_verify items are distinguishable by
+    // callers via `type === "EDIT" && payload.kind === "re_verify"`, already the same shape
+    // re-verify.service.ts writes and admin-queue.service.spec.ts already asserts on.)
+    function isReVerify(item: (typeof items)[number]): boolean {
+      const payload = item.payload;
+      return item.type === "EDIT" && !!payload && typeof payload === "object" && (payload as { kind?: unknown }).kind === "re_verify";
+    }
+    function tierOf(item: (typeof items)[number], urgent: boolean): number {
+      if (urgent) return 0;
+      if (isReVerify(item)) return 1;
+      return 2;
+    }
+
+    const withTier = items.map((item) => {
       const urgent = item.type === "REPORT" && item.venueId ? (countByVenueId.get(item.venueId) ?? 0) >= threshold : false;
-      return { item, urgent };
+      return { item, urgent, tier: tierOf(item, urgent) };
     });
-    return withUrgency.sort((a, b) => Number(b.urgent) - Number(a.urgent)).map((w) => ({ ...w.item, urgent: w.urgent }));
+    return withTier
+      .sort((a, b) => a.tier - b.tier)
+      .slice(0, limit)
+      .map((w) => ({ ...w.item, urgent: w.urgent }));
   }
 
   async approve(id: string, reviewerId: string) {

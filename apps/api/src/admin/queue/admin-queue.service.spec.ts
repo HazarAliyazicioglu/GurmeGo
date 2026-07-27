@@ -38,22 +38,79 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
     } as any;
   }
 
-  it("passes `limit` through as `take` on the findMany query", async () => {
+  // MAJOR 1 fix (final whole-branch review): `limit` used to be passed straight through as the
+  // findMany `take`, which meant urgency/priority was computed AFTER the DB had already discarded
+  // everything past `limit` in raw insertion order -- an urgent/re_verify row ranked past `limit`
+  // could never surface regardless of priority. The findMany now always fetches the larger,
+  // bounded `CANDIDATE_FETCH_CAP` candidate set; `limit` only slices the final, already-sorted
+  // response. These two tests assert that decoupling directly.
+  it("fetches the bounded internal candidate cap on the findMany query, NOT the caller's `limit`", async () => {
     const prisma = makeQueuePrisma([], []);
     const service = new AdminQueueService(prisma, {} as any);
 
     await service.list(undefined, "PENDING", 25);
 
-    expect(prisma.contributionQueue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 25 }));
+    expect(prisma.contributionQueue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 2000 }));
   });
 
-  it("defaults `limit` to 100 when not passed", async () => {
+  it("still respects a small `limit` for the RESPONSE size even though the DB fetch uses the larger candidate cap", async () => {
+    const items = Array.from({ length: 5 }, (_, i) => ({ id: `c${i}`, type: "EDIT", venueId: null, venue: null }));
+    const prisma = makeQueuePrisma(items, []);
+    const service = new AdminQueueService(prisma, {} as any);
+
+    const result = await service.list(undefined, "PENDING", 2);
+
+    expect(result).toHaveLength(2);
+  });
+
+  it("defaults `limit` to 100 when not passed (response size, not the DB fetch)", async () => {
     const prisma = makeQueuePrisma([], []);
     const service = new AdminQueueService(prisma, {} as any);
 
     await service.list();
 
-    expect(prisma.contributionQueue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
+    expect(prisma.contributionQueue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 2000 }));
+  });
+
+  it("returns an urgent item even when it is inserted LAST and total items exceed `limit` -- proves urgency is computed before the client-facing slice, not after (MAJOR 1 regression test)", async () => {
+    const limit = 3;
+    // 4 non-urgent EDIT items (older, createdAt-asc first) + 1 urgent REPORT item inserted LAST.
+    // A naive `take: limit` at the DB level would fetch only the first 3 (all non-urgent EDITs)
+    // and never even see the urgent REPORT row, regardless of any later sort.
+    const items = [
+      { id: "old-1", type: "EDIT", venueId: null, venue: null },
+      { id: "old-2", type: "EDIT", venueId: null, venue: null },
+      { id: "old-3", type: "EDIT", venueId: null, venue: null },
+      { id: "old-4", type: "EDIT", venueId: null, venue: null },
+      { id: "urgent-last", type: "REPORT", venueId: "v1", venue: { name: "A", slug: "a" } },
+    ];
+    const groupByResult = [{ venueId: "v1", _count: { _all: 3 } }]; // >= default threshold 3 -> urgent
+    const prisma = makeQueuePrisma(items, groupByResult);
+    const service = new AdminQueueService(prisma, {} as any);
+
+    const result = await service.list(undefined, "PENDING", limit);
+
+    expect(result).toHaveLength(limit);
+    expect(result.some((r) => r.id === "urgent-last")).toBe(true);
+    expect(result[0].id).toBe("urgent-last");
+  });
+
+  // MAJOR 2 fix: docs/rule-engine.md §6 (FR-AP-01) documents a THREE-tier MVP priority order --
+  // 1. urgent REPORT, 2. re_verify EDIT, 3. everything else -- which a prior version of this
+  // service's comment incorrectly claimed no doc required. This proves the missing middle tier.
+  it("sorts re_verify EDIT items ahead of ordinary (non-urgent, non-re_verify) items, but behind urgent REPORT items", async () => {
+    const items = [
+      { id: "ordinary", type: "EDIT", venueId: null, venue: null, payload: {} },
+      { id: "re-verify-1", type: "EDIT", venueId: "v2", venue: { name: "B", slug: "b" }, payload: { kind: "re_verify" } },
+      { id: "urgent-report", type: "REPORT", venueId: "v1", venue: { name: "A", slug: "a" }, payload: {} },
+    ];
+    const groupByResult = [{ venueId: "v1", _count: { _all: 3 } }];
+    const prisma = makeQueuePrisma(items, groupByResult);
+    const service = new AdminQueueService(prisma, {} as any);
+
+    const result = await service.list();
+
+    expect(result.map((r) => r.id)).toEqual(["urgent-report", "re-verify-1", "ordinary"]);
   });
 
   it("computes urgency for multiple REPORT rows across DIFFERENT venues with exactly ONE groupBy call, never per-row count()", async () => {
