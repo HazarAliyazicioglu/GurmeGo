@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createApiClient } from "./index";
+import { createApiClient, ApiHttpError } from "./index";
 
 describe("createApiClient().get — headers option", () => {
   beforeEach(() => {
@@ -21,5 +21,31 @@ describe("createApiClient().get — headers option", () => {
     const client = createApiClient("http://api.test");
     await client.get("/venues");
     expect(global.fetch).toHaveBeenCalledWith("http://api.test/venues", expect.objectContaining({ headers: {} }));
+  });
+});
+
+describe("createApiClient — non-ok responses throw ApiHttpError carrying the status code", () => {
+  it("get() throws an ApiHttpError with the response's status on a 404", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, text: async () => "Not Found" });
+    const client = createApiClient("http://api.test");
+    const error = await client.get("/venues/missing").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiHttpError);
+    expect((error as ApiHttpError).status).toBe(404);
+  });
+
+  it("get() throws an ApiHttpError with the response's status on a 500", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => "Internal Error" });
+    const client = createApiClient("http://api.test");
+    const error = await client.get("/venues").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiHttpError);
+    expect((error as ApiHttpError).status).toBe(500);
+  });
+
+  it("post() throws an ApiHttpError with the response's status", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 400, text: async () => "Bad Request" });
+    const client = createApiClient("http://api.test");
+    const error = await client.post("/me/lists", { name: "x" }).catch((e) => e);
+    expect(error).toBeInstanceOf(ApiHttpError);
+    expect((error as ApiHttpError).status).toBe(400);
   });
 });

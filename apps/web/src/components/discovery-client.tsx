@@ -30,7 +30,12 @@ export function DiscoveryClient({
 
   const latestRequest = useRef(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Pagination metadata from `GET /venues`'s keyset cursor -- `null` means "no further page",
+  // matching the API's own `next_cursor: null` convention rather than an empty-string sentinel.
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   // `sortedByDistance` becomes true only immediately after a successful coords-driven fetch,
   // not merely "coords exist" -- passed to CategoryQuickRoute so its "En yakın" copy only ever
   // describes what's actually on screen.
@@ -49,10 +54,14 @@ export function DiscoveryClient({
     setLoading(true);
     setError(null);
     try {
-      const { data } = await getVenues({ districtId, ...serializeFilters(next, requestCoords) }, requestCoords);
+      const { data, meta } = await getVenues({ districtId, ...serializeFilters(next, requestCoords) }, requestCoords);
       if (requestId !== latestRequest.current) return;
       setVenues(data);
       setSortedByDistance(Boolean(requestCoords));
+      // A fresh filter/search fetch always replaces the page-1 result set, so pagination state
+      // resets alongside it rather than carrying over a cursor from the PREVIOUS query's pages.
+      setCursor(meta.next_cursor);
+      setHasMore(meta.has_more);
     } catch {
       if (requestId !== latestRequest.current) return;
       setError("Mekanlar yüklenirken bir hata oluştu.");
@@ -65,6 +74,32 @@ export function DiscoveryClient({
   function applyFilters(next: FilterState) {
     userInteractedRef.current = true;
     void runFetch(next, coords);
+  }
+
+  // Fetches the next keyset page for the CURRENT filters/coords and appends it below the
+  // existing results. Shares `latestRequest` with `runFetch` so that if a filter change (or
+  // another "load more" click) starts a newer request while this one is still in flight, the
+  // stale response here is discarded instead of appending pages out of order or onto a result
+  // set that's since been replaced.
+  async function loadMore() {
+    if (!hasMore || !cursor || loadingMore) return;
+    const requestId = ++latestRequest.current;
+    setLoadingMore(true);
+    try {
+      const { data, meta } = await getVenues(
+        { districtId, ...serializeFilters(filters, coords), cursor },
+        coords,
+      );
+      if (requestId !== latestRequest.current) return;
+      setVenues((prev) => [...prev, ...data]);
+      setCursor(meta.next_cursor);
+      setHasMore(meta.has_more);
+    } catch {
+      if (requestId !== latestRequest.current) return;
+      setError("Daha fazla mekan yüklenirken bir hata oluştu.");
+    } finally {
+      if (requestId === latestRequest.current) setLoadingMore(false);
+    }
   }
 
   // One-time auto-sort: fires once when coords first resolve, but only if the user hasn't already
@@ -117,7 +152,22 @@ export function DiscoveryClient({
         {viewMode === "list" ? "Haritada göster" : "Listede göster"}
       </button>
       {viewMode === "list" ? (
-        <VenueList venues={venues} />
+        <>
+          <VenueList venues={venues} />
+          {hasMore && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                data-testid="load-more"
+                onClick={() => void loadMore()}
+                disabled={loadingMore}
+                className="min-h-11 rounded-full border border-[#201d18]/15 bg-white/45 px-6 text-sm font-black text-[#201d18] transition-colors hover:border-[#d75d3b]/50 hover:bg-[#d75d3b] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]"
+              >
+                {loadingMore ? "Yükleniyor…" : "Daha fazla göster"}
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <VenueMap key={districtId} venues={venues} center={center} />
       )}

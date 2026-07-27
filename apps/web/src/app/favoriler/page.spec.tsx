@@ -40,6 +40,52 @@ describe("FavorilerPage", () => {
   });
 });
 
+describe("FavorilerPage — discards a stale getFavoriteLists response after a session change (privacy race)", () => {
+  beforeEach(() => {
+    push.mockClear();
+    vi.mocked(getFavoriteLists).mockReset();
+    useAuthMock.mockReset();
+  });
+
+  it("does not render User A's lists if their request resolves after User B has logged in", async () => {
+    let resolveUserA: (v: unknown) => void;
+    vi.mocked(getFavoriteLists).mockImplementationOnce(
+      () => new Promise<unknown>((resolve) => { resolveUserA = resolve; }) as ReturnType<typeof getFavoriteLists>,
+    );
+    useAuthMock.mockReturnValue({
+      user: { id: "user-a" },
+      loading: false,
+      session: { access_token: "token-a" },
+    });
+
+    const { rerender } = render(<FavorilerPage />);
+    await waitFor(() => expect(getFavoriteLists).toHaveBeenCalledWith("token-a"));
+
+    // User B logs in before User A's request has resolved.
+    vi.mocked(getFavoriteLists).mockResolvedValueOnce([
+      { id: "list-b", userId: "user-b", name: "User B's list", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] },
+    ]);
+    useAuthMock.mockReturnValue({
+      user: { id: "user-b" },
+      loading: false,
+      session: { access_token: "token-b" },
+    });
+    rerender(<FavorilerPage />);
+    await waitFor(() => expect(getFavoriteLists).toHaveBeenCalledWith("token-b"));
+    await waitFor(() => expect(screen.getByText("User B's list")).toBeInTheDocument());
+
+    // NOW User A's stale request finally resolves -- it must be discarded, not rendered over
+    // User B's already-visible lists.
+    resolveUserA!([
+      { id: "list-a", userId: "user-a", name: "User A's list", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] },
+    ]);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(screen.queryByText("User A's list")).not.toBeInTheDocument();
+    expect(screen.getByText("User B's list")).toBeInTheDocument();
+  });
+});
+
 describe("FavorilerPage — visible loading state instead of a silent blank screen", () => {
   beforeEach(() => {
     push.mockClear();

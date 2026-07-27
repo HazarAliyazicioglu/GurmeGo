@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -12,6 +12,12 @@ export default function FavorilerPage() {
   const [lists, setLists] = useState<FavoriteList[] | null>(null);
   const [newListName, setNewListName] = useState("");
   const [creating, setCreating] = useState(false);
+  // Guards against the privacy-sensitive race where a `getFavoriteLists` request is still in
+  // flight when the session changes (e.g. logout followed by a different user logging back in
+  // before the first request settles) -- without this, the stale response could resolve AFTER
+  // the session change and render User A's favorites into User B's view. Mirrors the same
+  // `requestId` guard `favorite-button.tsx` uses for its own session-change race.
+  const latestListsRequest = useRef(0);
 
   async function handleCreateList(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,16 +34,29 @@ export default function FavorilerPage() {
   }
 
   useEffect(() => {
+    const requestId = ++latestListsRequest.current;
     if (!loading && !user) {
       router.push("/giris");
       return;
     }
     if (session?.access_token) {
+      // Clear any previous session's lists immediately rather than leaving them on screen until
+      // the new fetch resolves -- a session change should never risk flashing the prior user's
+      // favorites, even for a moment.
+      setLists(null);
       getFavoriteLists(session.access_token)
-        .then(setLists)
-        .catch(() => router.push("/giris"));
+        .then((data) => {
+          if (requestId === latestListsRequest.current) setLists(data);
+        })
+        .catch(() => {
+          if (requestId === latestListsRequest.current) router.push("/giris");
+        });
     }
-  }, [user, session, loading, router]);
+    // Depend on `user?.id` / `session?.access_token` (stable primitives), not the `user`/`session`
+    // objects themselves -- some auth-context consumers hand back a fresh object reference on
+    // every render even when the underlying session hasn't changed, which would otherwise re-run
+    // this effect (and reset `lists`) spuriously on every render.
+  }, [user?.id, session?.access_token, loading, router]);
 
   if (!loading && !user) return null;
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { notFound } from "next/navigation";
 import type { VenueDetail as VenueDetailType } from "@gurmego/shared";
+import { ApiHttpError } from "@gurmego/api-client";
 import { getVenueBySlug } from "@/lib/api";
 import VenueDetailPage, { generateStaticParams } from "./page";
 
@@ -48,14 +49,36 @@ describe("venue detail page", () => {
     expect(notFound).toHaveBeenCalled();
   });
 
-  it("calls notFound() when getVenueBySlug rejects", async () => {
-    vi.mocked(getVenueBySlug).mockRejectedValue(new Error("404"));
+  it("calls notFound() when getVenueBySlug rejects with a genuine 404 ApiHttpError", async () => {
+    vi.mocked(getVenueBySlug).mockRejectedValue(new ApiHttpError(404, "Not Found"));
 
     await expect(
       VenueDetailPage({ params: { slug: "missing-venue" } }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
 
     expect(notFound).toHaveBeenCalled();
+  });
+
+  it("propagates a non-404 ApiHttpError (e.g. 500) instead of rendering not-found", async () => {
+    const serverError = new ApiHttpError(500, "Internal Server Error");
+    vi.mocked(getVenueBySlug).mockRejectedValue(serverError);
+
+    await expect(
+      VenueDetailPage({ params: { slug: "kadikoy-kahvecisi" } }),
+    ).rejects.toBe(serverError);
+
+    expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it("propagates a plain network error instead of rendering not-found", async () => {
+    const networkError = new Error("fetch failed");
+    vi.mocked(getVenueBySlug).mockRejectedValue(networkError);
+
+    await expect(
+      VenueDetailPage({ params: { slug: "kadikoy-kahvecisi" } }),
+    ).rejects.toBe(networkError);
+
+    expect(notFound).not.toHaveBeenCalled();
   });
 
   it("renders VenueDetail with the fetched venue and does not call notFound()", async () => {

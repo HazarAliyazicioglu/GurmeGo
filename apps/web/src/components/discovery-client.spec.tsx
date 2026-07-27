@@ -134,6 +134,84 @@ describe("DiscoveryClient — one-time auto-sort effect", () => {
   });
 });
 
+describe("DiscoveryClient — pagination ('load more' from GET /venues's keyset cursor)", () => {
+  beforeEach(() => {
+    getVenues.mockReset();
+    useLocationContext.mockReset().mockReturnValue(null);
+  });
+
+  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+  const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+  const venueC = { id: "v3", name: "Third", slug: "third", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+
+  it("does not render a 'load more' button when has_more is false", () => {
+    render(<DiscoveryClient districtId="d1" initialVenues={[venueA]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    expect(screen.queryByTestId("load-more")).not.toBeInTheDocument();
+  });
+
+  it("renders a 'load more' button after a fetch reports has_more: true, and clicking it appends the next cursor page", async () => {
+    getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    await waitFor(() => expect(screen.getByTestId("load-more")).toBeInTheDocument());
+
+    getVenues.mockResolvedValueOnce({ data: [venueB], meta: { next_cursor: null, has_more: false } });
+    fireEvent.click(screen.getByTestId("load-more"));
+
+    // The second, "load more" call passes the cursor from the first response's meta.
+    await waitFor(() =>
+      expect(getVenues).toHaveBeenLastCalledWith(
+        expect.objectContaining({ districtId: "d1", cursor: "cursor-1" }),
+        null,
+      ),
+    );
+    // Existing results stay, the new page is appended (not replacing).
+    await waitFor(() => expect(screen.getByText("Second")).toBeInTheDocument());
+    expect(screen.getByText("First")).toBeInTheDocument();
+    // has_more is now false, so the button disappears.
+    expect(screen.queryByTestId("load-more")).not.toBeInTheDocument();
+  });
+
+  it("a new filter fetch replaces venues and pagination state instead of appending to the old page", async () => {
+    getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    await waitFor(() => expect(screen.getByTestId("load-more")).toBeInTheDocument());
+
+    // User changes filters again before loading more -- this must replace, not append, and the
+    // stale cursor from the FIRST fetch must not leak into a later "load more" click.
+    getVenues.mockResolvedValueOnce({ data: [venueC], meta: { next_cursor: null, has_more: false } });
+    fireEvent.click(screen.getByTestId("filter-open-now"));
+
+    await waitFor(() => expect(screen.getByText("Third")).toBeInTheDocument());
+    expect(screen.queryByText("First")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("load-more")).not.toBeInTheDocument();
+  });
+
+  it("discards a stale 'load more' response if a newer filter fetch has already superseded it", async () => {
+    getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    await waitFor(() => expect(screen.getByTestId("load-more")).toBeInTheDocument());
+
+    let resolveLoadMore: (v: unknown) => void;
+    getVenues.mockReturnValueOnce(new Promise((resolve) => { resolveLoadMore = resolve; }));
+    fireEvent.click(screen.getByTestId("load-more"));
+
+    // A new filter change fires before the slow "load more" request resolves.
+    getVenues.mockResolvedValueOnce({ data: [venueC], meta: { next_cursor: null, has_more: false } });
+    fireEvent.click(screen.getByTestId("filter-open-now"));
+    await waitFor(() => expect(screen.getByText("Third")).toBeInTheDocument());
+
+    // The stale "load more" response for venueB now resolves -- it must not appear.
+    resolveLoadMore!({ data: [venueB], meta: { next_cursor: null, has_more: false } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText("Second")).not.toBeInTheDocument();
+    expect(screen.getByText("Third")).toBeInTheDocument();
+  });
+});
+
 describe("DiscoveryClient — forwards center to VenueMap (C3)", () => {
   beforeEach(() => {
     getVenues.mockReset().mockResolvedValue({ data: [] as VenueListItem[], meta: { next_cursor: null, has_more: false } });
