@@ -30,13 +30,32 @@ review'a tekrar sokuldu, TEMİZ doğrulandı. **Ders: her review raporunda Codex
 çağrıldığını teyit et, rapor formatına güvenme.**
 
 ## Sıradaki adım
-Kullanıcıya Task 17-25'in tamamlandığını bildir. İki seçenek: (a) tüm bu ek fix'leri de kapsayan
-YENİ bir final whole-branch review (Plan 4c'nin merge-base'inden şu ana kadarki tüm commit'ler) —
-opsiyonel ama tutarlılık için önerilir; (b) doğrudan kullanıcıya "her şey test edildi + review
-edildi" özeti verip master'a merge kararını sor. Merge kararı kullanıcıya ait.
+Kullanıcı final whole-branch review'ı istedi (d268f96..1ecbb2e, 16 commit). Codex bunu gerçekten
+çalıştırdı ve 1 BLOCKER + 4 MAJOR + 3 MINOR gerçek cross-task entegrasyon sorunu buldu (CI'da
+Task 20'nin zorunlu RULES_* env'leri eksikti; admin-queue urgency limit'ten önce değil sonra
+hesaplanıyordu; docs/rule-engine.md'nin re_verify tier gereksinimi atlanmıştı; favoriler'in
+render-time clear'ı newListName/creating'i unutmuştu; kuyruk/import'un 401 yolu signOut()'u
+await etmiyordu; favorite-button'ın dual-counter'ı identity değişiminde reset olmuyordu; JWT
+guard→403 zincirini gerçekten test eden bir e2e yoktu; apps/admin'in bilinen tek eski test hatası
+aslında imkansız bir senaryoyu test ediyordu). Task 26 olarak hepsi düzeltildi (5 commit,
+1ecbb2e..c0e2e80) — **apps/admin ilk kez tarih boyunca 60/60, sıfır hata.** Bu fix batch'i re-review'a
+gönderildiğinde Codex kotası tükendi (**1 Ağustos 2026 23:26'ya kadar dönmüyor** — ChatGPT Plus
+kotası, konuşma içinde iki ayrı prompt'la doğrulandı, prompt-boyutu/effort sorunu değil).
+Kullanıcıya durum bildirildi, **kullanıcı 1 Ağustos'u bekleyip o zaman Codex ile review etmeyi
+seçti** (GLM veya self-review'ı reddetti).
 
 ## Bloke olanlar
-- Yok.
+- **Task 26'nın (1ecbb2e..c0e2e80, 5 commit) çapraz-model review'ı Codex kotası dolduğu için
+  yapılamadı.** Kota sıfırlanma: 2026-08-01 23:26. Review prompt'u hazır, aynen tekrar
+  çalıştırılabilir (bu oturumun review dispatch'inde kullanılan tam prompt — 8 madde: CI env
+  vars, admin-queue 2000-cap production-ölçek güvenliği, re_verify tier'ın docs'ta gerçekten var
+  olup olmadığı, favoriler render-time branch'inin newListName/creating'i de kapsadığı, kuyruk/
+  import'un TÜM 401 site'larının await+error-check kullandığı, favorite-button'ın iki counter'ının
+  hâlâ bağımsız kaldığı, yeni e2e'nin gerçekten JWT guard zincirini çalıştırdığı, getQueue
+  teşhisinin doğruluğu). Testler yeşil (tüm 5 paket, apps/admin dahil 0 hata) ama bu 3-4 madde
+  yargı gerektiriyor, testlerle yakalanamaz — review tamamlanmadan TEMİZ sayılamaz.
+- Master'a merge YAPILMAYACAK (Task 26 review'ı temizlenene kadar, ayrıca kullanıcının "hepsi
+  bitince tek seferde" kararı hâlâ geçerli).
 
 ## Yakın kararlar
 - Round 1-10 red-team kayıtları: docs/superpowers/plans/2026-07-26-frontend-fixes.md (plan
