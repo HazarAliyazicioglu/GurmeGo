@@ -23,7 +23,15 @@ export default function FavorilerPage() {
     }
   }, [user, session, loading, router]);
 
-  if (loading || !user) return null;
+  if (!loading && !user) return null;
+
+  if (loading) {
+    return (
+      <p role="status" aria-live="polite">
+        Yükleniyor…
+      </p>
+    );
+  }
 
   return (
     <main data-testid="favoriler-page" className="relative overflow-hidden pt-8 sm:pt-12 lg:pt-16">

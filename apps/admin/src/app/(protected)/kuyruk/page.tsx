@@ -87,7 +87,13 @@ export default function KuyrukPage() {
     }
   }
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <p role="status" aria-live="polite">
+        Yükleniyor…
+      </p>
+    );
+  }
 
   return (
     <main

@@ -94,3 +94,15 @@ describe("ProtectedLayout", () => {
     expect(push).not.toHaveBeenCalledWith("/giris");
   });
 });
+
+describe("ProtectedLayout — visible loading state instead of a silent blank screen", () => {
+  it("renders a visible, accessible loading indicator while auth is loading", async () => {
+    vi.doMock("@/lib/auth-context", () => ({
+      useAuth: () => ({ user: null, role: null, loading: true }),
+    }));
+    const { default: Layout } = await import("./layout");
+    render(<Layout><div>içerik</div></Layout>);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent(/yükleniyor/i);
+  });
+});

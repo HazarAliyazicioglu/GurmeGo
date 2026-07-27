@@ -39,7 +39,13 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     }
   }, [user, role, loading, error, router]);
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <p role="status" aria-live="polite">
+        Yükleniyor…
+      </p>
+    );
+  }
 
   if (error) {
     return (

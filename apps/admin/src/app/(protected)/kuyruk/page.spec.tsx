@@ -224,3 +224,12 @@ describe("KuyrukPage", () => {
     expect(screen.getByText(/0 bildirim/i)).toBeInTheDocument();
   });
 });
+
+describe("KuyrukPage — visible loading state while the queue itself is loading", () => {
+  it("renders a visible, accessible loading indicator while getQueue() is unresolved", () => {
+    getQueue.mockReturnValue(new Promise(() => {})); // never resolves within this test
+    render(<KuyrukPage />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent(/yükleniyor/i);
+  });
+});

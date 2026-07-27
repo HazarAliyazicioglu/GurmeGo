@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import FavorilerPage from "./page";
 import { getFavoriteLists } from "@/lib/api";
 
@@ -36,5 +36,20 @@ describe("FavorilerPage", () => {
     render(<FavorilerPage />);
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/giris"));
+  });
+});
+
+describe("FavorilerPage — visible loading state instead of a silent blank screen", () => {
+  beforeEach(() => {
+    push.mockClear();
+    vi.mocked(getFavoriteLists).mockReset();
+    useAuthMock.mockReset();
+  });
+
+  it("renders a visible, accessible loading indicator while auth is loading, not null", () => {
+    useAuthMock.mockReturnValue({ user: null, session: null, loading: true });
+    render(<FavorilerPage />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent(/yükleniyor/i);
   });
 });
