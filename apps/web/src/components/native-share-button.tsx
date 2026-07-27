@@ -22,7 +22,10 @@ export function NativeShareButton({ venue }: { venue: { name: string } }) {
       data-testid="native-share-button"
       className="group inline-flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-[#201d18]/15 bg-[#f4f0e7] px-4 text-sm font-black text-[#201d18] transition-all hover:border-[#d75d3b]/45 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf7f0]"
       onClick={() => {
-        navigator.share({ title: venue.name, url: window.location.href });
+        // navigator.share() rejects when the user cancels the native share sheet -- that's a
+        // normal, expected outcome, not an error to surface, so it's swallowed here rather than
+        // left as an unhandled rejection.
+        navigator.share({ title: venue.name, url: window.location.href }).catch(() => {});
       }}
     >
       <span className="flex items-center gap-2.5">

@@ -8,7 +8,9 @@ describe("NativeShareButton", () => {
   });
 
   it("renders once mounted when navigator.share is a real function, and calls it with the venue name and a URL", async () => {
-    const shareMock = vi.fn();
+    // navigator.share() always returns a Promise per the real Web Share API contract -- the mock
+    // must too, since the component now calls .catch() on the result.
+    const shareMock = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "share", { value: shareMock, configurable: true });
     render(<NativeShareButton venue={{ name: "Cafe Test" }} />);
     await waitFor(() => expect(screen.getByTestId("native-share-button")).toBeInTheDocument());
