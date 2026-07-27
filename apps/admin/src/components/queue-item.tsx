@@ -61,10 +61,11 @@ export function QueueItem({
         <p className="text-sm leading-5 text-slate-700">{reason}</p>
       </div>
 
-      {/* "Onayla" yalnızca bildirimi incelenmiş olarak işaretler ve mekanın verified_at'ini yeniler —
-          mekan verisini OTOMATİK DÜZELTMEZ. Veriyi düzeltmek gerekiyorsa Postman/Prisma Studio ile
-          PUT /admin/venues/:id kullan (bu panelde manuel mekan düzenleme UI'ı yok, bilinçli bir kapsam
-          kararı — bkz. design doc). */}
+      {/* "Onayla" yalnızca bu kuyruk öğesinin kendi durumunu değiştirir (incelendi olarak işaretler) —
+          `Venue`'ye YAZMAZ ve `verifiedAt`'e DOKUNMAZ (Plan 4b'nin A3 kararı). Mekan verisini
+          düzeltmek veya verified_at'i tazelemek gerekiyorsa ayrı bir admin-venues API çağrısı
+          (PUT /admin/venues/:id) veya Prisma Studio ile elle yapılmalı (bu panelde manuel mekan
+          düzenleme UI'ı yok, bilinçli bir kapsam kararı — bkz. design doc). */}
       <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row lg:justify-end lg:border-t-0 lg:pt-0">
         <button
           type="button"
