@@ -155,6 +155,22 @@ describe("FavorilerPage — no committed frame ever paints the previous session'
     // very first -- may have shown User A's list.
     expect(commits.length).toBeGreaterThan(0);
     expect(commits.every((hadUserAList) => hadUserAList === false)).toBe(true);
+
+    // The property under test is "no committed frame EVER shows the previous session's data", not
+    // merely "not in the one commit immediately following the flip". An implementation that clears
+    // stale state correctly only on the very next render after a prop change could still have a
+    // latent bug that resurfaces on a LATER, unrelated re-render (e.g. a stray effect, or a
+    // re-render triggered by something else entirely, re-deriving/restoring the old value). Force
+    // at least one more, benign re-render -- same User B session, identical props -- and confirm
+    // User A's list still never appears in ANY commit recorded across the WHOLE sequence, not just
+    // the commit(s) produced by the flip itself.
+    rerender(
+      <Profiler id="favoriler-probe" onRender={onRender}>
+        <FavorilerPage />
+      </Profiler>,
+    );
+    expect(commits.length).toBeGreaterThan(1);
+    expect(commits.every((hadUserAList) => hadUserAList === false)).toBe(true);
   });
 });
 

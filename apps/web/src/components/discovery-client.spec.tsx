@@ -313,6 +313,45 @@ describe("DiscoveryClient — loadMore freezes the coords context the cursor was
       ),
     );
   });
+
+  it("freezes the coords the page-1 cursor was ACTUALLY issued under (non-null), even if geolocation later resolves to a DIFFERENT non-null value before the click", async () => {
+    // Page 1 is fetched under REAL, non-null coords A -- geolocation was already resolved by the
+    // time the component mounted, so the one-time auto-sort effect fires immediately and fetches
+    // page 1 under coords A, freezing `lastFetchCoordsRef` to it.
+    const coordsA = { lat: 40.99, lng: 29.02 };
+    const coordsB = { lat: 41.05, lng: 29.1 };
+    useLocationContext.mockReturnValue(coordsA);
+    getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
+    const { rerender } = render(
+      <DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />,
+    );
+    await waitFor(() => expect(getVenues).toHaveBeenCalledWith(expect.any(Object), coordsA));
+    await waitFor(() => expect(screen.getByTestId("load-more")).toBeInTheDocument());
+    expect(getVenues).toHaveBeenCalledTimes(1);
+
+    // Geolocation updates AGAIN to a DIFFERENT non-null value before "load more" is clicked. The
+    // auto-sort effect only fires once (`autoSortedRef`) and no filter was touched
+    // (`userInteractedRef` stays false), so this re-render must not trigger a new fetch --
+    // otherwise `lastFetchCoordsRef` would legitimately update to coords B, defeating the point of
+    // the test (there'd be no frozen/live divergence left to catch).
+    useLocationContext.mockReturnValue(coordsB);
+    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getVenues).toHaveBeenCalledTimes(1);
+
+    getVenues.mockResolvedValueOnce({ data: [venueB], meta: { next_cursor: null, has_more: false } });
+    fireEvent.click(screen.getByTestId("load-more"));
+
+    // The load-more request must use coords A (the frozen value page 1's cursor was actually
+    // issued under) -- not coords B (the live value at click time), and not `null` (which a
+    // hardcoded-null "fix" for the null-only test case would have wrongly produced here).
+    await waitFor(() =>
+      expect(getVenues).toHaveBeenLastCalledWith(
+        expect.objectContaining({ districtId: "d1", cursor: "cursor-1" }),
+        coordsA,
+      ),
+    );
+  });
 });
 
 describe("DiscoveryClient — filter change immediately resets stale pagination state, including a stuck loadingMore (final-review Major 3)", () => {
