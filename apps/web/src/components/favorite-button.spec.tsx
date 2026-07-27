@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { FavoriteButton } from "./favorite-button";
 
 const push = vi.fn();
@@ -168,5 +168,47 @@ describe("FavoriteButton — reactivity and race conditions", () => {
 
     // v2 must still show as NOT favorited — the stale v1 result must not leak in.
     expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("does not re-enable the button when a stale first click resolves after a second, still-in-flight click was fired", async () => {
+    const listFixture = {
+      id: "l1", userId: "u1", name: "Default", createdAt: "2026-01-01T00:00:00.000Z", favorites: [],
+    };
+    getFavoriteLists.mockResolvedValue([listFixture]);
+    let resolveFirstAdd: () => void;
+    let resolveSecondAdd: () => void;
+    addFavoriteVenue
+      .mockReturnValueOnce(new Promise<void>((resolve) => { resolveFirstAdd = resolve; }))
+      .mockReturnValueOnce(new Promise<void>((resolve) => { resolveSecondAdd = resolve; }));
+    render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
+
+    // Fire two clicks back-to-back inside the same `act` batch, before React has a chance
+    // to flush the first click's `setPending(true)` and commit `disabled` to the DOM. This
+    // models the real-world race: a second click landing in the brief window before the
+    // button visually disables (double-click / rapid click-unclick-click).
+    const button = screen.getByTestId("favorite-button") as HTMLButtonElement;
+    act(() => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
+    // Both clicks kick off their own getFavoriteLists -> addFavoriteVenue chain.
+    await waitFor(() => expect(addFavoriteVenue).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("favorite-button")).toBeDisabled();
+
+    // The first (now-stale) request resolves. Its own `finally` must NOT flip `pending`
+    // back to false, since a second request is still genuinely in flight.
+    await act(async () => {
+      resolveFirstAdd!();
+      // Give the first request's `.then`/`finally` a couple of ticks to (incorrectly, if
+      // unfixed) fire.
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("favorite-button")).toBeDisabled();
+
+    // Now the second (genuinely latest) request resolves — only now should it re-enable.
+    resolveSecondAdd!();
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
   });
 });

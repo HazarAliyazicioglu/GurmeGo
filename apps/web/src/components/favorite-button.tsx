@@ -13,6 +13,15 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
   const [pending, setPending] = useState(false);
   const [initialCheckPending, setInitialCheckPending] = useState(true);
   const latestClickRequest = useRef(0);
+  // Separate from `latestClickRequest`: that counter is also bumped by the effect below on
+  // every `venueId`/user/session change, which is the right thing for guarding `setAdded`
+  // (a stale click must never apply its result to a *different* venue) but the wrong thing
+  // for guarding `pending` — if they shared a counter, a venueId change while a click is
+  // in flight would permanently stick `pending` at `true` (the in-flight click's `requestId`
+  // would never again match `latestClickRequest.current`), disabling the button forever.
+  // `latestPendingRequest` is bumped only by `handleClick` itself, so it only guards against
+  // a genuinely newer overlapping click superseding an older one.
+  const latestPendingRequest = useRef(0);
 
   useEffect(() => {
     // Invalidate any in-flight `handleClick` request: this effect re-runs whenever
@@ -58,6 +67,7 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
     }
     if (!session?.access_token) return;
     const requestId = ++latestClickRequest.current;
+    const pendingRequestId = ++latestPendingRequest.current;
     setPending(true);
     try {
       const lists = await getFavoriteLists(session.access_token);
@@ -70,11 +80,14 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
       // unhandled promise rejection. The button re-enables via `finally` below so the
       // user can retry.
     } finally {
-      // Always reset `pending` (this click's own request truly finished, one way or
-      // another) — only whether to *apply* the result (`setAdded(true)` above) is
-      // guarded by `requestId`, since that's the part that could otherwise show the
-      // wrong venue as favorited after `venueId` changes mid-flight.
-      setPending(false);
+      // Only reset `pending` when this is still the LATEST click request. If the user
+      // clicked again before this one resolved, `latestPendingRequest.current` has since
+      // moved past `pendingRequestId` — this (now-stale) request's `finally` must not flip
+      // `pending` back to false while the newer request is still genuinely in flight,
+      // otherwise the button would prematurely re-enable and allow a third overlapping
+      // request. Same request-id/generation-counter convention as `favoriler/page.tsx`'s
+      // `latestListsRequest` and `discovery-client.tsx`'s `latestRequest`.
+      if (pendingRequestId === latestPendingRequest.current) setPending(false);
     }
   }
 

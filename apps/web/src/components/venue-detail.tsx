@@ -140,7 +140,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
             )}
           </section>
 
-          {venue.googleRating && (
+          {venue.googleRating != null && (
             <a data-testid="google-rating" href={`https://maps.google.com/?q=${encodeURIComponent(venue.name)}`} target="_blank" rel="noreferrer" className="group flex min-h-12 items-center justify-between gap-3 rounded-full border border-[#201d18]/12 bg-[#faf7f0] px-4 text-sm font-black text-[#201d18] transition-colors hover:border-[#d75d3b]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]" aria-label={`${venue.googleRating} yıldız, ${venue.googleRatingCount} Google yorumu`}>
               <span className="flex items-center gap-2">
                 <svg viewBox="0 0 18 18" className="size-4 text-[#d75d3b]" aria-hidden="true"><path d="m9 1.4 1.9 4.7 5 .4-3.8 3.2 1.2 4.9L9 12l-4.3 2.6 1.2-4.9-3.8-3.2 5-.4L9 1.4Z" fill="currentColor" /></svg>

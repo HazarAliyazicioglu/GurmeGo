@@ -97,4 +97,19 @@ describe("VenueDetail — address, single-marker map, photo grid (net-new sectio
     render(<VenueDetail venue={{ ...baseVenue, photos: [] }} />);
     expect(screen.getByText(/henüz fotoğraf eklenmedi/i)).toBeInTheDocument();
   });
+
+  it("still renders the Google rating block when googleRating is a real 0 (not just null/undefined)", () => {
+    // `googleRating` is `z.number().min(0).max(5).nullable()` — 0 is a valid, real rating,
+    // distinct from `null` ("no rating yet"). A truthiness check (`venue.googleRating && ...`)
+    // would treat 0 the same as null/undefined and hide the whole block.
+    render(<VenueDetail venue={{ ...baseVenue, googleRating: 0, googleRatingCount: 3 }} />);
+    const rating = screen.getByTestId("google-rating");
+    expect(rating).toBeInTheDocument();
+    expect(rating).toHaveTextContent("0.0");
+  });
+
+  it("does not render the Google rating block when googleRating is null", () => {
+    render(<VenueDetail venue={{ ...baseVenue, googleRating: null, googleRatingCount: null }} />);
+    expect(screen.queryByTestId("google-rating")).not.toBeInTheDocument();
+  });
 });
