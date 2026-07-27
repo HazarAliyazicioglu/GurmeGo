@@ -20,7 +20,7 @@ export function serializeFilters(filters: FilterState, coords?: Coords | null): 
   const out: Record<string, string> = {};
   if (filters.category) out.category = filters.category;
   if (filters.priceRange) out.priceRange = filters.priceRange;
-  if (filters.isBoutique !== undefined) out.isBoutique = String(filters.isBoutique);
+  if (filters.isBoutique === true) out.isBoutique = String(filters.isBoutique);
   if (filters.radiusM !== undefined && coords) out.radiusM = String(filters.radiusM);
   if (filters.openNow) out.openNow = "true";
   return out;

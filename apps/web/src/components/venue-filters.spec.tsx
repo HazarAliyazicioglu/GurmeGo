@@ -28,6 +28,13 @@ describe("serializeFilters", () => {
     expect(serializeFilters({ openNow: false })).toEqual({});
     expect(serializeFilters({})).toEqual({});
   });
+
+  // Plan 4b's OptionalTrueFlag schema rejects `isBoutique=false` with a 400. The toggle button is
+  // the only current caller and it never passes `false`, but `serializeFilters` itself must also
+  // guard this — any future caller (e.g. restoring filters from a URL) could pass `false` directly.
+  it("never emits isBoutique=false, even when called directly with isBoutique: false (bypassing the toggle button)", () => {
+    expect(serializeFilters({ isBoutique: false })).toEqual({});
+  });
 });
 
 // Plan 4b's OptionalTrueFlag schema rejects `isBoutique=false` with a 400 — the toggle must only
@@ -47,8 +54,11 @@ describe("VenueFilters — boutique toggle only ever sets true or undefined", ()
 describe("VenueFilters — openNow toggle", () => {
   it("toggles between undefined and true", () => {
     const onChange = vi.fn();
-    render(<VenueFilters value={{}} onChange={onChange} coordsAvailable={false} />);
+    const { rerender } = render(<VenueFilters value={{}} onChange={onChange} coordsAvailable={false} />);
     fireEvent.click(screen.getByTestId("filter-open-now"));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ openNow: true }));
+    rerender(<VenueFilters value={{ openNow: true }} onChange={onChange} coordsAvailable={false} />);
+    fireEvent.click(screen.getByTestId("filter-open-now"));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ openNow: undefined }));
   });
 });
