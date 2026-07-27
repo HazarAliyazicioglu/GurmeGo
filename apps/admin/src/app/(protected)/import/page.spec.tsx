@@ -96,6 +96,34 @@ describe("ImportPage", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  // MAJOR 4 fix (final whole-branch review): the 401 sign-out path used to call `signOut()`
+  // without awaiting or checking its result. These prove the fixed await + `{ error }`-check
+  // pattern (matching (protected)/layout.tsx and erisim-yok/page.tsx): an error-resolved or
+  // rejected signOut during a 401 flow shows an error instead of silently redirecting anyway.
+  it("shows an error and does NOT redirect when signOut() resolves with an error during the 401 flow", async () => {
+    importCsv.mockRejectedValue(new ApiHttpError(401, "unauthorized"));
+    signOut.mockResolvedValueOnce({ error: "boom" });
+    render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
+  it("shows an error and does not produce an unhandled rejection when signOut() itself rejects during the 401 flow", async () => {
+    importCsv.mockRejectedValue(new ApiHttpError(401, "unauthorized"));
+    signOut.mockRejectedValueOnce(new Error("network down"));
+    render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
   it("still shows the generic upload-failed message (not the 403 permission message) on a plain/500 error", async () => {
     importCsv.mockRejectedValue(new Error("Import failed: 500"));
     render(<ImportPage />);

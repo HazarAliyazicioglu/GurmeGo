@@ -318,6 +318,44 @@ describe("KuyrukPage", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  // MAJOR 4 fix (final whole-branch review): the 401 sign-out paths used to call `signOut()`
+  // without awaiting or checking its result, so a rejected/error-resolved signOut during a 401
+  // flow either produced an unhandled rejection or silently proceeded to redirect as if sign-out
+  // succeeded. These two tests prove the fixed behavior matches the established
+  // layout.tsx/erisim-yok.tsx pattern: an error-resolved signOut shows an error banner and does
+  // NOT redirect.
+  it("shows an error and does NOT redirect when signOut() resolves with an error during the initial-load 401 flow", async () => {
+    getQueue.mockRejectedValueOnce(new ApiHttpError(401, "unauthorized"));
+    signOut.mockResolvedValueOnce({ error: "boom" });
+    render(<KuyrukPage />);
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
+  it("shows an error and does NOT redirect when signOut() resolves with an error during the mutation 401 flow", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]);
+    approveQueueItem.mockRejectedValueOnce(new ApiHttpError(401, "unauthorized"));
+    signOut.mockResolvedValueOnce({ error: "boom" });
+    render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
+  it("shows an error and does not produce an unhandled rejection when signOut() itself rejects during a 401 flow", async () => {
+    getQueue.mockRejectedValueOnce(new ApiHttpError(401, "unauthorized"));
+    signOut.mockRejectedValueOnce(new Error("network down"));
+    render(<KuyrukPage />);
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
   it("shows the generic mutation-failed message (distinct from the 403 permission message) on a plain/500 error", async () => {
     getQueue.mockResolvedValueOnce([BASE_ITEM]);
     approveQueueItem.mockRejectedValueOnce(new Error("network error"));

@@ -26,8 +26,23 @@ export default function ImportPage() {
       if (err instanceof ApiHttpError && err.status === 401) {
         // Session expired server-side — sign out to clear the stale client session and send the
         // curator back to login instead of showing a generic, unactionable upload-failure message.
-        void signOut();
-        router.push("/giris");
+        // MAJOR fix (final whole-branch review): this used to fire-and-forget `signOut()` (not
+        // awaited, not checked) before redirecting. Same established pattern as
+        // (protected)/layout.tsx, erisim-yok/page.tsx, and kuyruk/page.tsx's handleSignOutFor401:
+        // Supabase's `signOut()` resolves with `{ error }` rather than rejecting on failure, so an
+        // unchecked call silently proceeds to redirect as if sign-out succeeded even when the
+        // session was never actually cleared server-side (and an outright rejection would become
+        // an unhandled promise rejection). Await it and check the result before redirecting.
+        try {
+          const result = await signOut();
+          if (result?.error) {
+            setError("Çıkış yapılamadı. Tekrar deneyin.");
+            return;
+          }
+          router.push("/giris");
+        } catch {
+          setError("Çıkış yapılamadı. Tekrar deneyin.");
+        }
         return;
       }
       setError(

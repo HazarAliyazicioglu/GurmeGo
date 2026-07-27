@@ -40,6 +40,30 @@ export default function KuyrukPage() {
 
   const token = session?.access_token;
 
+  // Shared 401 sign-out handler, used by both the refetch() 401 path and the mutation 401 path.
+  // Established pattern (matches (protected)/layout.tsx and erisim-yok/page.tsx): Supabase's
+  // `signOut()` resolves with `{ error }` rather than rejecting on failure, so it must be AWAITED
+  // and its result CHECKED before redirecting — an unchecked, un-awaited `void signOut()` would
+  // silently redirect to /giris as if sign-out succeeded even when the session was never actually
+  // cleared server-side (and could leave an unhandled promise rejection if signOut() rejects
+  // outright). On success, redirect; on failure, surface an error via the caller's own error slot
+  // instead of redirecting anyway, so the curator isn't left believing they signed out cleanly.
+  const handleSignOutFor401 = useCallback(
+    async (setError: (message: string) => void) => {
+      try {
+        const result = await signOut();
+        if (result?.error) {
+          setError("Çıkış yapılamadı. Tekrar deneyin.");
+          return;
+        }
+        router.push("/giris");
+      } catch {
+        setError("Çıkış yapılamadı. Tekrar deneyin.");
+      }
+    },
+    [signOut, router],
+  );
+
   const refetch = useCallback(async () => {
     if (!token) return;
     const requestId = ++latestQueueRequest.current;
@@ -53,8 +77,13 @@ export default function KuyrukPage() {
       if (err instanceof ApiHttpError && err.status === 401) {
         // Session expired server-side. Sign out to clear the stale client session too, then send
         // the curator back to login rather than showing a generic, unactionable error.
-        void signOut();
-        router.push("/giris");
+        // MAJOR fix (final whole-branch review): this used to fire-and-forget `signOut()` (not
+        // awaited, not checked) before redirecting. Same established pattern as
+        // (protected)/layout.tsx and erisim-yok/page.tsx: Supabase's `signOut()` resolves with
+        // `{ error }` rather than rejecting on failure, so an unchecked call silently proceeds to
+        // redirect as if sign-out succeeded even when the session was never actually cleared
+        // server-side. Await it and check the result before deciding whether to redirect.
+        await handleSignOutFor401(setLoadError);
         return;
       }
       // Same pattern as apps/admin/src/app/(protected)/import/page.tsx: without this, a rejected
@@ -68,7 +97,7 @@ export default function KuyrukPage() {
     } finally {
       if (requestId === latestQueueRequest.current) setLoading(false);
     }
-  }, [token, signOut, router]);
+  }, [token, signOut, router, handleSignOutFor401]);
 
   useEffect(() => {
     void refetch();
@@ -86,10 +115,12 @@ export default function KuyrukPage() {
     });
   }
 
-  function handleMutationError(err: unknown) {
+  async function handleMutationError(err: unknown) {
     if (err instanceof ApiHttpError && err.status === 401) {
-      void signOut();
-      router.push("/giris");
+      // MAJOR fix (final whole-branch review): same unawaited/unchecked `signOut()` bug as
+      // refetch()'s 401 path above — see handleSignOutFor401's comment for the established
+      // await + `{ error }`-check pattern this now follows.
+      await handleSignOutFor401(setMutationError);
       return;
     }
     setMutationError(
@@ -107,7 +138,7 @@ export default function KuyrukPage() {
       await approveQueueItem(token, id);
       await refetch();
     } catch (err) {
-      handleMutationError(err);
+      await handleMutationError(err);
     } finally {
       removeMutatingId(id);
     }
@@ -121,7 +152,7 @@ export default function KuyrukPage() {
       await rejectQueueItem(token, id);
       await refetch();
     } catch (err) {
-      handleMutationError(err);
+      await handleMutationError(err);
     } finally {
       removeMutatingId(id);
     }
