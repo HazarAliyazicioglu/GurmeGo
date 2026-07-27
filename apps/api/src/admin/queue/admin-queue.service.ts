@@ -69,7 +69,15 @@ export class AdminQueueService {
       : [];
     const countByVenueId = new Map(grouped.map((g) => [g.venueId as string, g._count._all]));
 
-    // Urgent (>= threshold pending REPORTs on same venue) sort first, then re_verify, then rest
+    // Sort: urgent REPORT items (>= threshold pending REPORTs on the same venue) first, everything
+    // else (re_verify EDIT items, other EDIT/NEW_VENUE/OWNER_VERIFICATION items, and non-urgent
+    // REPORTs) after, in the `createdAt asc` order the initial `findMany` already produced --
+    // `Array.prototype.sort` is stable, so ties on `urgent` preserve that relative order. There is
+    // no dedicated re_verify tier: a re_verify item does not get pulled ahead of an older
+    // non-urgent REPORT/EDIT/etc. just for being a re_verify. (MINOR finding: this comment
+    // previously claimed a "then re_verify, then rest" second tier that the code below never
+    // implemented -- corrected to describe the actual two-tier urgent/non-urgent behavior; no
+    // sorting logic changed, since no doc under docs/ requires a separate re_verify priority tier.)
     const withUrgency = items.map((item) => {
       const urgent = item.type === "REPORT" && item.venueId ? (countByVenueId.get(item.venueId) ?? 0) >= threshold : false;
       return { item, urgent };

@@ -86,4 +86,18 @@ describe("FavoritesController (e2e) — RolesGuard", () => {
     expect(res.statusCode).toBe(400);
     expect(service.addVenue).not.toHaveBeenCalled();
   });
+
+  it("rejects a non-UUID venueId with 400 before reaching the service", async () => {
+    const listId = "d290f1ee-6c54-4b01-90e6-d701748f0855";
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/me/lists/${listId}/venues`,
+      headers: { "x-test-role": "user" },
+      payload: { venueId: "not-a-uuid" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.addVenue).not.toHaveBeenCalled();
+  });
 });

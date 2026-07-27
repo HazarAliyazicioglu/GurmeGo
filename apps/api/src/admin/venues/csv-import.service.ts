@@ -1,28 +1,39 @@
 import { Injectable } from "@nestjs/common";
-import { parse } from "csv-parse/sync";
+import { parse } from "csv-parse";
 import { CsvVenueImportRowSchema, type CsvVenueImportRow } from "@gurmego/shared";
 
 export type CsvRow = CsvVenueImportRow;
 
-// Each valid row is tagged with its ORIGINAL 1-based CSV line number. `importRows` reports its own
-// errors (district-not-found, create-failure) against a subset of these rows (structurally-invalid
-// rows were already filtered out here) — using the loop index of that filtered subset instead of the
-// original row number would misattribute errors to the wrong CSV line. See Finding 1.
+// Each valid row is tagged with its ORIGINAL 1-based CSV file line number (the line a human sees if
+// they open the file in a spreadsheet app: line 1 is the header, so the first data row is line 2).
+// `importRows` reports its own errors (district-not-found, create-failure) against a subset of these
+// rows (structurally-invalid rows were already filtered out here) — using the loop index of that
+// filtered subset instead of the original row number would misattribute errors to the wrong CSV line.
+// See Finding 1.
 export type CsvImportRow = { row: number; data: CsvRow };
 
 @Injectable()
 export class CsvImportService {
-  parseRows(csv: string): { valid: CsvImportRow[]; errors: { row: number; message: string }[] } {
+  async parseRows(csv: string): Promise<{ valid: CsvImportRow[]; errors: { row: number; message: string }[] }> {
     let records: Record<string, string>[];
     try {
-      // `bom: true` strips a leading UTF-8 BOM before the header row is parsed. Excel's "CSV UTF-8"
-      // export commonly prepends one; without this option the first column's key becomes the literal
-      // "﻿name" instead of "name", so every row in an otherwise-valid Excel export fails
-      // validation with a spurious "name zorunlu" error.
-      records = parse(csv, { columns: true, skip_empty_lines: true, bom: true });
+      // Using the callback/stream-based `csv-parse` entry point (not `csv-parse/sync`) so parsing
+      // happens incrementally off a Transform stream instead of synchronously walking the whole
+      // buffer in one blocking call — on a large admin CSV upload the sync variant would stall the
+      // event loop (and every other in-flight request) for the whole parse duration.
+      records = await new Promise<Record<string, string>[]>((resolve, reject) => {
+        // `bom: true` strips a leading UTF-8 BOM before the header row is parsed. Excel's "CSV UTF-8"
+        // export commonly prepends one; without this option the first column's key becomes the literal
+        // "﻿name" instead of "name", so every row in an otherwise-valid Excel export fails
+        // validation with a spurious "name zorunlu" error.
+        parse(csv, { columns: true, skip_empty_lines: true, bom: true }, (err, result: Record<string, string>[]) => {
+          if (err) reject(err);
+          else resolve(result);
+        });
+      });
     } catch (err) {
-      // A malformed file (bad quoting, inconsistent column counts, ...) makes csv-parse throw
-      // synchronously — surface it as a single file-level row error instead of a 500 that discards
+      // A malformed file (bad quoting, inconsistent column counts, ...) makes csv-parse error out
+      // asynchronously — surface it as a single file-level row error instead of a 500 that discards
       // even the valid rows in an otherwise-fine file. The raw csv-parse message (internal parser
       // state, sometimes fragments of file content) is logged server-side only, same pattern as
       // admin-venues.service.ts's importRows create()-failure handling — the client gets a generic
@@ -35,7 +46,11 @@ export class CsvImportService {
     const errors: { row: number; message: string }[] = [];
 
     records.forEach((record, index) => {
-      const row = index + 1;
+      // +2, not +1: `index` is 0-based among DATA rows only (the header was already consumed by
+      // `columns: true`), and the header itself occupies file line 1. So data record 0 is file line
+      // 2, record 1 is file line 3, and so on — +1 alone would under-report every row number by one
+      // relative to what a human sees opening the file in a spreadsheet app.
+      const row = index + 2;
       const result = CsvVenueImportRowSchema.safeParse(record);
       if (result.success) {
         valid.push({ row, data: result.data });

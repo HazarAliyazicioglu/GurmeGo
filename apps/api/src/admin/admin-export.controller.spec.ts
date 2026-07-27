@@ -67,4 +67,20 @@ describe("AdminExportController (e2e) — RolesGuard", () => {
     expect(res.statusCode).toBe(401);
     expect(service.exportVenues).not.toHaveBeenCalled();
   });
+
+  it("rejects an invalid format value with 400 before reaching the service", async () => {
+    const res = await app.inject({ method: "GET", url: "/admin/export?format=xml", headers: { "x-test-role": "curator" } });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.exportVenues).not.toHaveBeenCalled();
+  });
+
+  it("defaults to json when format is omitted", async () => {
+    service.exportVenues.mockResolvedValue("[]");
+
+    const res = await app.inject({ method: "GET", url: "/admin/export", headers: { "x-test-role": "curator" } });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.exportVenues).toHaveBeenCalledWith("json");
+  });
 });

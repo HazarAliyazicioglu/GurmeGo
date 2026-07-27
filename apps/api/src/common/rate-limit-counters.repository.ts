@@ -22,4 +22,18 @@ export class RateLimitCountersRepository {
     `;
     return result[0].count;
   }
+
+  // MINOR finding: `increment()`'s upsert only ever resets/updates a row for a key that's actively
+  // being hit again -- a key whose window expired and is never requested again (client stopped
+  // sending that IP/user, rate limit window rolled past) stays in the unlogged table forever, so
+  // it grows unbounded over time. `cutoff` (windowEnd + retention buffer, computed by the caller --
+  // see RateLimitCleanupService) is passed in rather than computed here so the raw SQL stays a pure
+  // "delete rows older than this instant" statement, same repository-only-raw-SQL boundary as
+  // increment() above (ADR 002).
+  async deleteExpired(cutoff: Date): Promise<number> {
+    const result = await this.prisma.$executeRaw`
+      DELETE FROM rate_limit_counters WHERE "windowEnd" < ${cutoff}
+    `;
+    return result;
+  }
 }

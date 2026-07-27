@@ -7,6 +7,7 @@ import { FavoritesModule } from "./favorites/favorites.module";
 import { ReportsModule } from "./reports/reports.module";
 import { RuleEngineModule } from "./rule-engine/rule-engine.module";
 import { AdminModule } from "./admin/admin.module";
+import { CommonModule } from "./common/common.module";
 
 @Controller("health")
 class HealthController {
@@ -17,7 +18,17 @@ class HealthController {
 }
 
 @Module({
-  imports: [PrismaModule, DistrictsModule, VenuesModule, AuthModule, FavoritesModule, ReportsModule, RuleEngineModule, AdminModule],
+  imports: [
+    PrismaModule,
+    DistrictsModule,
+    VenuesModule,
+    AuthModule,
+    FavoritesModule,
+    ReportsModule,
+    RuleEngineModule,
+    AdminModule,
+    CommonModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

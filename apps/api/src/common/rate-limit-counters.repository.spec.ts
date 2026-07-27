@@ -58,3 +58,20 @@ describe("RateLimitCountersRepository.increment", () => {
     await expect(new RateLimitCountersRepository(incrementPrisma).increment("read:9.9.9.9", now, windowEnd)).resolves.toBe(8);
   });
 });
+
+describe("RateLimitCountersRepository.deleteExpired", () => {
+  it("issues a DELETE bound to the given cutoff and returns the affected row count", async () => {
+    const prisma = { $executeRaw: jest.fn().mockResolvedValue(7) } as unknown as PrismaService;
+    const repo = new RateLimitCountersRepository(prisma);
+    const cutoff = new Date("2026-01-01T00:00:00Z");
+
+    const deleted = await repo.deleteExpired(cutoff);
+
+    expect(deleted).toBe(7);
+    const call = (prisma.$executeRaw as jest.Mock).mock.calls[0];
+    const sqlText = (call[0] as string[]).join("");
+    expect(sqlText).toContain("DELETE FROM rate_limit_counters");
+    expect(sqlText).toContain('"windowEnd" <');
+    expect(call.slice(1)).toEqual([cutoff]);
+  });
+});
