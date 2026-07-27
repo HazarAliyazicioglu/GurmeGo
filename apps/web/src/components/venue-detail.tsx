@@ -6,16 +6,7 @@ import { NativeShareButton } from "./native-share-button";
 import { FavoriteButton } from "./favorite-button";
 import { VenueMap } from "./venue-map";
 import { directionsUrl } from "@/lib/directions";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  bakery: "Fırın",
-  cafe: "Kahve",
-  kahvalti: "Kahvaltı",
-  kahve: "Kahve",
-  restaurant: "Restoran",
-  "street-food": "Sokak lezzeti",
-  tatli: "Tatlı",
-};
+import { CATEGORY_LABELS } from "@/lib/category-labels";
 
 const DAY_LABELS: Record<string, string> = {
   friday: "Cum", fri: "Cum", monday: "Pzt", mon: "Pzt",

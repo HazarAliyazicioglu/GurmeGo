@@ -1,5 +1,5 @@
 "use client";
-import { CATEGORY_LABELS } from "@/components/venue-card";
+import { CATEGORY_LABELS } from "@/lib/category-labels";
 import { directionsUrl } from "@/lib/directions";
 import type { VenueListItem } from "@/lib/api";
 
