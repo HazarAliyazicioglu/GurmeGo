@@ -1,28 +1,39 @@
-# Durum — 2026-07-27
+# Durum — 2026-07-28
 
 ## Aktif plan
-Plan 1 ✅ 24/24, Plan 2 ✅ 12/12, Plan 3 ✅ 7/7, Plan 4a ✅ 3/3, Plan 4b ✅ 16/16, **Plan 4c ✅ 16/16
-+ final whole-branch review TEMİZ — GERÇEKTEN TAMAMLANDI.** `master`'a hiçbir plan henüz merge
-edilmedi (kullanıcı kararı: hepsi bitince tek seferde).
+Plan 1 ✅ 24/24, Plan 2 ✅ 12/12, Plan 3 ✅ 7/7, Plan 4a ✅ 3/3, Plan 4b ✅ 16/16, Plan 4c ✅ 16/16
++ final whole-branch review TEMİZ. **Ardından: Plan 1-4c'nin TAMAMI (kullanıcı talebiyle) 3 pakette
+(apps/api, apps/web, apps/admin) tam-kod full-codebase Codex review'dan geçirildi, bulunan HER
+bulgu (BLOCKER→MAJOR→MINOR) Task 17-25 olarak düzeltildi ve her fix bağımsız Codex re-review'dan
+TEMİZ geçti — TAMAMLANDI.** `master`'a hiçbir plan henüz merge edilmedi (kullanıcı kararı: hepsi
+bitince tek seferde).
 
 ## Şu an ne yapıyoruz
-Plan 4c'nin implementasyon planı 10 plan-red-team turu gerektirmişti (round 5'te bir görevin
-sessizce plandan düşmesi dahil — C1-C14 çapraz-referans tablosu bu sınıf hatayı önlemek için
-eklendi). HAZIR onayından sonra `subagent-driven-development` ile 16 task sırayla yürütüldü:
-Task 3 (favorite-button/auth-context/auth-form) 2 fix turu gerektirdi (gerçek race condition +
-lint regresyonu), Task 7 (venue-detail map) 1 fix turu (react-leaflet remount + zayıf test), Task
-12 küçük bir eksik test kapsamı düzeltmesi, Task 14 (boutique/openNow toggle) 1 fix turu
-(serializeFilters'ın kendisi hâlâ isBoutique=false üretebiliyordu, toggle düzeltmesine rağmen).
-Kalan task'lar tek seferde TEMİZ geçti. Task 16 (final regresyon): apps/web 111/111, apps/admin
-39/40 (1 Plan 4c'den bağımsız, önceden var olan hata), packages/api-client 2/2, turbo lint 0 hata.
-**Final whole-branch review** (24 commit'lik tam diff, opus modeliyle, 8 spesifik cross-task
-entegrasyon noktası kontrol edilerek): 0 BLOCKER, 0 MAJOR, 2 MINOR (bayat yorumlar, davranış
-etkisi yok) — düzeltildi, bağımsız re-review TEMİZ.
+Kullanıcı "Plan 1'den 4c'ye kadar HER ŞEY'i teste ve review'a sok" dedi (2026-07-26/27/28 arası).
+Üç paketin tam kodu Codex'e review ettirildi: apps/api (0 BLOCKER, çok sayıda MAJOR), apps/web
+(0 BLOCKER, 5 MAJOR), apps/admin (1 BLOCKER — JWT rol-case uyuşmazlığı, 2 MAJOR). Kullanıcı
+"büyükten küçüğe her türlü sorunu çöz, düzelttiğini tekrar review ve testten geçir" dedi. Sonuç,
+Task 17-25 olarak subagent-driven-development disipliniyle yürütüldü:
+- Task 17: BLOCKER (JWT rol-case, apps/api+apps/admin) — TEMİZ.
+- Task 18-19: apps/api MAJOR (race condition'lar, pagination, security/ops) — TEMİZ (1 non-blocking MINOR).
+- Task 20: apps/api mimari kural ihlalleri (raw SQL relocation, rule-engine eşikleri) — 1 fix turu (test kalitesi MINOR'ları), TEMİZ.
+- Task 21: apps/api MINOR küme (7 bulgu: any, validasyon, csv-import, rate-limit cleanup) — TEMİZ ilk turda.
+- Task 22: apps/web MAJOR küme (pagination, 404 conflation, **favoriler sayfası session-değişimi privacy bug'ı**) — 3 fix turu gerektirdi (ilk fix'te 2 BLOCKER çıktı — privacy leak render-timing'de hâlâ vardı + create-list guard'sız; sonra 2 test'in gerçekte ayırt edici olmadığı bulundu, güçlendirildi; sonra o testlerin kapsamı dar bulunup genişletildi) — TEMİZ.
+- Task 23: apps/web MINOR küme (favorite-button race, googleRating=0 falsy-hide) — TEMİZ (1 kozmetik MINOR test-yorumu düzeltmesi ile).
+- Task 24: apps/admin MAJOR küme (kuyruk sayfası refetch race, 401/403 mesaj ayrımı) — 1 fix turu (AuthProvider referans stabilizasyonu MINOR'ı), TEMİZ.
+- Task 25: apps/admin MINOR (erisim-yok sayfasına çıkış butonu) — TEMİZ.
+
+Tüm task'larda pattern: implementer (sonnet) → code-reviewer (Codex-yönlendirmeli) → bulgu varsa fix
+subagent'ı → re-review, TEMİZ oluncaya kadar. Bir review turunda reviewer'ın Codex'e delege ETMEDİĞİ
+(kendi başına Sonnet olarak review yaptığı) fark edildi — aynı commit gerçek Codex-yönlendirmeli
+review'a tekrar sokuldu, TEMİZ doğrulandı. **Ders: her review raporunda Codex'in gerçekten
+çağrıldığını teyit et, rapor formatına güvenme.**
 
 ## Sıradaki adım
-Kullanıcıya Plan 4c'nin tamamlandığını bildir. Master'a merge kararı kullanıcıya ait (hepsi bitince
-tek seferde). Manuel tarayıcı smoke testi (gerçek Leaflet SVG odak/klavye davranışı, district
-navigasyonunda map remount) bu otomasyon ortamında yapılamadı — kullanıcı tarafından doğrulanmalı.
+Kullanıcıya Task 17-25'in tamamlandığını bildir. İki seçenek: (a) tüm bu ek fix'leri de kapsayan
+YENİ bir final whole-branch review (Plan 4c'nin merge-base'inden şu ana kadarki tüm commit'ler) —
+opsiyonel ama tutarlılık için önerilir; (b) doğrudan kullanıcıya "her şey test edildi + review
+edildi" özeti verip master'a merge kararını sor. Merge kararı kullanıcıya ait.
 
 ## Bloke olanlar
 - Yok.
