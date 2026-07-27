@@ -2,6 +2,7 @@ import type { VenueDetail as VenueDetailType } from "@gurmego/shared";
 import { PRICE_RANGE_LABELS } from "@gurmego/shared";
 import { ReportForm } from "./report-form";
 import { WhatsappShareButton } from "./whatsapp-share-button";
+import { NativeShareButton } from "./native-share-button";
 import { FavoriteButton } from "./favorite-button";
 import { VenueMap } from "./venue-map";
 import { directionsUrl } from "@/lib/directions";
@@ -166,7 +167,10 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
           <section className="rounded-[1.5rem] border border-[#201d18]/12 bg-[#faf7f0] p-5 sm:p-6">
             <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#201d18]/42">Birlikte karar ver</p>
             <p className="mt-2 text-sm font-medium leading-relaxed text-[#201d18]/55">Bu mekanı plan yaptığın kişiye gönder.</p>
-            <div className="mt-4"><WhatsappShareButton venue={venue} /></div>
+            <div className="mt-4 space-y-2">
+              <WhatsappShareButton venue={venue} />
+              <NativeShareButton venue={venue} />
+            </div>
           </section>
 
           <ReportForm venueId={venue.id} />
