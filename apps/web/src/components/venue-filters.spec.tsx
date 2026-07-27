@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { serializeFilters } from "./venue-filters";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { serializeFilters, VenueFilters } from "./venue-filters";
 
 describe("serializeFilters", () => {
   it("omits unset filters and includes set ones as query params", () => {
@@ -20,5 +21,34 @@ describe("serializeFilters", () => {
   it("never includes lat/lng, even when coords and radiusM are both present", () => {
     const out = serializeFilters({ radiusM: 2000 }, { lat: 40.99, lng: 29.02 });
     expect(out).toEqual({ radiusM: "2000" });
+  });
+
+  it("emits openNow=true only when true, omits it when false or undefined", () => {
+    expect(serializeFilters({ openNow: true })).toEqual({ openNow: "true" });
+    expect(serializeFilters({ openNow: false })).toEqual({});
+    expect(serializeFilters({})).toEqual({});
+  });
+});
+
+// Plan 4b's OptionalTrueFlag schema rejects `isBoutique=false` with a 400 — the toggle must only
+// ever move between `undefined` and `true`, never explicitly `false`.
+describe("VenueFilters — boutique toggle only ever sets true or undefined", () => {
+  it("toggles between undefined and true, never sets false", () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<VenueFilters value={{}} onChange={onChange} coordsAvailable={false} />);
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ isBoutique: true }));
+    rerender(<VenueFilters value={{ isBoutique: true }} onChange={onChange} coordsAvailable={false} />);
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ isBoutique: undefined }));
+  });
+});
+
+describe("VenueFilters — openNow toggle", () => {
+  it("toggles between undefined and true", () => {
+    const onChange = vi.fn();
+    render(<VenueFilters value={{}} onChange={onChange} coordsAvailable={false} />);
+    fireEvent.click(screen.getByTestId("filter-open-now"));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ openNow: true }));
   });
 });

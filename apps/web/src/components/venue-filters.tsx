@@ -5,6 +5,7 @@ export interface FilterState {
   priceRange?: string;
   isBoutique?: boolean;
   radiusM?: number;
+  openNow?: boolean;
 }
 
 interface Coords {
@@ -21,6 +22,7 @@ export function serializeFilters(filters: FilterState, coords?: Coords | null): 
   if (filters.priceRange) out.priceRange = filters.priceRange;
   if (filters.isBoutique !== undefined) out.isBoutique = String(filters.isBoutique);
   if (filters.radiusM !== undefined && coords) out.radiusM = String(filters.radiusM);
+  if (filters.openNow) out.openNow = "true";
   return out;
 }
 
@@ -138,7 +140,7 @@ export function VenueFilters({
 
         <button
           data-testid="filter-boutique"
-          onClick={() => update({ isBoutique: !filters.isBoutique })}
+          onClick={() => update({ isBoutique: filters.isBoutique ? undefined : true })}
           aria-pressed={Boolean(filters.isBoutique)}
           className={[
             "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition-all",
@@ -152,6 +154,25 @@ export function VenueFilters({
             <path d="M8 1.8 9.4 6l4.4 1.1-3.4 2.6.2 4.5L8 11.8l-2.6 2.4.2-4.5-3.4-2.6L6.6 6 8 1.8Z" fill="currentColor" />
           </svg>
           Butik
+        </button>
+
+        <button
+          data-testid="filter-open-now"
+          onClick={() => update({ openNow: filters.openNow ? undefined : true })}
+          aria-pressed={Boolean(filters.openNow)}
+          className={[
+            "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition-all",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]",
+            filters.openNow
+              ? "border-[#d75d3b] bg-[#d75d3b] text-white shadow-[0_5px_14px_rgba(215,93,59,0.18)]"
+              : "border-[#201d18]/15 bg-white/45 text-[#201d18]/65 hover:border-[#201d18]/30",
+          ].join(" ")}
+        >
+          <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">
+            <path d="M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M8 5v3.2l2.2 1.3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Şimdi açık
         </button>
       </div>
     </div>
