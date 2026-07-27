@@ -19,7 +19,11 @@ function decodeRole(accessToken: string): Role {
   try {
     const decoded: unknown = JSON.parse(atob(accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     const parsed = JwtPayloadSchema.safeParse(decoded);
-    const role = parsed.success ? parsed.data.user_role : undefined;
+    // Normalize casing here, at the single point this decode first reads the claim: the Prisma
+    // `UserRole` enum stores roles UPPERCASE (see apps/api's admin-users.service.ts, which writes
+    // `role.toUpperCase()`), so a real Supabase custom access token hook would emit e.g. "CURATOR".
+    // Lowercase before comparing so this panel recognizes the DB's casing too.
+    const role = parsed.success ? parsed.data.user_role?.toLowerCase() : undefined;
     return role === "curator" || role === "admin" ? role : null;
   } catch {
     return null;

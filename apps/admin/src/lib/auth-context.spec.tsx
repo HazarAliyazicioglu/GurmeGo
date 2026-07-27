@@ -54,6 +54,21 @@ describe("useAuth role extraction", () => {
     await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("curator"));
   });
 
+  // Regression test for the casing blocker: the Prisma `UserRole` enum stores roles UPPERCASE
+  // (confirmed by admin-users.service.ts's `assignRole` writing `role.toUpperCase()`), but
+  // `decodeRole` here only recognized lowercase "curator"/"admin". A real Supabase custom access
+  // token hook reading the DB's role verbatim would emit "CURATOR", which used to fall through to
+  // `null` — silently locking curators/admins out of every role-gated admin page once that hook is
+  // wired up. `decodeRole` must normalize casing before comparing.
+  it("recognizes an uppercase user_role claim (matching the DB's UserRole enum casing) as the lowercase role", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
+      data: { session: { access_token: fakeJwt({ user_role: "CURATOR" }), user: { id: "u1" } } },
+    } as never);
+    render(<AuthProvider><RoleProbe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId("role")).toHaveTextContent("curator"));
+  });
+
   it("returns null role when the JWT has no user_role claim", async () => {
     const { supabase } = await import("./supabase");
     vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({

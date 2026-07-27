@@ -100,6 +100,24 @@ describe("JwtAuthGuard", () => {
     });
   });
 
+  // Regression test for the casing blocker: the Prisma `UserRole` enum stores roles UPPERCASE
+  // (USER, APPROVED_RATER, CURATOR, ADMIN — confirmed by admin-users.service.ts's `assignRole`
+  // writing `role.toUpperCase()`), but every `@Roles(...)` decorator across the codebase compares
+  // against lowercase strings ("curator", "admin", ...). A real Supabase custom access token hook
+  // reading the DB's role verbatim would emit "CURATOR", which this guard used to pass through
+  // unchanged — silently breaking every role-gated route once that hook is wired up. The guard must
+  // normalize casing at the point it first reads the claim.
+  it("lowercases the JWT's user_role claim so it matches the lowercase @Roles(...) comparisons", async () => {
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", user_role: "CURATOR" } });
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard();
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await guard.canActivate(makeContext(req));
+
+    expect(req.user).toEqual({ id: "u1", role: "curator" });
+  });
+
   it("sets user to undefined and allows through when no Bearer header is present", async () => {
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
     const guard = new JwtAuthGuard();

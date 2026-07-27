@@ -70,7 +70,13 @@ export class JwtAuthGuard implements CanActivate {
       if (!parsed.success) {
         throw new UnauthorizedException({ error: { code: "INVALID_TOKEN", message: "Geçersiz oturum" } });
       }
-      req.user = { id: parsed.data.sub, role: parsed.data.user_role ?? "user" };
+      // Normalize casing here, at the single point this guard first reads the claim: the Prisma
+      // `UserRole` enum stores roles UPPERCASE (see admin-users.service.ts's `assignRole`, which
+      // writes `role.toUpperCase()`), but every `@Roles(...)` decorator across the codebase compares
+      // against lowercase strings. Once a real Supabase custom access token hook populates this
+      // claim from the DB, it will arrive as e.g. "CURATOR" — lowercase it so RolesGuard's existing
+      // comparisons keep working unchanged.
+      req.user = { id: parsed.data.sub, role: (parsed.data.user_role ?? "user").toLowerCase() };
     } catch (err) {
       if (err instanceof UnauthorizedException) throw err;
       throw new UnauthorizedException({ error: { code: "INVALID_TOKEN", message: "Geçersiz oturum" } });
