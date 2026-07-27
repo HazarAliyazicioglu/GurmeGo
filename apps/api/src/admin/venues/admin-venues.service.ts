@@ -52,11 +52,17 @@ export class AdminVenuesService {
 
   async revert(venueId: string, versionId: string) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const version = await tx.venueVersion.findUniqueOrThrow({ where: { id: versionId } });
-      if (version.venueId !== venueId) {
-        // A mismatched venueId/versionId pair is treated as "no such version for this venue" —
-        // same shape as VENUE_NOT_FOUND elsewhere, so callers can't distinguish "wrong venue" from
-        // "wrong id" and use that to probe other venues' version history.
+      // `findUnique` (not `findUniqueOrThrow`) -- a well-formed but non-existent `versionId` (it's
+      // already passed `ParseUUIDPipe` at the controller) must produce this same clean
+      // VENUE_VERSION_NOT_FOUND 404, not an uncaught Prisma "record not found" surfacing as a 500
+      // via the global exception filter. This also naturally covers the mismatched-venue case
+      // below with the identical error shape.
+      const version = await tx.venueVersion.findUnique({ where: { id: versionId } });
+      if (!version || version.venueId !== venueId) {
+        // A missing version, and a mismatched venueId/versionId pair, are both treated as "no such
+        // version for this venue" — same shape as VENUE_NOT_FOUND elsewhere, so callers can't
+        // distinguish "wrong venue" from "wrong id" (or "doesn't exist at all") and use that to
+        // probe other venues' version history.
         // The HTTP response body must stay exactly `{ error: { code, message } }` per
         // docs/api-spec.md; NestJS's HttpException only derives `.message` from a top-level
         // `message` property, so set it explicitly after construction (same pattern as

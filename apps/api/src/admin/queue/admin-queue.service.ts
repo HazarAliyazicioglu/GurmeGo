@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { ContributionStatus, ContributionType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { VenuesRepository } from "../../venues/venues.repository";
@@ -13,6 +13,15 @@ function alreadyProcessedError() {
     error: { code: "CONTRIBUTION_ALREADY_PROCESSED", message: "Bu katkı zaten işlenmiş" },
   });
   ex.message = "Bu katkı zaten işlenmiş";
+  return ex;
+}
+
+// `id` here has already passed `ParseUUIDPipe` at the controller (admin-queue.controller.ts) --
+// this is the clean "well-formed id, no such row" case, which must surface as 404, not a raw
+// Prisma "not found" bubbling up to a 500 via the global exception filter.
+function notFoundError() {
+  const ex = new NotFoundException({ error: { code: "CONTRIBUTION_NOT_FOUND", message: "Katkı bulunamadı" } });
+  ex.message = "Katkı bulunamadı";
   return ex;
 }
 
@@ -51,8 +60,23 @@ export class AdminQueueService {
 
   async approve(id: string, reviewerId: string) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const item = await tx.contributionQueue.findUniqueOrThrow({ where: { id } });
-      if (item.status !== "PENDING") throw alreadyProcessedError();
+      const item = await tx.contributionQueue.findUnique({ where: { id } });
+      if (!item) throw notFoundError();
+      // Race fix: two concurrent approve/reject calls on the same PENDING row (two admin tabs, a
+      // double-click) must not both succeed. A plain read-then-write (the old code: read status,
+      // branch on it, then unconditionally `.update()`) has a window between the read and the
+      // write where a second transaction can read the same PENDING status and also proceed.
+      // `updateMany` with `status: "PENDING"` in the WHERE turns the write itself into the guard:
+      // Postgres's row-level UPDATE lock means only one of two concurrent transactions can
+      // actually flip status away from PENDING -- the other blocks until the first commits, then
+      // its own WHERE re-evaluates against the now-changed status and matches zero rows. Checking
+      // `count === 1` after the fact is what turns "zero rows affected" into a clean conflict
+      // response instead of silently doing nothing.
+      const claimed = await tx.contributionQueue.updateMany({
+        where: { id, status: "PENDING" },
+        data: { status: "APPROVED", reviewedBy: reviewerId, reviewedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw alreadyProcessedError();
       if (item.type === "EDIT" && item.venueId) {
         const snapshot = await this.venuesRepository.findRawForSnapshot(tx, item.venueId);
         await tx.venueVersion.create({ data: { venueId: item.venueId, snapshot: snapshot as unknown as Prisma.InputJsonValue, createdBy: reviewerId } });
@@ -61,20 +85,21 @@ export class AdminQueueService {
       // REPORT: intentionally does NOT touch Venue/VenueVersion -- approving a "this info is
       // wrong" report means "we've reviewed it," not "we've confirmed it's accurate." Any actual
       // correction happens through AdminVenuesService.update() (Step 15 above).
-      return tx.contributionQueue.update({ where: { id }, data: { status: "APPROVED", reviewedBy: reviewerId, reviewedAt: new Date() } });
+      return tx.contributionQueue.findUniqueOrThrow({ where: { id } });
     });
   }
 
   reject(id: string, reviewerId: string) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const item = await tx.contributionQueue.findUniqueOrThrow({ where: { id } });
-      if (item.status !== "PENDING") {
-        throw alreadyProcessedError();
-      }
-      return tx.contributionQueue.update({
-        where: { id },
+      const item = await tx.contributionQueue.findUnique({ where: { id } });
+      if (!item) throw notFoundError();
+      // Same conditional-update race guard as approve() above.
+      const claimed = await tx.contributionQueue.updateMany({
+        where: { id, status: "PENDING" },
         data: { status: "REJECTED", reviewedBy: reviewerId, reviewedAt: new Date() },
       });
+      if (claimed.count !== 1) throw alreadyProcessedError();
+      return tx.contributionQueue.findUniqueOrThrow({ where: { id } });
     });
   }
 }

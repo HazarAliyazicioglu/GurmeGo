@@ -41,7 +41,11 @@ describe("VenuesRepository.searchPublished — B11 zero-coordinate handling", ()
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
     await new VenuesRepository(prisma).searchPublished({ sort: "distance", limit: 20, lat: 0, lng: 0, radiusM: 500 } as any);
     const sqlText = prisma.$queryRaw.mock.calls[0][0].strings.join("");
-    expect(sqlText).toContain("ST_Distance");
+    // distance_m's SELECT expression and the ORDER BY clause now deliberately share the exact same
+    // `<->` expression (not a separate `ST_Distance` call) -- see venues.repository.ts's
+    // `distanceExpr` comment: this guarantees the value encoded into a "distance" sort cursor lines
+    // up exactly with what the ORDER BY/WHERE keyset filter compares against on the next page.
+    expect(sqlText).toContain("AS distance_m");
     expect(sqlText).toContain("ST_DWithin");
     expect(sqlText).toMatch(/ORDER BY v\.location <->/);
   });

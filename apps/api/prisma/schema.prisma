@@ -125,6 +125,13 @@ model ContributionQueue {
 
   @@index([venueId, status])
   @@index([type, status])
+  // NOTE: a partial unique index (one PENDING "EDIT" row per venue) also exists on this table,
+  // added by migration 20260727000000_add_contribution_queue_pending_edit_unique_index. It's not
+  // representable in schema.prisma (Prisma has no partial/filtered `@@unique`), which is why it's
+  // not declared here -- see that migration's .sql and rule-engine/re-verify.service.ts for why a
+  // full (unfiltered) unique on (venueId, type, status) would be wrong: it would also cap REPORT
+  // rows at one PENDING-per-venue, breaking the "3 pending reports -> auto-hide" moderation rule
+  // (rule-engine.md), which depends on multiple simultaneously-PENDING REPORT rows per venue.
 }
 
 model User {

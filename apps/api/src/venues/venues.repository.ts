@@ -12,6 +12,45 @@ export interface VenueRow {
   distance_m?: number;
 }
 
+// Internal-only row shape used while building a page: carries `created_at` (needed to encode a
+// resumable "newest" cursor) which is stripped back out before the row is returned to callers --
+// the public `VenueRow`/`VenueListQuerySchema` response contract has no `createdAt` field, and
+// leaking one here would silently widen the public API response shape.
+type VenueRowInternal = VenueRow & { created_at?: Date };
+
+// Cursor shape differs by sort: "newest" resumes on (createdAt, id) since ORDER BY is
+// createdAt DESC, id DESC; "distance" resumes on (distance_m, id) since ORDER BY is
+// distance ASC, id ASC -- a distance-sorted page cannot be resumed by id alone, the last row's
+// distance value is also needed to keep filtering "further than the last one seen."
+interface NewestCursor { lastId: string; lastCreatedAt: string }
+interface DistanceCursor { lastId: string; lastDistanceM: number }
+type Cursor = NewestCursor | DistanceCursor;
+
+// `lastId` gets an explicit `::uuid` cast when building the keyset WHERE clause (see
+// searchPublished) -- a non-UUID-shaped `lastId` in a corrupted/forged cursor would make that cast
+// throw a runtime SQL error (500) instead of the fail-open "ignore the cursor" behavior this
+// method otherwise guarantees. Validated once here so a bad shape is treated the same as any other
+// malformed cursor.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function encodeCursor(payload: Cursor): string {
+  return Buffer.from(JSON.stringify(payload)).toString("base64");
+}
+
+// Malformed/foreign cursors (bad base64, bad JSON, wrong shape for the requested sort) are
+// ignored rather than thrown on -- same fail-open posture as this repository's openNow handling:
+// a broken cursor silently restarting at page 1 is a much better failure mode than a 500 on the
+// public search endpoint.
+function decodeCursor(raw: string | undefined): Partial<NewestCursor & DistanceCursor> | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+    return typeof parsed === "object" && parsed !== null ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Every column of `Venue` except the raw PostGIS `location`, plus its decomposed lat/lng — mirrors
 // what `RETURNING ..., ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng` produces.
 export interface AdminVenueRow {
@@ -158,18 +197,45 @@ export class VenuesRepository {
     if (filters.priceRange) conditions.push(Prisma.sql`v."priceRange" = ${filters.priceRange}::"PriceRange"`);
     if (filters.isBoutique !== undefined) conditions.push(Prisma.sql`v."isBoutique" = ${filters.isBoutique}`);
     if (filters.openNow) {
+      // Fail-open by design (docs/superpowers/specs/2026-07-26-backend-fixes-design.md, 10
+      // plan-red-team rounds): missing/malformed openingHours resolve to `true` (included), not
+      // excluded -- accidentally hiding a venue is worse UX than accidentally showing one, and a
+      // data-quality bug in one venue's `openingHours` must never surface as a 500 on this whole
+      // query. Each bucket's raw "HH:MM-HH:MM" text is validated by regex before being cast to
+      // `::time` so a malformed value can never reach the cast (which would error the whole
+      // query); if the regex fails or the key is absent, the CASE falls through to ELSE true.
+      // The open/close comparison itself handles venues open across midnight (e.g. "22:00-02:00"):
+      // when close < open, "now" is open either from `open` through midnight, OR from midnight
+      // through `close" -- a plain BETWEEN cannot express that wrap-around, so each bucket branch
+      // is an explicit OR of the same-day and wrapped-day cases instead.
+      //
+      // IMPORTANT: the regex validity check must live in the CASE's WHEN condition (not inside
+      // THEN) -- if it were inside THEN and the value were missing/malformed, THEN would evaluate
+      // to `false`/`NULL` and that becomes the CASE's actual result, never falling through to
+      // `ELSE true`. Keeping it in WHEN means a bad/missing value makes the WHEN condition itself
+      // false, so control correctly falls through to the next WHEN/ELSE.
+      const hoursCheck = (bucket: "mon_fri" | "sat_sun") => Prisma.sql`
+        (
+          ( (split_part(v."openingHours"->>${bucket}, '-', 2))::time >= (split_part(v."openingHours"->>${bucket}, '-', 1))::time
+            AND (now() AT TIME ZONE 'Europe/Istanbul')::time
+                BETWEEN (split_part(v."openingHours"->>${bucket}, '-', 1))::time
+                AND (split_part(v."openingHours"->>${bucket}, '-', 2))::time )
+          OR
+          ( (split_part(v."openingHours"->>${bucket}, '-', 2))::time < (split_part(v."openingHours"->>${bucket}, '-', 1))::time
+            AND ( (now() AT TIME ZONE 'Europe/Istanbul')::time >= (split_part(v."openingHours"->>${bucket}, '-', 1))::time
+                  OR (now() AT TIME ZONE 'Europe/Istanbul')::time <= (split_part(v."openingHours"->>${bucket}, '-', 2))::time ) )
+        )
+      `;
+      const bucketFormatOk = (bucket: "mon_fri" | "sat_sun") =>
+        Prisma.sql`v."openingHours"->>${bucket} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'`;
       conditions.push(Prisma.sql`
         CASE
           WHEN EXTRACT(ISODOW FROM now() AT TIME ZONE 'Europe/Istanbul') BETWEEN 1 AND 5
-               AND v."openingHours"->>'mon_fri' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
-          THEN (now() AT TIME ZONE 'Europe/Istanbul')::time
-               BETWEEN (split_part(v."openingHours"->>'mon_fri', '-', 1))::time
-               AND (split_part(v."openingHours"->>'mon_fri', '-', 2))::time
+               AND ${bucketFormatOk("mon_fri")}
+          THEN ${hoursCheck("mon_fri")}
           WHEN EXTRACT(ISODOW FROM now() AT TIME ZONE 'Europe/Istanbul') BETWEEN 6 AND 7
-               AND v."openingHours"->>'sat_sun' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
-          THEN (now() AT TIME ZONE 'Europe/Istanbul')::time
-               BETWEEN (split_part(v."openingHours"->>'sat_sun', '-', 1))::time
-               AND (split_part(v."openingHours"->>'sat_sun', '-', 2))::time
+               AND ${bucketFormatOk("sat_sun")}
+          THEN ${hoursCheck("sat_sun")}
           ELSE true
         END
       `);
@@ -179,30 +245,86 @@ export class VenuesRepository {
     const limit = filters.limit ?? 20;
 
     const hasLocation = filters.lat !== undefined && filters.lng !== undefined;
-    const distanceSelect = hasLocation
-      ? Prisma.sql`, ST_Distance(v.location, ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography) AS distance_m`
-      : Prisma.sql``;
+    // `<->` (used raw, unrounded, in ORDER BY below) is what lets Postgres use `location`'s spatial
+    // index for a KNN nearest-neighbor sort -- wrapping it in ROUND() there would defeat that and
+    // force a sequential scan, regressing the <300ms search target (architecture.md §6). But the
+    // *raw* value is empirically NOT bit-for-bit reproducible across separate query executions for
+    // the same two points (verified against this local Postgres/PostGIS stack: re-querying the
+    // exact same row/reference-point pair a moment later returns a value differing at the ~1e-10m
+    // level) -- likely PostGIS's own internal spheroid-distance evaluation picking a marginally
+    // different code path depending on whether the KNN index is used. That sub-millimeter jitter is
+    // irrelevant to users, but it's fatal to a keyset cursor: comparing "> the exact float I got
+    // back last time" can spuriously evaluate true again for the SAME row on the next page's query.
+    // Rounded to millimeters (3 decimal places) for both the value returned to clients
+    // (`distance_m`) and the cursor comparison -- far finer than any real venue-distance UI needs,
+    // but coarse enough to fully absorb the jitter, so the same physical distance always encodes
+    // and compares identically across requests.
+    const distanceExprRaw = Prisma.sql`v.location <-> ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography`;
+    const distanceExpr = Prisma.sql`ROUND((${distanceExprRaw})::numeric, 3)::float8`;
+    const distanceSelect = hasLocation ? Prisma.sql`, ${distanceExpr} AS distance_m` : Prisma.sql``;
 
     const radiusFilter = hasLocation && filters.radiusM
       ? Prisma.sql`AND ST_DWithin(v.location, ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography, ${filters.radiusM})`
       : Prisma.sql``;
 
-    const orderBy = filters.sort === "distance" && hasLocation
-      ? Prisma.sql`ORDER BY v.location <-> ST_SetSRID(ST_MakePoint(${filters.lng}, ${filters.lat}), 4326)::geography ASC`
-      : Prisma.sql`ORDER BY v."createdAt" DESC`;
+    const sortByDistance = filters.sort === "distance" && hasLocation;
+    const orderBy = sortByDistance
+      ? Prisma.sql`ORDER BY ${distanceExprRaw} ASC, v.id ASC`
+      : Prisma.sql`ORDER BY v."createdAt" DESC, v.id DESC`;
 
-    const rows = await this.prisma.$queryRaw<VenueRow[]>(Prisma.sql`
+    // Keyset pagination: the client's opaque `cursor` must actually narrow the next page to rows
+    // strictly past the last one it already saw, or every "next page" request silently repeats
+    // page 1. Correctness at ties (two venues created at the exact same instant, or sitting at the
+    // exact same distance) falls back to `id` as a deterministic tiebreak, matching each sort's own
+    // ORDER BY tiebreak above. Deliberately spelled out as `(a > c) OR (a = c AND b > d)` instead of
+    // Postgres row-constructor comparison (`(a, b) > (c, d)`) -- empirically verified against this
+    // schema that ROW comparison involving `v.id` against a bound parameter silently produces wrong
+    // results here (Postgres resolves the anonymous record's per-field comparison in a way that
+    // does not error, but does not correctly exclude the boundary row either); the explicit OR form
+    // avoids the composite-type resolution entirely. `v.id` (`String @id @default(uuid())`, no
+    // `@db.Uuid`) is a plain `text` column, not native Postgres `uuid` -- compared as text here, no
+    // cast needed or possible on either side.
+    const decoded = decodeCursor(filters.cursor);
+    let cursorFilter = Prisma.sql``;
+    if (decoded && typeof decoded.lastId === "string" && UUID_RE.test(decoded.lastId)) {
+      if (sortByDistance && typeof decoded.lastDistanceM === "number") {
+        cursorFilter = Prisma.sql`AND (${distanceExpr} > ${decoded.lastDistanceM} OR (${distanceExpr} = ${decoded.lastDistanceM} AND v.id > ${decoded.lastId}))`;
+      } else if (!sortByDistance && typeof decoded.lastCreatedAt === "string") {
+        const lastCreatedAt = new Date(decoded.lastCreatedAt);
+        cursorFilter = Prisma.sql`AND (v."createdAt" < ${lastCreatedAt} OR (v."createdAt" = ${lastCreatedAt} AND v.id < ${decoded.lastId}))`;
+      }
+      // A cursor encoded under one sort mode (e.g. "distance") replayed against a request using
+      // the other mode (e.g. "newest") matches neither branch above -- ignored (fail-open, same
+      // posture as the rest of this method), so the mismatched cursor just yields page 1 again
+      // instead of a 500 or a `split_part`-style crash on a shape mismatch.
+    }
+
+    const rows = await this.prisma.$queryRaw<VenueRowInternal[]>(Prisma.sql`
       SELECT v.id, v.name, v.slug, v.category, v."priceRange", v."isBoutique", v."editorialNote",
-             v."googleRating", v."googleRatingCount"${distanceSelect}
+             v."googleRating", v."googleRatingCount", v."createdAt" AS created_at${distanceSelect}
       FROM "Venue" v
-      WHERE ${where} ${radiusFilter}
+      WHERE ${where} ${radiusFilter} ${cursorFilter}
       ${orderBy}
       LIMIT ${limit + 1}
     `);
 
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const nextCursor = hasMore ? Buffer.from(JSON.stringify({ lastId: items[items.length - 1].id })).toString("base64") : null;
+    const trimmed = hasMore ? rows.slice(0, limit) : rows;
+    const last = trimmed[trimmed.length - 1];
+    const nextCursor = hasMore
+      ? encodeCursor(
+          sortByDistance
+            ? { lastId: last.id, lastDistanceM: last.distance_m as number }
+            : { lastId: last.id, lastCreatedAt: (last.created_at as Date).toISOString() },
+        )
+      : null;
+    // `created_at` is an internal-only field used to build the cursor above -- strip it before
+    // returning rows, so the public response shape (`VenueRow`) doesn't silently gain a field.
+    const items: VenueRow[] = trimmed.map((row) => {
+      const { created_at, ...rest } = row;
+      void created_at;
+      return rest;
+    });
 
     return { items, nextCursor };
   }
@@ -258,6 +380,17 @@ export class VenuesRepository {
     return rows[0];
   }
 
+  // Every current caller (`AdminVenuesService.update`/`revert`, `AdminQueueService.approve`'s EDIT
+  // branch) runs this inside a `$transaction`, then writes back based on what it read -- a classic
+  // read-then-write race: two concurrent calls can both read the same snapshot before either
+  // writes, and the second write silently clobbers the first's changes (including derived fields
+  // like `isBoutique`, recomputed from a now-stale `existing` in `update()`). `FOR UPDATE` takes a
+  // row lock as part of THIS read: a second transaction's `findRawForSnapshot` on the same `id`
+  // blocks here until the first transaction commits (or rolls back), then reads the
+  // already-updated row -- turning the race into a serialized queue instead of two callers
+  // proceeding from the same stale snapshot. Locking here (the one place every writer's
+  // read-before-write already goes through) fixes all three call sites at once rather than adding
+  // a separate lock call to each.
   async findRawForSnapshot(client: Pick<PrismaService, "$queryRaw">, id: string): Promise<AdminVenueRow> {
     const rows = await client.$queryRaw<AdminVenueRow[]>(Prisma.sql`
       SELECT id, name, slug, "districtId", category, "cuisineType", "priceRange", "signatureItems",
@@ -266,6 +399,7 @@ export class VenuesRepository {
         address, photos, "createdAt", "updatedAt",
         ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
       FROM "Venue" WHERE id = ${id}
+      FOR UPDATE
     `);
     if (rows.length === 0) {
       const notFound = new NotFoundException({ error: { code: "VENUE_NOT_FOUND", message: "Mekan bulunamadı" } });

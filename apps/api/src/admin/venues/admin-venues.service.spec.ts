@@ -58,7 +58,7 @@ describe("AdminVenuesService.revert", () => {
       verifiedAt: new Date(), googleRating: null, googleRatingCount: null, googlePlaceId: null,
       featured: false, address: null, photos: [], createdAt: new Date(), updatedAt: new Date(),
     };
-    const txClient = { venueVersion: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "ver1", venueId: "v1", snapshot: targetSnapshot }), create: jest.fn().mockResolvedValue({}) } };
+    const txClient = { venueVersion: { findUnique: jest.fn().mockResolvedValue({ id: "ver1", venueId: "v1", snapshot: targetSnapshot }), create: jest.fn().mockResolvedValue({}) } };
     const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
     const repo = {
       findRawForSnapshot: jest.fn().mockResolvedValue({ id: "v1", name: "Current Name", status: "PUBLISHED" }),
@@ -70,10 +70,25 @@ describe("AdminVenuesService.revert", () => {
     expect(repo.updateWithLocation).toHaveBeenCalledWith(txClient, "v1", expect.objectContaining({ name: "Old Name", source: "MANUAL", verifiedAt: expect.any(Date) }));
   });
   it("throws NotFoundException if the version doesn't belong to this venue", async () => {
-    const txClient = { venueVersion: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "ver1", venueId: "OTHER", snapshot: {} }) } };
+    const txClient = { venueVersion: { findUnique: jest.fn().mockResolvedValue({ id: "ver1", venueId: "OTHER", snapshot: {} }) } };
     const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
     const service = new AdminVenuesService(prisma, {} as any, { findRawForSnapshot: jest.fn() } as any);
     await expect(service.revert("v1", "ver1")).rejects.toThrow("Bu mekan için böyle bir versiyon bulunamadı");
+  });
+
+  it("throws a clean 404 (not an uncaught Prisma error) when versionId is well-formed but no such version exists (regression: was findUniqueOrThrow surfacing as a 500)", async () => {
+    const txClient = { venueVersion: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
+    const service = new AdminVenuesService(prisma, {} as any, { findRawForSnapshot: jest.fn() } as any);
+
+    try {
+      await service.revert("v1", "missing-version-id");
+      throw new Error("expected revert to throw");
+    } catch (err: any) {
+      expect(err.getResponse()).toEqual({ error: { code: "VENUE_VERSION_NOT_FOUND", message: "Bu mekan için böyle bir versiyon bulunamadı" } });
+      expect(err.getResponse().message).toBeUndefined();
+      expect(err.message).toBe("Bu mekan için böyle bir versiyon bulunamadı");
+    }
   });
 });
 

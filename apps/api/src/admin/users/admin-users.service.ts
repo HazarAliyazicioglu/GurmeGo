@@ -1,7 +1,14 @@
-import { Injectable, BadRequestException } from "@nestjs/common";
+import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 
 const MVP_ASSIGNABLE_ROLES = ["curator"];
+
+// Prisma's `update()` throws P2025 ("record not found") for a well-formed but non-existent
+// `userId` -- left uncaught, the global exception filter turns that into a 500, not a clean 404.
+function isRecordNotFound(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025";
+}
 
 @Injectable()
 export class AdminUsersService {
@@ -20,6 +27,15 @@ export class AdminUsersService {
       ex.message = "Bu rol MVP'de kullanılamaz (Faz 2)";
       throw ex;
     }
-    return this.prisma.user.update({ where: { id: userId }, data: { role: role.toUpperCase() as any } });
+    try {
+      return await this.prisma.user.update({ where: { id: userId }, data: { role: role.toUpperCase() as any } });
+    } catch (err) {
+      if (isRecordNotFound(err)) {
+        const notFound = new NotFoundException({ error: { code: "USER_NOT_FOUND", message: "Kullanıcı bulunamadı" } });
+        notFound.message = "Kullanıcı bulunamadı";
+        throw notFound;
+      }
+      throw err;
+    }
   }
 }
