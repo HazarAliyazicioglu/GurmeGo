@@ -79,6 +79,35 @@ describe("useAuth role extraction", () => {
   });
 });
 
+describe("AuthProvider value stability", () => {
+  // Regression test for the MINOR review finding: AuthProvider used to build a brand-new `value`
+  // object (and a brand-new `signOut` function) on every render, so any consumer with `signOut` (or
+  // the whole context value) in a `useCallback`/`useMemo` dependency array — e.g. kuyruk/page.tsx's
+  // `refetch` — got a new identity on every AuthProvider render, even ones where session/loading/error
+  // didn't actually change. Wrapping `signOut`/`signIn` in `useCallback` and `value` in `useMemo` means
+  // consumers only see a new reference when the underlying state genuinely changes.
+  it("keeps the same signOut and context value reference across a re-render with unchanged auth state", async () => {
+    const seen: Array<{ value: unknown; signOut: unknown }> = [];
+    function Capture() {
+      const ctx = useAuth();
+      if (!ctx.loading) seen.push({ value: ctx, signOut: ctx.signOut });
+      return ctx.loading ? <span>yükleniyor</span> : <span data-testid="auth-ok">ok</span>;
+    }
+
+    const { rerender } = render(<AuthProvider><Capture /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId("auth-ok")).toBeInTheDocument());
+
+    // Force AuthProvider itself to re-render (React re-invokes the component function) without any
+    // underlying session/loading/error state change.
+    rerender(<AuthProvider><Capture /></AuthProvider>);
+    await waitFor(() => expect(seen.length).toBeGreaterThanOrEqual(2));
+
+    const [first, second] = seen;
+    expect(second.signOut).toBe(first.signOut);
+    expect(second.value).toBe(first.value);
+  });
+});
+
 describe("useAuth getSession() rejection", () => {
   it("resolves loading to false and sets a terminal error instead of hanging forever when getSession() rejects", async () => {
     // Without the fix, a rejected getSession() (network error, Supabase down, ...) never calls

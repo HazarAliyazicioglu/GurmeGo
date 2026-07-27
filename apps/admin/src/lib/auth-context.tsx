@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { z } from "zod";
 import { supabase } from "./supabase";
@@ -75,21 +75,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const value: AuthContextValue = {
-    user: session?.user ?? null,
-    session,
-    role: session?.access_token ? decodeRole(session.access_token) : null,
-    loading,
-    error,
-    signIn: async (email, password) => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      return { error: error?.message ?? null };
-    },
-    signOut: async () => {
-      const { error } = await supabase.auth.signOut();
-      return { error: error?.message ?? null };
-    },
-  };
+  const signIn = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error?.message ?? null };
+  }, []);
+
+  const signOut = useCallback(async () => {
+    const { error } = await supabase.auth.signOut();
+    return { error: error?.message ?? null };
+  }, []);
+
+  const value: AuthContextValue = useMemo(
+    () => ({
+      user: session?.user ?? null,
+      session,
+      role: session?.access_token ? decodeRole(session.access_token) : null,
+      loading,
+      error,
+      signIn,
+      signOut,
+    }),
+    [session, loading, error, signIn, signOut],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
