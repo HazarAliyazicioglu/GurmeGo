@@ -116,6 +116,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
 
             <div className="mt-4">
               <VenueMap
+                key={venue.id}
                 venues={[]}
                 center={[venue.lat, venue.lng]}
                 focusVenue={{
@@ -133,7 +134,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
               <div data-testid="venue-photos" className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {venue.photos.map((photo, index) => (
                   <img
-                    key={photo}
+                    key={`${photo}-${index}`}
                     src={photo}
                     alt={`${venue.name} fotoğrafı ${index + 1}`}
                     className="aspect-square w-full rounded-xl object-cover"

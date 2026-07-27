@@ -5,11 +5,16 @@ import { VenueDetail } from "./venue-detail";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/auth-context", () => ({ useAuth: () => ({ user: null, session: null, loading: false }) }));
-vi.mock("@/components/venue-map", () => ({
-  VenueMap: ({ center, focusVenue }: { center: [number, number]; focusVenue?: { lat: number; lng: number } }) => {
+const venueMapMock = vi.fn(
+  ({ center, focusVenue }: { center: [number, number]; focusVenue?: { lat: number; lng: number } }) => {
     const effectiveCenter = focusVenue ? [focusVenue.lat, focusVenue.lng] : center;
     return <div data-testid="map-container" data-center={effectiveCenter.join(",")} />;
   },
+);
+
+vi.mock("@/components/venue-map", () => ({
+  VenueMap: (props: { center: [number, number]; focusVenue?: { lat: number; lng: number } }) =>
+    venueMapMock(props),
 }));
 
 const venue: VenueDetailType = {
@@ -64,6 +69,23 @@ describe("VenueDetail — address, single-marker map, photo grid (net-new sectio
   it("renders the new map focused on the venue's real coordinates", () => {
     render(<VenueDetail venue={baseVenue} />);
     expect(screen.getByTestId("map-container")).toHaveAttribute("data-center", "40.99,29.02");
+  });
+
+  it("passes a focusVenue prop (not just a matching center) to VenueMap, proving single-marker mode is engaged", () => {
+    venueMapMock.mockClear();
+    render(<VenueDetail venue={baseVenue} />);
+    expect(venueMapMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        focusVenue: {
+          id: baseVenue.id,
+          name: baseVenue.name,
+          slug: baseVenue.slug,
+          category: baseVenue.category,
+          lat: baseVenue.lat,
+          lng: baseVenue.lng,
+        },
+      }),
+    );
   });
 
   it("renders a photo grid using real <img> elements", () => {
