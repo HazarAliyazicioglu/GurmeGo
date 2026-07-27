@@ -31,8 +31,9 @@ export function DiscoveryClient({
   const latestRequest = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // `sortedByDistance` is produced here — becomes true only immediately after a successful
-  // coords-driven fetch, not merely "coords exist" — but has no consumer yet (Task 6's job).
+  // `sortedByDistance` becomes true only immediately after a successful coords-driven fetch,
+  // not merely "coords exist" -- passed to CategoryQuickRoute so its "En yakın" copy only ever
+  // describes what's actually on screen.
   const [sortedByDistance, setSortedByDistance] = useState(false);
   const autoSortedRef = useRef(false);
   const userInteractedRef = useRef(false);
