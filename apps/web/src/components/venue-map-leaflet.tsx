@@ -29,6 +29,25 @@ export type FocusVenue = {
   lng: number;
 };
 
+function markerEventHandlers(name: string) {
+  return {
+    add: (e: { target: { getElement: () => HTMLElement | null; openPopup: () => void } }) => {
+      const layer = e.target;
+      const el = layer.getElement();
+      if (!el) return;
+      el.setAttribute("tabindex", "0");
+      el.setAttribute("role", "button");
+      el.setAttribute("aria-label", name);
+      el.addEventListener("keydown", (evt: KeyboardEvent) => {
+        if (evt.key === "Enter" || evt.key === " ") {
+          evt.preventDefault();
+          layer.openPopup();
+        }
+      });
+    },
+  };
+}
+
 function BoundsVenueLoader({
   venues,
   onLocationsChange,
@@ -167,6 +186,7 @@ export function VenueMapCanvas({
               opacity: 1,
               weight: 3,
             }}
+            eventHandlers={markerEventHandlers(venue.name)}
           >
             <Popup minWidth={180}>
               <div className="font-sans text-[#201d18]">

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 // `openPopupMock` is unused by this task's own test (Step 4 below only asserts on `center`) but is
 // declared here, in the ONE shared vi.hoisted() block this whole file uses, because Task 12 (C14)
@@ -63,5 +63,34 @@ describe("VenueMap — venue-count header reflects focusVenue, not venues.length
     render(<VenueMap venues={[]} center={[40.99, 29.02]} focusVenue={{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", lat: 40.99, lng: 29.02 }} />);
     expect(screen.getByText(/1 mekan/i)).toBeInTheDocument();
     expect(screen.queryByText(/0 mekan/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("VenueMapCanvas — real keyboard accessibility for markers (C14)", () => {
+  it("gives each marker's underlying element a tabindex/role/aria-label", async () => {
+    getVenuesInBboxMock.mockResolvedValueOnce([{ id: "v1", name: "Cafe Test", category: "cafe", lat: 40.99, lng: 29.02 }]);
+    render(<VenueMapCanvas venues={[{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null }]} center={[40.99, 29.02]} />);
+    const marker = await screen.findByTestId("circle-marker");
+    expect(marker).toHaveAttribute("tabindex", "0");
+    expect(marker).toHaveAttribute("role", "button");
+    expect(marker).toHaveAttribute("aria-label", "Cafe Test");
+  });
+
+  it("opens the popup on both Enter and Space, proven via a real assertion on the hoisted openPopupMock", async () => {
+    getVenuesInBboxMock.mockResolvedValueOnce([{ id: "v1", name: "Cafe Test", category: "cafe", lat: 40.99, lng: 29.02 }]);
+    render(<VenueMapCanvas venues={[{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null }]} center={[40.99, 29.02]} />);
+    const marker = await screen.findByTestId("circle-marker");
+    fireEvent.keyDown(marker, { key: "Enter" });
+    expect(openPopupMock).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(marker, { key: " " });
+    expect(openPopupMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("the focusVenue single-marker case (Task 7) uses the same accessible marker path", async () => {
+    render(<VenueMapCanvas venues={[]} center={[40.99, 29.02]} focusVenue={{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", lat: 40.99, lng: 29.02 }} />);
+    const marker = await screen.findByTestId("circle-marker");
+    expect(marker).toHaveAttribute("role", "button");
+    fireEvent.keyDown(marker, { key: "Enter" });
+    expect(openPopupMock).toHaveBeenCalledTimes(1);
   });
 });
