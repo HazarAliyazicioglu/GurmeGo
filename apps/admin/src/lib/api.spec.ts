@@ -2,9 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const get = vi.hoisted(() => vi.fn());
 const post = vi.hoisted(() => vi.fn());
-vi.mock("@gurmego/api-client", () => ({ createApiClient: () => ({ get, post }) }));
+// Preserve the real `ApiHttpError` export (via importOriginal) while only stubbing
+// `createApiClient` — api.ts's own `importCsv` constructs `ApiHttpError` directly, so a mock that
+// dropped this export would make that `new ApiHttpError(...)` call throw "not a constructor".
+vi.mock("@gurmego/api-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@gurmego/api-client")>();
+  return { ...actual, createApiClient: () => ({ get, post }) };
+});
 
 import { getQueue, approveQueueItem, rejectQueueItem, importCsv, ApiValidationError } from "./api";
+import { ApiHttpError } from "@gurmego/api-client";
 
 const VALID_ITEM = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -72,9 +79,18 @@ describe("importCsv", () => {
     expect(init.headers).not.toHaveProperty("Content-Type"); // never force JSON on a multipart body
   });
 
-  it("throws a plain Error on a non-2xx HTTP response (not ApiValidationError — the request itself failed)", async () => {
+  it("throws an ApiHttpError carrying the status on a non-2xx HTTP response (not ApiValidationError — the request itself failed)", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 }) as unknown as typeof fetch;
     await expect(importCsv("tok", file)).rejects.toThrow("Import failed: 500");
+    await expect(importCsv("tok", file)).rejects.toBeInstanceOf(ApiHttpError);
+  });
+
+  it("carries the 401/403 status on the thrown ApiHttpError so callers can distinguish session-expired from insufficient-role", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401 }) as unknown as typeof fetch;
+    await expect(importCsv("tok", file)).rejects.toMatchObject({ status: 401 });
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 }) as unknown as typeof fetch;
+    await expect(importCsv("tok", file)).rejects.toMatchObject({ status: 403 });
   });
 
   it("throws ApiValidationError when the 2xx response body doesn't match CsvImportResultSchema", async () => {

@@ -1,12 +1,15 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ApiHttpError } from "@gurmego/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { getQueue, approveQueueItem, rejectQueueItem } from "@/lib/api";
 import { QueueItem } from "@/components/queue-item";
 import type { AdminQueueItem } from "@gurmego/shared";
 
 export default function KuyrukPage() {
-  const { session } = useAuth();
+  const { session, signOut } = useAuth();
+  const router = useRouter();
   const [items, setItems] = useState<AdminQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   // Two DISTINCT error states, deliberately not merged into one:
@@ -24,24 +27,48 @@ export default function KuyrukPage() {
   // with a single id, starting row B's mutation while row A's is still in flight overwrote the
   // shared value and re-enabled row A's buttons mid-flight, allowing a double-fire on row A.
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
+  // Request-generation guard against the concurrent-refetch race: an approve/reject on one row
+  // triggers its own refetch(), and a curator double-clicking approve on two different rows fires
+  // two overlapping refetches. Network/scheduling order is not guaranteed to match call order, so
+  // the FIRST-fired refetch's response can resolve AFTER the second's and overwrite the list with
+  // stale data (e.g. showing an item as still "pending" after it was actually approved). Bumping
+  // this counter on every refetch() call and only applying a response whose captured id still
+  // matches the counter discards any response that is no longer the latest in flight. Same pattern
+  // as apps/web/src/app/favoriler/page.tsx's `latestListsRequest` and
+  // apps/web/src/components/discovery-client.tsx's `latestRequest`.
+  const latestQueueRequest = useRef(0);
 
   const token = session?.access_token;
 
   const refetch = useCallback(async () => {
     if (!token) return;
+    const requestId = ++latestQueueRequest.current;
     try {
       const data = await getQueue(token, { status: "PENDING" });
+      if (requestId !== latestQueueRequest.current) return; // a newer refetch has since started — discard this stale response
       setItems(data);
       setLoadError(null);
-    } catch {
+    } catch (err) {
+      if (requestId !== latestQueueRequest.current) return; // stale error, a newer refetch is already in flight/resolved
+      if (err instanceof ApiHttpError && err.status === 401) {
+        // Session expired server-side. Sign out to clear the stale client session too, then send
+        // the curator back to login rather than showing a generic, unactionable error.
+        void signOut();
+        router.push("/giris");
+        return;
+      }
       // Same pattern as apps/admin/src/app/(protected)/import/page.tsx: without this, a rejected
-      // getQueue() (network error, 401 on token expiry, malformed response) would leave `loading`
-      // true forever — a permanently blank page with no feedback.
-      setLoadError("Kuyruk yüklenemedi. Sayfayı yenileyip tekrar deneyin.");
+      // getQueue() (network error, malformed response) would leave `loading` true forever — a
+      // permanently blank page with no feedback.
+      setLoadError(
+        err instanceof ApiHttpError && err.status === 403
+          ? "Bu kuyruğu görüntüleme yetkiniz yok."
+          : "Kuyruk yüklenemedi. Sayfayı yenileyip tekrar deneyin.",
+      );
     } finally {
-      setLoading(false);
+      if (requestId === latestQueueRequest.current) setLoading(false);
     }
-  }, [token]);
+  }, [token, signOut, router]);
 
   useEffect(() => {
     void refetch();
@@ -59,6 +86,19 @@ export default function KuyrukPage() {
     });
   }
 
+  function handleMutationError(err: unknown) {
+    if (err instanceof ApiHttpError && err.status === 401) {
+      void signOut();
+      router.push("/giris");
+      return;
+    }
+    setMutationError(
+      err instanceof ApiHttpError && err.status === 403
+        ? "Bu işlemi yapmaya yetkiniz yok."
+        : "İşlem gerçekleştirilemedi. Tekrar deneyin.",
+    );
+  }
+
   async function handleApprove(id: string) {
     if (!token) return;
     addMutatingId(id);
@@ -66,8 +106,8 @@ export default function KuyrukPage() {
     try {
       await approveQueueItem(token, id);
       await refetch();
-    } catch {
-      setMutationError("İşlem gerçekleştirilemedi. Tekrar deneyin.");
+    } catch (err) {
+      handleMutationError(err);
     } finally {
       removeMutatingId(id);
     }
@@ -80,8 +120,8 @@ export default function KuyrukPage() {
     try {
       await rejectQueueItem(token, id);
       await refetch();
-    } catch {
-      setMutationError("İşlem gerçekleştirilemedi. Tekrar deneyin.");
+    } catch (err) {
+      handleMutationError(err);
     } finally {
       removeMutatingId(id);
     }

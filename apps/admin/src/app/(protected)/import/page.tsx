@@ -1,11 +1,14 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ApiHttpError } from "@gurmego/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { importCsv } from "@/lib/api";
 import type { CsvImportResult } from "@gurmego/shared";
 
 export default function ImportPage() {
-  const { session } = useAuth();
+  const { session, signOut } = useAuth();
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<CsvImportResult | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -19,8 +22,19 @@ export default function ImportPage() {
     try {
       const res = await importCsv(session.access_token, file);
       setResult(res);
-    } catch {
-      setError("Yükleme başarısız oldu. Dosyayı kontrol edip tekrar dene.");
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.status === 401) {
+        // Session expired server-side — sign out to clear the stale client session and send the
+        // curator back to login instead of showing a generic, unactionable upload-failure message.
+        void signOut();
+        router.push("/giris");
+        return;
+      }
+      setError(
+        err instanceof ApiHttpError && err.status === 403
+          ? "Bu işlemi yapmaya yetkiniz yok."
+          : "Yükleme başarısız oldu. Dosyayı kontrol edip tekrar dene.",
+      );
     } finally {
       setUploading(false);
     }

@@ -1,4 +1,4 @@
-import { createApiClient } from "@gurmego/api-client";
+import { createApiClient, ApiHttpError } from "@gurmego/api-client";
 import {
   AdminQueueListSchema,
   AdminQueueMutationResultSchema,
@@ -56,7 +56,11 @@ export async function importCsv(token: string, file: File): Promise<CsvImportRes
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
   });
-  if (!res.ok) throw new Error(`Import failed: ${res.status}`);
+  // Uses ApiHttpError (not a plain Error) for the same reason createApiClient's .get/.post do:
+  // callers need the status code to distinguish a 401 (session expired) or 403 (insufficient role)
+  // from a generic failure, so they can show an accurate, actionable message instead of a blanket
+  // "something went wrong".
+  if (!res.ok) throw new ApiHttpError(res.status, `Import failed: ${res.status}`);
   const raw: unknown = await res.json();
   const result = CsvImportResultSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError("/admin/import", result.error.issues);

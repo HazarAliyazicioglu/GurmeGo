@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ApiHttpError } from "@gurmego/api-client";
 import ImportPage from "./page";
 
+const signOut = vi.fn().mockResolvedValue({ error: null });
 vi.mock("@/lib/auth-context", () => ({
-  useAuth: () => ({ session: { access_token: "tok" }, role: "curator", loading: false, user: { id: "u1" } }),
+  useAuth: () => ({ session: { access_token: "tok" }, role: "curator", loading: false, user: { id: "u1" }, signOut }),
 }));
+const push = vi.fn();
+const routerMock = { push };
+vi.mock("next/navigation", () => ({ useRouter: () => routerMock }));
 const importCsv = vi.fn();
 vi.mock("@/lib/api", () => ({ importCsv: (...args: unknown[]) => importCsv(...args) }));
 
@@ -16,6 +21,8 @@ function selectFile() {
 
 beforeEach(() => {
   importCsv.mockReset();
+  signOut.mockReset().mockResolvedValue({ error: null });
+  push.mockReset();
 });
 
 describe("ImportPage", () => {
@@ -66,5 +73,36 @@ describe("ImportPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /yükle/i })).toBeDisabled());
     resolveImport({ created: 0, skipped: 0, errors: [] });
     await waitFor(() => expect(screen.getByRole("button", { name: /yükle/i })).not.toBeDisabled());
+  });
+
+  it("signs out and redirects to login (instead of a generic upload-failed message) when importCsv rejects with a 401", async () => {
+    importCsv.mockRejectedValue(new ApiHttpError(401, "unauthorized"));
+    render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/giris"));
+    expect(signOut).toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows a distinct permission-denied message (not the generic upload-failed message) when importCsv rejects with a 403", async () => {
+    importCsv.mockRejectedValue(new ApiHttpError(403, "forbidden"));
+    render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/yetkiniz yok/i));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("still shows the generic upload-failed message (not the 403 permission message) on a plain/500 error", async () => {
+    importCsv.mockRejectedValue(new Error("Import failed: 500"));
+    render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/yükleme başarısız/i));
+    expect(screen.queryByRole("alert")).not.toHaveTextContent(/yetkiniz yok/i);
   });
 });
