@@ -3,13 +3,29 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { getFavoriteLists } from "@/lib/api";
+import { getFavoriteLists, createFavoriteList } from "@/lib/api";
 import type { FavoriteList } from "@gurmego/shared";
 
 export default function FavorilerPage() {
   const { user, session, loading } = useAuth();
   const router = useRouter();
   const [lists, setLists] = useState<FavoriteList[] | null>(null);
+  const [newListName, setNewListName] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  async function handleCreateList(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newListName.trim();
+    if (!name || !session?.access_token || creating) return;
+    setCreating(true);
+    try {
+      const created = await createFavoriteList(session.access_token, name);
+      setLists((prev) => [...(prev ?? []), created]);
+      setNewListName("");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) {
@@ -59,6 +75,28 @@ export default function FavorilerPage() {
           )}
         </div>
       </header>
+
+      {lists !== null && (
+        <form onSubmit={handleCreateList} className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="flex-1 text-sm font-semibold text-[#201d18]/70">
+            Liste adı
+            <input
+              type="text"
+              value={newListName}
+              onChange={(event) => setNewListName(event.target.value)}
+              placeholder="Örn. Kadıköy Kahveleri"
+              className="mt-1.5 block w-full rounded-full border border-[#201d18]/15 bg-[#faf7f0] px-4 py-2.5 text-sm font-medium text-[#201d18] outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b]"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={creating || !newListName.trim()}
+            className="min-h-11 rounded-full bg-[#d75d3b] px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.28)] transition-all hover:-translate-y-0.5 hover:bg-[#bd4c30] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Oluştur
+          </button>
+        </form>
+      )}
 
       {lists === null ? (
         <section className="grid gap-3 py-6 sm:grid-cols-2 sm:gap-4 sm:py-8" aria-label="Favoriler yükleniyor" aria-busy="true">
