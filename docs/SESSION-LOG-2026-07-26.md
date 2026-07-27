@@ -424,3 +424,9 @@ task'a atanmış, kayıp/çift yok.
 
 **PLAN 4C: 16/16 TAMAMLANDI.** Sıradaki: mandatory final whole-branch review (Codex-yönlü
 `code-reviewer`, Plan 4b'nin sürecini tekrarlayarak — round round TEMİZ'e kadar).
+
+**PLAN 4C: GERÇEKTEN TAMAMLANDI (2026-07-27).** 16/16 task + final whole-branch review (opus
+modeliyle, 8 cross-task entegrasyon noktası özellikle kontrol edilerek) TEMİZ. `master`'a henüz
+merge yok (kullanıcı kararı: her şey bitince tek seferde). Manuel tarayıcı smoke testi (gerçek
+Leaflet SVG odak/klavye davranışı, district navigasyonunda map remount) bu otomasyon ortamında
+yapılamadı, kullanıcı tarafından ayrıca doğrulanmalı.

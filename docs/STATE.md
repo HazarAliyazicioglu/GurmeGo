@@ -2,9 +2,8 @@
 
 ## Aktif plan
 Plan 1 ✅ 24/24, Plan 2 ✅ 12/12, Plan 3 ✅ 7/7, Plan 4a ✅ 3/3, Plan 4b ✅ 16/16, **Plan 4c ✅ 16/16
-(frontend/admin düzeltmeleri)** — hepsi task-review'dan geçti. `master`'a hiçbir plan henüz merge
-edilmedi (kullanıcı kararı: hepsi bitince tek seferde). Sıradaki: Plan 4c'nin final whole-branch
-review'ı (Codex-yönlü `code-reviewer`), sonra tüm planların birlikte merge kararı.
++ final whole-branch review TEMİZ — GERÇEKTEN TAMAMLANDI.** `master`'a hiçbir plan henüz merge
+edilmedi (kullanıcı kararı: hepsi bitince tek seferde).
 
 ## Şu an ne yapıyoruz
 Plan 4c'nin implementasyon planı 10 plan-red-team turu gerektirmişti (round 5'te bir görevin
@@ -12,18 +11,18 @@ sessizce plandan düşmesi dahil — C1-C14 çapraz-referans tablosu bu sınıf 
 eklendi). HAZIR onayından sonra `subagent-driven-development` ile 16 task sırayla yürütüldü:
 Task 3 (favorite-button/auth-context/auth-form) 2 fix turu gerektirdi (gerçek race condition +
 lint regresyonu), Task 7 (venue-detail map) 1 fix turu (react-leaflet remount + zayıf test), Task
-14 (boutique/openNow toggle) 1 fix turu (serializeFilters'ın kendisi hâlâ isBoutique=false
-üretebiliyordu, toggle düzeltmesine rağmen). Kalan 13 task tek seferde TEMİZ geçti. Task 16 (final
-regresyon) tamamlandı: apps/web 111/111, apps/admin 39/40 (1 Plan 4c'den bağımsız, önceden var
-olan hata — bkz. aşağı), packages/api-client 2/2, turbo typecheck+lint 0 hata (yalnızca 2 önceden
-kabul edilmiş any/unused uyarısı). C1-C14 çapraz-kontrolü: hepsi task 3-14'e atanmış, hiçbiri
-kayıp/çift değil.
+12 küçük bir eksik test kapsamı düzeltmesi, Task 14 (boutique/openNow toggle) 1 fix turu
+(serializeFilters'ın kendisi hâlâ isBoutique=false üretebiliyordu, toggle düzeltmesine rağmen).
+Kalan task'lar tek seferde TEMİZ geçti. Task 16 (final regresyon): apps/web 111/111, apps/admin
+39/40 (1 Plan 4c'den bağımsız, önceden var olan hata), packages/api-client 2/2, turbo lint 0 hata.
+**Final whole-branch review** (24 commit'lik tam diff, opus modeliyle, 8 spesifik cross-task
+entegrasyon noktası kontrol edilerek): 0 BLOCKER, 0 MAJOR, 2 MINOR (bayat yorumlar, davranış
+etkisi yok) — düzeltildi, bağımsız re-review TEMİZ.
 
 ## Sıradaki adım
-Plan 4c'nin final whole-branch review'ını çalıştır (52 commit'lik tam diff'e karşı Codex ile,
-Plan 4b'nin sürecini tekrarla — round round TEMİZ'e kadar). Ardından manuel tarayıcı smoke testi
-(bu otomasyon ortamında yapılamaz — gerçek Leaflet SVG odak/klavye davranışı ve district-to-district
-navigasyonda map remount'u kullanıcı tarafından doğrulanmalı).
+Kullanıcıya Plan 4c'nin tamamlandığını bildir. Master'a merge kararı kullanıcıya ait (hepsi bitince
+tek seferde). Manuel tarayıcı smoke testi (gerçek Leaflet SVG odak/klavye davranışı, district
+navigasyonunda map remount) bu otomasyon ortamında yapılamadı — kullanıcı tarafından doğrulanmalı.
 
 ## Bloke olanlar
 - Yok.
