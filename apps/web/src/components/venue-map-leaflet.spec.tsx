@@ -89,8 +89,12 @@ describe("VenueMapCanvas — real keyboard accessibility for markers (C14)", () 
   it("the focusVenue single-marker case (Task 7) uses the same accessible marker path", async () => {
     render(<VenueMapCanvas venues={[]} center={[40.99, 29.02]} focusVenue={{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", lat: 40.99, lng: 29.02 }} />);
     const marker = await screen.findByTestId("circle-marker");
+    expect(marker).toHaveAttribute("tabindex", "0");
     expect(marker).toHaveAttribute("role", "button");
+    expect(marker).toHaveAttribute("aria-label", "Cafe Test");
     fireEvent.keyDown(marker, { key: "Enter" });
     expect(openPopupMock).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(marker, { key: " " });
+    expect(openPopupMock).toHaveBeenCalledTimes(2);
   });
 });
