@@ -12,20 +12,47 @@ export default function FavorilerPage() {
   const [lists, setLists] = useState<FavoriteList[] | null>(null);
   const [newListName, setNewListName] = useState("");
   const [creating, setCreating] = useState(false);
-  // Guards against the privacy-sensitive race where a `getFavoriteLists` request is still in
-  // flight when the session changes (e.g. logout followed by a different user logging back in
-  // before the first request settles) -- without this, the stale response could resolve AFTER
-  // the session change and render User A's favorites into User B's view. Mirrors the same
-  // `requestId` guard `favorite-button.tsx` uses for its own session-change race.
+  // Guards against the privacy-sensitive race where a `getFavoriteLists` request (or a
+  // `createFavoriteList` submission) is still in flight when the session changes (e.g. logout
+  // followed by a different user logging back in before the first request settles) -- without
+  // this, a stale response could resolve AFTER the session change and render User A's data into
+  // User B's view. Every session-identity change (see the render-time reset below and the effect)
+  // bumps this counter, so any response captured under the old requestId is discarded, whether it
+  // came from the GET fetch or from a create-list submission. Mirrors the same `requestId` guard
+  // `favorite-button.tsx` uses for its own session-change race.
   const latestListsRequest = useRef(0);
+
+  // `user?.id` is the identity `lists` was rendered for. This is intentionally checked and, if
+  // stale, corrected DURING render (React's "adjusting state while rendering" pattern) rather than
+  // in a `useEffect` -- an effect only runs AFTER React commits/paints, which leaves a real window
+  // where a committed frame shows User A's `lists` under User B's already-active session. Comparing
+  // against a ref recorded on a previous render and calling `setState` synchronously here means
+  // React discards this render's output and re-renders with `lists` already cleared BEFORE
+  // anything paints -- no committed frame with mismatched owner and session ever exists.
+  const identity = user?.id ?? null;
+  const listsIdentityRef = useRef<string | null>(identity);
+  if (listsIdentityRef.current !== identity) {
+    listsIdentityRef.current = identity;
+    ++latestListsRequest.current;
+    if (lists !== null) setLists(null);
+  }
 
   async function handleCreateList(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = newListName.trim();
     if (!name || !session?.access_token || creating) return;
     setCreating(true);
+    const requestId = ++latestListsRequest.current;
     try {
       const created = await createFavoriteList(session.access_token, name);
+      if (requestId !== latestListsRequest.current) {
+        // The session changed while this create-list request was in flight -- applying it now
+        // would append User A's newly-created list into User B's `lists` state. Drop it silently
+        // (matching how the stale-GET response case is handled) rather than mutate the wrong
+        // session's data.
+        console.warn("Discarded createFavoriteList response: session changed before it resolved.");
+        return;
+      }
       setLists((prev) => [...(prev ?? []), created]);
       setNewListName("");
     } finally {

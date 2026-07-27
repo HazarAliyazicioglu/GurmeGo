@@ -19,7 +19,10 @@ export function createApiClient(baseUrl: string, getToken?: () => string | undef
       const res = await fetch(`${baseUrl}${path}`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options?.headers },
       });
-      if (!res.ok) throw new ApiHttpError(res.status, `API error ${res.status}: ${await res.text()}`);
+      // Reading the error body can itself fail (rare, but possible with a malformed/truncated
+      // response) -- fall back to an empty string body rather than losing the known `res.status`
+      // to a generic, uncategorized error.
+      if (!res.ok) throw new ApiHttpError(res.status, `API error ${res.status}: ${await res.text().catch(() => "")}`);
       return res.json();
     },
     async post<T>(path: string, body: unknown): Promise<T> {
@@ -32,7 +35,7 @@ export function createApiClient(baseUrl: string, getToken?: () => string | undef
         },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new ApiHttpError(res.status, `API error ${res.status}: ${await res.text()}`);
+      if (!res.ok) throw new ApiHttpError(res.status, `API error ${res.status}: ${await res.text().catch(() => "")}`);
       return res.json();
     },
   };

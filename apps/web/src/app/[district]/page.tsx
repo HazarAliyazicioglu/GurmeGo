@@ -10,7 +10,7 @@ export default async function DiscoveryPage({ params }: { params: { district: st
   const current = districts.find((d) => d.slug === params.district);
   if (!current) notFound();
 
-  const { data: venues } = await getVenues({ districtId: current.id, sort: "newest" });
+  const { data: venues, meta } = await getVenues({ districtId: current.id, sort: "newest" });
   const center = DISTRICT_CENTERS[params.district] ?? DEFAULT_CENTER;
 
   return (
@@ -18,7 +18,15 @@ export default async function DiscoveryPage({ params }: { params: { district: st
       <LocationProvider>
         <DistrictPicker districts={districts} current={params.district} />
         <h1>{current.name}</h1>
-        <DiscoveryClient key={current.id} districtId={current.id} initialVenues={venues} center={center} districtName={current.name} />
+        <DiscoveryClient
+          key={current.id}
+          districtId={current.id}
+          initialVenues={venues}
+          initialCursor={meta.next_cursor}
+          initialHasMore={meta.has_more}
+          center={center}
+          districtName={current.name}
+        />
       </LocationProvider>
     </main>
   );

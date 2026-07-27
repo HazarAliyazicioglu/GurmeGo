@@ -48,4 +48,28 @@ describe("createApiClient — non-ok responses throw ApiHttpError carrying the s
     expect(error).toBeInstanceOf(ApiHttpError);
     expect((error as ApiHttpError).status).toBe(400);
   });
+
+  it("get() still throws an ApiHttpError carrying the correct status even if reading the error body itself rejects", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: () => Promise.reject(new Error("body stream errored")),
+    });
+    const client = createApiClient("http://api.test");
+    const error = await client.get("/venues/missing").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiHttpError);
+    expect((error as ApiHttpError).status).toBe(404);
+  });
+
+  it("post() still throws an ApiHttpError carrying the correct status even if reading the error body itself rejects", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: () => Promise.reject(new Error("body stream errored")),
+    });
+    const client = createApiClient("http://api.test");
+    const error = await client.post("/me/lists", { name: "x" }).catch((e) => e);
+    expect(error).toBeInstanceOf(ApiHttpError);
+    expect((error as ApiHttpError).status).toBe(500);
+  });
 });

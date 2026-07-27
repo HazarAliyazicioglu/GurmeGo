@@ -15,11 +15,19 @@ export function toggleViewMode(current: "list" | "map"): "list" | "map" {
 export function DiscoveryClient({
   districtId,
   initialVenues,
+  initialCursor = null,
+  initialHasMore = false,
   center,
   districtName,
 }: {
   districtId: string;
   initialVenues: VenueListItem[];
+  // Pagination metadata for `initialVenues` from the server component's own `GET /venues` call --
+  // without these, a normal page load (no client-side filter change yet) would discard the real
+  // `next_cursor`/`has_more` and the "Load more" button could never appear until SOME client fetch
+  // ran, even when more results genuinely exist server-side.
+  initialCursor?: string | null;
+  initialHasMore?: boolean;
   center: [number, number];
   districtName: string;
 }) {
@@ -34,8 +42,16 @@ export function DiscoveryClient({
   const [error, setError] = useState<string | null>(null);
   // Pagination metadata from `GET /venues`'s keyset cursor -- `null` means "no further page",
   // matching the API's own `next_cursor: null` convention rather than an empty-string sentinel.
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(initialCursor);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  // The coords context that the CURRENT page-1 result set (and therefore `cursor`) was actually
+  // fetched under -- frozen at fetch time, not read live. The initial SSR fetch never sends
+  // location (server-side, no geolocation), so this starts at `null` to match. `loadMore` must use
+  // THIS, not the live `coords`, or a cursor issued in one sort/coordinate context (e.g. no
+  // location yet) could get combined with a DIFFERENT context's results (e.g. distance-sorted)
+  // once geolocation resolves asynchronously between page loads -- producing a duplicated or
+  // incoherently-ordered list (final-review Major 2).
+  const lastFetchCoordsRef = useRef<Coords | null>(null);
   // `sortedByDistance` becomes true only immediately after a successful coords-driven fetch,
   // not merely "coords exist" -- passed to CategoryQuickRoute so its "En yakın" copy only ever
   // describes what's actually on screen.
@@ -53,13 +69,24 @@ export function DiscoveryClient({
     setFilters(next);
     setLoading(true);
     setError(null);
+    // A fresh filter/search fetch always replaces the page-1 result set, so pagination state
+    // resets IMMEDIATELY and synchronously as part of this same transition -- not only once the
+    // fetch resolves. Two reasons this can't wait: (a) otherwise the stale cursor/hasMore from the
+    // PREVIOUS query could combine with the new filters if the user clicks "Load more" during the
+    // gap (final-review Major 3a); (b) if a `loadMore` request was still in flight when this filter
+    // change fired, ITS OWN `finally` block will see its requestId no longer matches and skip
+    // resetting `loadingMore` -- so `loadingMore` must be cleared here instead, or the button could
+    // stay stuck disabled forever even after the new filter's fetch reports `has_more: true`
+    // (final-review Major 3b).
+    setCursor(null);
+    setHasMore(false);
+    setLoadingMore(false);
     try {
       const { data, meta } = await getVenues({ districtId, ...serializeFilters(next, requestCoords) }, requestCoords);
       if (requestId !== latestRequest.current) return;
       setVenues(data);
       setSortedByDistance(Boolean(requestCoords));
-      // A fresh filter/search fetch always replaces the page-1 result set, so pagination state
-      // resets alongside it rather than carrying over a cursor from the PREVIOUS query's pages.
+      lastFetchCoordsRef.current = requestCoords;
       setCursor(meta.next_cursor);
       setHasMore(meta.has_more);
     } catch {
@@ -85,10 +112,13 @@ export function DiscoveryClient({
     if (!hasMore || !cursor || loadingMore) return;
     const requestId = ++latestRequest.current;
     setLoadingMore(true);
+    // Use the coords context the CURRENT cursor was actually issued under (frozen at fetch time),
+    // not the live `coords` -- see `lastFetchCoordsRef`'s definition above.
+    const pageCoords = lastFetchCoordsRef.current;
     try {
       const { data, meta } = await getVenues(
-        { districtId, ...serializeFilters(filters, coords), cursor },
-        coords,
+        { districtId, ...serializeFilters(filters, pageCoords), cursor },
+        pageCoords,
       );
       if (requestId !== latestRequest.current) return;
       setVenues((prev) => [...prev, ...data]);

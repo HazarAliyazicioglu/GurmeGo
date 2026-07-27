@@ -212,6 +212,138 @@ describe("DiscoveryClient — pagination ('load more' from GET /venues's keyset 
   });
 });
 
+describe("DiscoveryClient — SSR initial pagination props (final-review Major 1)", () => {
+  beforeEach(() => {
+    getVenues.mockReset();
+    useLocationContext.mockReset().mockReturnValue(null);
+  });
+
+  it("shows the 'Load more' button from initialHasMore/initialCursor props without any client fetch", () => {
+    render(
+      <DiscoveryClient
+        districtId="d1"
+        initialVenues={[]}
+        initialCursor="ssr-cursor-1"
+        initialHasMore={true}
+        center={[40.99, 29.02]}
+        districtName="Kadıköy"
+      />,
+    );
+    expect(screen.getByTestId("load-more")).toBeInTheDocument();
+    expect(getVenues).not.toHaveBeenCalled();
+  });
+
+  it("does not show 'Load more' when initialHasMore is omitted (defaults false, matching prior behavior)", () => {
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    expect(screen.queryByTestId("load-more")).not.toBeInTheDocument();
+  });
+
+  it("clicking 'load more' from SSR-provided pagination state uses the SSR-provided cursor", async () => {
+    const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+    getVenues.mockResolvedValueOnce({ data: [venueB], meta: { next_cursor: null, has_more: false } });
+    render(
+      <DiscoveryClient
+        districtId="d1"
+        initialVenues={[]}
+        initialCursor="ssr-cursor-1"
+        initialHasMore={true}
+        center={[40.99, 29.02]}
+        districtName="Kadıköy"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("load-more"));
+    await waitFor(() =>
+      expect(getVenues).toHaveBeenCalledWith(
+        expect.objectContaining({ districtId: "d1", cursor: "ssr-cursor-1" }),
+        null,
+      ),
+    );
+  });
+});
+
+describe("DiscoveryClient — loadMore freezes the coords context the cursor was issued under (final-review Major 2)", () => {
+  beforeEach(() => {
+    getVenues.mockReset();
+    useLocationContext.mockReset();
+  });
+
+  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+  const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+
+  it("uses null coords (page 1's context) for loadMore even if geolocation resolves before the click", async () => {
+    // Page 1 is fetched with no coords (matches the SSR fetch / no location yet).
+    useLocationContext.mockReturnValue(null);
+    getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    await waitFor(() => expect(screen.getByTestId("load-more")).toBeInTheDocument());
+
+    // Geolocation resolves asynchronously, BEFORE the user clicks "Load more".
+    useLocationContext.mockReturnValue({ lat: 40.99, lng: 29.02 });
+
+    getVenues.mockResolvedValueOnce({ data: [venueB], meta: { next_cursor: null, has_more: false } });
+    fireEvent.click(screen.getByTestId("load-more"));
+
+    // The load-more request must still be issued with `null` coords -- the context page 1's
+    // cursor was actually issued under -- not the now-live coords, which would otherwise switch
+    // sort modes mid-pagination and produce a duplicated/incoherent list.
+    await waitFor(() =>
+      expect(getVenues).toHaveBeenLastCalledWith(
+        expect.objectContaining({ districtId: "d1", cursor: "cursor-1" }),
+        null,
+      ),
+    );
+  });
+});
+
+describe("DiscoveryClient — filter change immediately resets stale pagination state, including a stuck loadingMore (final-review Major 3)", () => {
+  beforeEach(() => {
+    getVenues.mockReset();
+    useLocationContext.mockReset().mockReturnValue(null);
+  });
+
+  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+  const venueC = { id: "v3", name: "Third", slug: "third", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+
+  it("hides 'Load more' immediately (synchronously with the filter change) rather than leaving the stale cursor's button visible until the new fetch resolves", async () => {
+    getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    await waitFor(() => expect(screen.getByTestId("load-more")).toBeInTheDocument());
+
+    let resolveNext: (v: unknown) => void;
+    getVenues.mockReturnValueOnce(new Promise((resolve) => { resolveNext = resolve; }));
+    fireEvent.click(screen.getByTestId("filter-open-now"));
+
+    // The stale "Load more" button (from the boutique-only query) must disappear right away,
+    // before the new (boutique + open-now) fetch has resolved.
+    expect(screen.queryByTestId("load-more")).not.toBeInTheDocument();
+
+    resolveNext!({ data: [venueC], meta: { next_cursor: null, has_more: false } });
+    await waitFor(() => expect(screen.getByText("Third")).toBeInTheDocument());
+  });
+
+  it("does not leave 'loadingMore' permanently stuck true when its owning request is superseded by a filter change", async () => {
+    getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
+    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    fireEvent.click(screen.getByTestId("filter-boutique"));
+    await waitFor(() => expect(screen.getByTestId("load-more")).toBeInTheDocument());
+
+    // Start a "load more" that never resolves during this test.
+    getVenues.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(screen.getByTestId("load-more"));
+    await waitFor(() => expect(screen.getByTestId("load-more")).toBeDisabled());
+
+    // A filter change fires while the "load more" request is still in flight -- it must reset
+    // `loadingMore`, and once ITS OWN fetch reports has_more: true, the button must be enabled
+    // again (not stuck disabled forever).
+    getVenues.mockResolvedValueOnce({ data: [venueC], meta: { next_cursor: "cursor-2", has_more: true } });
+    fireEvent.click(screen.getByTestId("filter-open-now"));
+
+    await waitFor(() => expect(screen.getByTestId("load-more")).not.toBeDisabled());
+  });
+});
+
 describe("DiscoveryClient — forwards center to VenueMap (C3)", () => {
   beforeEach(() => {
     getVenues.mockReset().mockResolvedValue({ data: [] as VenueListItem[], meta: { next_cursor: null, has_more: false } });
