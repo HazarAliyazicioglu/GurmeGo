@@ -41,8 +41,26 @@ describe("getQueue", () => {
     expect(get).toHaveBeenCalledWith(expect.stringContaining("status=PENDING"));
   });
 
-  it("throws ApiValidationError when a non-REPORT item is returned", async () => {
-    get.mockResolvedValue([{ ...VALID_ITEM, type: "EDIT" }]);
+  // MINOR 3 fix (final whole-branch review): this test used to assert that `getQueue` REJECTS a
+  // non-REPORT (`type: "EDIT"`) item in the response, via `ApiValidationError`. That premise is
+  // false on two independent counts, confirmed by reading both the real implementation and the
+  // real schema (this was a stale/incorrect test, not a real behavior gap — pre-dates this whole
+  // hardening pass, per docs/STATE.md's "Ertelenen/izlenen maddeler"):
+  //   1. `getQueue`'s request ALWAYS hardcodes `type=REPORT` (see api.ts's own comment and the
+  //      "always requests type=REPORT" test above) and is not overridable by any caller — a
+  //      structural guarantee, not a runtime check, so the real API server only ever returns
+  //      REPORT rows for this call in the first place.
+  //   2. Even if a non-REPORT item somehow appeared in the response body, `AdminQueueItemSchema`
+  //      (packages/shared/src/schemas/admin-queue.schema.ts) deliberately types `type` as
+  //      `z.enum(["REPORT", "EDIT"])`, NOT `z.literal("REPORT")` — its own comment explains this
+  //      is intentional, since the same item schema is reused for single-item EDIT lookups
+  //      elsewhere. So `safeParse` would happily ACCEPT an EDIT item; asserting it throws was
+  //      testing behavior the schema was never written to have.
+  // The real, structurally-guaranteed contract this function must uphold is response-shape
+  // validation in general — a genuinely malformed item must still be rejected. This replacement
+  // test proves that instead of the impossible EDIT-rejection scenario.
+  it("throws ApiValidationError when a response item is genuinely malformed (fails schema validation), not merely because it happens to be type EDIT", async () => {
+    get.mockResolvedValue([{ ...VALID_ITEM, id: "not-a-valid-uuid" }]);
     await expect(getQueue("tok")).rejects.toThrow(ApiValidationError);
   });
 });
