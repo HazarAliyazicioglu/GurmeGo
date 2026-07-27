@@ -35,6 +35,16 @@ export default function FavorilerPage() {
     listsIdentityRef.current = identity;
     ++latestListsRequest.current;
     if (lists !== null) setLists(null);
+    // MAJOR fix (final whole-branch review): the render-time identity-gated clear above only
+    // reset `lists`. `newListName` (the create-list input's typed-but-not-submitted text) and
+    // `creating` (the create-list mutation's loading flag) are separate session-scoped UI state
+    // that were NOT cleared -- meaning if User A typed a partial list name (or had a create-list
+    // submission in flight) and the session then changed to User B, User B could still see User
+    // A's typed text (or a stuck loading state) in the shared input. Same class of cross-account
+    // leak this identity-gated clear exists to close; extend it to all session-scoped local state
+    // in this component, not just `lists`.
+    if (newListName !== "") setNewListName("");
+    if (creating) setCreating(false);
   }
 
   async function handleCreateList(event: React.FormEvent<HTMLFormElement>) {

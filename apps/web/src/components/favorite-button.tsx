@@ -29,6 +29,19 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
     // eventual `setAdded(true)` would otherwise apply to the wrong venue (see
     // `handleClick`'s `requestId` guard below).
     latestClickRequest.current += 1;
+    // MINOR fix (final whole-branch review): `latestPendingRequest` (and the `pending` boolean
+    // it guards) were NOT invalidated here -- only `latestClickRequest` was. If a click was
+    // in-flight when venueId/user/session changed, the button for the NEW context still showed
+    // `pending: true`, blocked on a request that belonged to the OLD context, until that
+    // (possibly slow/hung) old request's own `finally` resolved. Bumping
+    // `latestPendingRequest.current` here means that old request's `finally` guard
+    // (`pendingRequestId === latestPendingRequest.current`) will no longer match, so it can no
+    // longer flip `pending` for the new context either way -- which is exactly why `pending` must
+    // also be explicitly reset to `false` here (the old request's `finally` is now permanently
+    // disqualified from doing it). This does NOT merge the two counters back into one: they stay
+    // separate refs, bumped independently, each still guarding only its own concern.
+    latestPendingRequest.current += 1;
+    setPending(false);
     if (!user || !session?.access_token) {
       setAdded(false);
       setInitialCheckPending(false);
