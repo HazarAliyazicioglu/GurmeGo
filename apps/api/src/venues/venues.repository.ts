@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { VenueListQuery } from "@gurmego/shared";
@@ -344,12 +344,37 @@ export class VenuesRepository {
   }
 
   async findInBbox([minLng, minLat, maxLng, maxLat]: [number, number, number, number]) {
+    // Sanity-check bound, NOT a rule-engine threshold (rule-engine.md's config-driven thresholds
+    // are about deterministic product rules -- boutique branch limits, Gurme Puanı weights, etc.
+    // "is this bbox absurdly large" is a different kind of check: a fixed ceiling on what a public,
+    // unauthenticated endpoint will ever bother computing). This MVP's whole stated scope
+    // (Kadıköy + Beşiktaş + Beyoğlu, product-overview.md) spans roughly 40.95-41.09 N x 28.94-29.10
+    // E -- an area on the order of 0.02 square degrees. `MAX_BBOX_AREA_DEG2` is set ~50x that: big
+    // enough that any legitimate zoomed-out map view over the three districts (or a bit beyond, for
+    // UI padding) is never accidentally rejected, but small enough to reject a world-scale or
+    // country-scale bbox that would otherwise force PostGIS to scan and return every published
+    // venue in one request.
+    const MAX_BBOX_AREA_DEG2 = 1;
+    // Hard cap on rows returned regardless of bbox size -- matches VenueListQuerySchema's public
+    // list-endpoint pagination ceiling (packages/shared's `limit.max(50)`) order of magnitude, but
+    // a map view legitimately wants to show more markers at once than a paginated list page, so
+    // this is set higher rather than reusing that exact constant.
+    const MAX_BBOX_RESULTS = 500;
+
+    const area = (maxLng - minLng) * (maxLat - minLat);
+    if (area > MAX_BBOX_AREA_DEG2) {
+      throw new BadRequestException({
+        error: { code: "BBOX_TOO_LARGE", message: "Sorgulanan alan çok büyük, lütfen haritayı yakınlaştırın" },
+      });
+    }
+
     return this.prisma.$queryRaw<Array<{ id: string; name: string; category: string; lat: number; lng: number }>>(Prisma.sql`
       SELECT v.id, v.name, v.category,
              ST_Y(v.location::geometry) AS lat, ST_X(v.location::geometry) AS lng
       FROM "Venue" v
       WHERE v.status = 'PUBLISHED'
         AND ST_Intersects(v.location::geometry, ST_MakeEnvelope(${minLng}, ${minLat}, ${maxLng}, ${maxLat}, 4326))
+      LIMIT ${MAX_BBOX_RESULTS}
     `);
   }
 

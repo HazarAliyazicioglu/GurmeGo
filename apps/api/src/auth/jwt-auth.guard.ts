@@ -26,7 +26,19 @@ const SupabaseJwtPayloadSchema = z.object({
   user_role: z.string().optional(),
 });
 
-const JWKS = createRemoteJWKSet(new URL(process.env.SUPABASE_JWKS_URL!));
+// `new URL(undefined!)` throws a low-level "Invalid URL" error at module-import time with no
+// indication of which env var is missing -- and because this module is imported at app bootstrap
+// (before any request arrives), that crash takes down the whole process, including unrelated
+// routes like the health check. Fail fast with a clear, actionable message instead.
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required (set it in the environment/.env file)`);
+  }
+  return value;
+}
+
+const JWKS = createRemoteJWKSet(new URL(requireEnv("SUPABASE_JWKS_URL")));
 
 // Supabase signs project JWTs with either RS256 or ES256 depending on project config
 // (legacy HS256 shared-secret projects don't use a JWKS endpoint, so aren't relevant here).

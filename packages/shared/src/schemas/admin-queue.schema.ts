@@ -47,9 +47,16 @@ export const AdminQueueMutationResultSchema = z.object({
 // EDIT, OWNER_VERIFICATION. The previous REPORT/EDIT-only version of this schema was copied from
 // AdminQueueItemSchema and silently regressed a working filter (`?type=NEW_VENUE` 400'd instead of
 // returning a filtered list).
+// `limit`: security/ops finding -- this endpoint used to fetch every matching row with no cap at
+// all, getting slower (and more expensive) as the queue grows with no ceiling. Defaults to a much
+// higher value than the public venues list's `limit.max(50)` (packages/shared's
+// `VenueListQuerySchema`) -- this is an internal curator tool where seeing more rows at once is
+// useful, not a public endpoint needing tight pagination -- but a bounded default all the same,
+// same `z.coerce.number()` pattern as that schema's own `limit`.
 export const AdminQueueListQuerySchema = z.object({
   type: z.enum(["REPORT", "NEW_VENUE", "EDIT", "OWNER_VERIFICATION"]).optional(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
 });
 export type AdminQueueListQuery = z.infer<typeof AdminQueueListQuerySchema>;
 

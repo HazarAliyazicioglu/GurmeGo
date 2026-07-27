@@ -13,7 +13,7 @@ export class AdminQueueController {
 
   @Get()
   list(@Query(new ZodValidationPipe(AdminQueueListQuerySchema)) query: ReturnType<(typeof AdminQueueListQuerySchema)["parse"]>) {
-    return this.queue.list(query.type, query.status);
+    return this.queue.list(query.type, query.status, query.limit);
   }
 
   @Post(":id/approve")

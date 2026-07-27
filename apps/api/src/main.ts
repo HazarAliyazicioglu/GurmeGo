@@ -6,8 +6,32 @@ import { writeFileSync } from "fs";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 
+// Fastify's `req.ip` is the raw socket address unless `trustProxy` is configured -- behind ANY
+// reverse proxy (which this app will run behind in every real deployment), that raw address is
+// the proxy's own IP, not the real client's, so every request looks like it comes from the same
+// IP and `RateLimitGuard` (which keys its bucket on `req.ip`) puts every user in one shared
+// bucket -- one heavy user can lock out everyone else.
+//
+// `TRUST_PROXY_HOPS` (an env var, not a hardcoded count) controls this: unset/0 means "don't
+// trust any proxy" (correct for local dev, where there is no proxy in front of the app -- trusting
+// one here would let a client forge its own `X-Forwarded-For` and pick any rate-limit bucket it
+// wants), and once real infrastructure exists (Plan 4), it's set to the actual number of trusted
+// reverse-proxy hops in front of this process (e.g. 1 for a single load balancer) without needing
+// a code change or a guess at what that infrastructure will look like today.
+export function resolveTrustProxy(raw: string | undefined): number | boolean {
+  if (raw === undefined || raw === "") return false;
+  const hops = Number(raw);
+  if (!Number.isInteger(hops) || hops < 0) {
+    throw new Error(`TRUST_PROXY_HOPS must be a non-negative integer if set, got: "${raw}"`);
+  }
+  return hops === 0 ? false : hops;
+}
+
 export async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({ trustProxy: resolveTrustProxy(process.env.TRUST_PROXY_HOPS) }),
+  );
   app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
   // CSV import (`POST /admin/import`) is the only multipart consumer — a curator-uploaded venue
   // list, not a general file-upload feature. Without a limit, `req.file()`/`toBuffer()` buffers an

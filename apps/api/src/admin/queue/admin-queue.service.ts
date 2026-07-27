@@ -29,7 +29,14 @@ function notFoundError() {
 export class AdminQueueService {
   constructor(private prisma: PrismaService, private venuesRepository: VenuesRepository) {}
 
-  async list(type?: ContributionType, status?: ContributionStatus) {
+  // Security/ops finding: this endpoint used to (a) fetch every matching row with no limit at
+  // all, and (b) run one SEPARATE `count()` query per REPORT row to compute urgency -- the same
+  // venue's report count getting recomputed redundantly across its own multiple queue rows, and
+  // the whole endpoint getting slower (both in row count and query count) as the queue grows.
+  // `limit` (default 100, validated by `AdminQueueListQuerySchema`) caps (a); a single `groupBy`
+  // over all REPORT rows' distinct venueIds in the current page -- computed once, not once per
+  // row -- replaces the N separate `count()` calls for (b).
+  async list(type?: ContributionType, status?: ContributionStatus, limit = 100) {
     const items = await this.prisma.contributionQueue.findMany({
       where: {
         // `type`/`status` are now validated by `AdminQueueListQuerySchema` (@gurmego/shared) via
@@ -42,19 +49,31 @@ export class AdminQueueService {
         status: status ?? "PENDING",
       },
       orderBy: { createdAt: "asc" },
+      take: limit,
       include: { venue: { select: { name: true, slug: true } } },
     });
-    // Urgent (>= threshold pending REPORTs on same venue) sort first, then re_verify, then rest
+
     const threshold = getUrgentReportThreshold();
-    const withUrgency = await Promise.all(
-      items.map(async (item) => {
-        if (item.type !== "REPORT") return { item, urgent: false };
-        const count = await this.prisma.contributionQueue.count({
-          where: { venueId: item.venueId!, type: "REPORT", status: "PENDING" },
-        });
-        return { item, urgent: count >= threshold };
-      }),
+    const reportVenueIds = Array.from(
+      new Set(items.filter((item) => item.type === "REPORT" && item.venueId).map((item) => item.venueId as string)),
     );
+    // Only queried when the current page actually contains REPORT rows -- an empty `in: []` filter
+    // would still be a valid (if pointless) query, but skipping it entirely avoids a round-trip
+    // when the page is all EDIT/NEW_VENUE/OWNER_VERIFICATION items.
+    const grouped = reportVenueIds.length
+      ? await this.prisma.contributionQueue.groupBy({
+          by: ["venueId"],
+          where: { venueId: { in: reportVenueIds }, type: "REPORT", status: "PENDING" },
+          _count: { _all: true },
+        })
+      : [];
+    const countByVenueId = new Map(grouped.map((g) => [g.venueId as string, g._count._all]));
+
+    // Urgent (>= threshold pending REPORTs on same venue) sort first, then re_verify, then rest
+    const withUrgency = items.map((item) => {
+      const urgent = item.type === "REPORT" && item.venueId ? (countByVenueId.get(item.venueId) ?? 0) >= threshold : false;
+      return { item, urgent };
+    });
     return withUrgency.sort((a, b) => Number(b.urgent) - Number(a.urgent)).map((w) => ({ ...w.item, urgent: w.urgent }));
   }
 

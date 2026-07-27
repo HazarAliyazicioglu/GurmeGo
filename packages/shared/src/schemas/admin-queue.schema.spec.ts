@@ -27,7 +27,7 @@ describe("AdminQueueItemSchema / AdminQueueMutationResultSchema type enum", () =
 describe("AdminQueueListQuerySchema", () => {
   it("accepts valid type/status", () => {
     const r = AdminQueueListQuerySchema.safeParse({ type: "EDIT", status: "APPROVED" });
-    expect(r.success && r.data).toEqual({ type: "EDIT", status: "APPROVED" });
+    expect(r.success && r.data).toEqual({ type: "EDIT", status: "APPROVED", limit: 100 });
   });
   it("accepts absent type/status (both optional)", () => expect(AdminQueueListQuerySchema.safeParse({}).success).toBe(true));
   it("rejects an invalid status", () => expect(AdminQueueListQuerySchema.safeParse({ status: "NOTAREALSTATUS" }).success).toBe(false));
@@ -42,10 +42,29 @@ describe("AdminQueueListQuerySchema", () => {
   // used to work, now 400s).
   it("accepts type=NEW_VENUE (full ContributionType, not the item-schema's narrower subset)", () => {
     const r = AdminQueueListQuerySchema.safeParse({ type: "NEW_VENUE" });
-    expect(r.success && r.data).toEqual({ type: "NEW_VENUE" });
+    expect(r.success && r.data).toEqual({ type: "NEW_VENUE", limit: 100 });
   });
   it("accepts type=OWNER_VERIFICATION (full ContributionType, not the item-schema's narrower subset)", () => {
     const r = AdminQueueListQuerySchema.safeParse({ type: "OWNER_VERIFICATION" });
-    expect(r.success && r.data).toEqual({ type: "OWNER_VERIFICATION" });
+    expect(r.success && r.data).toEqual({ type: "OWNER_VERIFICATION", limit: 100 });
+  });
+
+  // Security/ops finding: `GET /admin/queue` used to fetch every matching row with no limit at
+  // all -- getting slower and more expensive as the queue grows with no ceiling. `limit` bounds
+  // that; unset defaults to 100 (an internal curator tool, so higher than the public venues list's
+  // `limit.max(50)`), and it's still capped so a caller can't ask for an unbounded page.
+  it("coerces a string `limit` query param to a number", () => {
+    const r = AdminQueueListQuerySchema.safeParse({ limit: "25" });
+    expect(r.success && r.data.limit).toBe(25);
+  });
+  it("defaults `limit` to 100 when absent", () => {
+    const r = AdminQueueListQuerySchema.safeParse({});
+    expect(r.success && r.data.limit).toBe(100);
+  });
+  it("rejects a `limit` above the 500 ceiling", () => {
+    expect(AdminQueueListQuerySchema.safeParse({ limit: "501" }).success).toBe(false);
+  });
+  it("rejects a `limit` below 1", () => {
+    expect(AdminQueueListQuerySchema.safeParse({ limit: "0" }).success).toBe(false);
   });
 });

@@ -165,4 +165,13 @@ describe("JwtAuthGuard", () => {
 
     expect(rolesResult).toBe(true);
   });
+
+  // Security/ops finding: `new URL(process.env.SUPABASE_JWKS_URL!)` at module load used to throw a
+  // confusing low-level "Invalid URL" error if the env var was genuinely missing -- and since this
+  // module is imported at app bootstrap, that crash took down the whole process (including
+  // unrelated routes like /health) with no indication of what was actually wrong.
+  it("throws a clear, actionable error at module load when SUPABASE_JWKS_URL is missing", async () => {
+    delete process.env.SUPABASE_JWKS_URL;
+    await expect(import("./jwt-auth.guard")).rejects.toThrow(/SUPABASE_JWKS_URL is required/);
+  });
 });

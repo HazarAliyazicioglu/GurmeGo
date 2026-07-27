@@ -126,7 +126,7 @@ describe("AdminQueueController (e2e) — RolesGuard", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(service.list).toHaveBeenCalledWith("EDIT", "APPROVED");
+    expect(service.list).toHaveBeenCalledWith("EDIT", "APPROVED", 100);
   });
 
   // Re-review finding (round 2): AdminQueueListQuerySchema's `type` had been narrowed to
@@ -143,7 +143,7 @@ describe("AdminQueueController (e2e) — RolesGuard", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(service.list).toHaveBeenCalledWith("NEW_VENUE", undefined);
+    expect(service.list).toHaveBeenCalledWith("NEW_VENUE", undefined, 100);
   });
 
   it("allows type=OWNER_VERIFICATION through to the service", async () => {
@@ -156,7 +156,7 @@ describe("AdminQueueController (e2e) — RolesGuard", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(service.list).toHaveBeenCalledWith("OWNER_VERIFICATION", undefined);
+    expect(service.list).toHaveBeenCalledWith("OWNER_VERIFICATION", undefined, 100);
   });
 
   it("blocks a plain user from listing the queue", async () => {

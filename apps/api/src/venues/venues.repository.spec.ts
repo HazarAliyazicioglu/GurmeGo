@@ -188,6 +188,41 @@ describe("VenuesRepository.findInBbox", () => {
     expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(result).toHaveLength(1);
   });
+
+  it("includes a hard result-count cap (LIMIT) so a huge published-venue set can't be returned in one request", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    const repo = new VenuesRepository(prisma);
+
+    await repo.findInBbox([28.9, 40.9, 29.1, 41.1]);
+
+    const sqlText = prisma.$queryRaw.mock.calls[0][0].strings.join("");
+    expect(sqlText).toMatch(/LIMIT/);
+  });
+
+  // Security/ops finding: an unbounded bbox (e.g. a world-scale query) had no size guard, letting
+  // a caller trigger an expensive PostGIS scan and get back every published venue at once. A
+  // bbox comfortably covering all three MVP districts (Kadıköy/Beşiktaş/Beyoğlu, roughly 0.02
+  // square degrees) must still succeed; something orders of magnitude larger must be rejected.
+  it("rejects a bbox whose area exceeds the sanity-check ceiling with a 400", async () => {
+    const prisma = { $queryRaw: jest.fn() } as any;
+    const repo = new VenuesRepository(prisma);
+
+    // Roughly the whole of Turkey -- ~9 x 15 degrees, area ~135 sq degrees, far past any real MVP need.
+    await expect(repo.findInBbox([26, 36, 35, 42])).rejects.toMatchObject({
+      response: { error: { code: "BBOX_TOO_LARGE" } },
+    });
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("accepts a bbox comfortably covering the MVP's whole three-district scope", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    const repo = new VenuesRepository(prisma);
+
+    // Kadıköy + Beşiktaş + Beyoğlu span roughly 40.95-41.09 N x 28.94-29.10 E; padded a bit for a
+    // realistic zoomed-out map viewport.
+    await expect(repo.findInBbox([28.9, 40.9, 29.15, 41.15])).resolves.toEqual([]);
+    expect(prisma.$queryRaw).toHaveBeenCalled();
+  });
 });
 
 describe("VenuesRepository.findBySlug — location and new fields", () => {

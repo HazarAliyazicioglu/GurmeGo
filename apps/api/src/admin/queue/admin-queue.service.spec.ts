@@ -23,6 +23,85 @@ function makePrisma(overrides: { item: any; venue?: any }) {
   return prisma;
 }
 
+describe("AdminQueueService.list — pagination and batched urgency count", () => {
+  // Security/ops finding: `list()` used to fetch every matching row with no cap, and ran one
+  // SEPARATE `count()` per REPORT row to compute urgency -- the same venue's count recomputed
+  // redundantly across its own rows. Both must be fixed: a `take` limit on the findMany, and a
+  // single `groupBy` covering every REPORT row's venueId in the page (not one query per row).
+  function makeQueuePrisma(items: any[], groupByResult: any[]) {
+    return {
+      contributionQueue: {
+        findMany: jest.fn().mockResolvedValue(items),
+        groupBy: jest.fn().mockResolvedValue(groupByResult),
+        count: jest.fn(), // must never be called -- would indicate the N+1 pattern regressed
+      },
+    } as any;
+  }
+
+  it("passes `limit` through as `take` on the findMany query", async () => {
+    const prisma = makeQueuePrisma([], []);
+    const service = new AdminQueueService(prisma, {} as any);
+
+    await service.list(undefined, "PENDING", 25);
+
+    expect(prisma.contributionQueue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 25 }));
+  });
+
+  it("defaults `limit` to 100 when not passed", async () => {
+    const prisma = makeQueuePrisma([], []);
+    const service = new AdminQueueService(prisma, {} as any);
+
+    await service.list();
+
+    expect(prisma.contributionQueue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
+  });
+
+  it("computes urgency for multiple REPORT rows across DIFFERENT venues with exactly ONE groupBy call, never per-row count()", async () => {
+    const items = [
+      { id: "c1", type: "REPORT", venueId: "v1", venue: { name: "A", slug: "a" } },
+      { id: "c2", type: "REPORT", venueId: "v2", venue: { name: "B", slug: "b" } },
+      { id: "c3", type: "EDIT", venueId: "v3", venue: { name: "C", slug: "c" } },
+    ];
+    // v1 has 3 pending reports (>= default threshold 3 -> urgent), v2 has 1 (not urgent).
+    const groupByResult = [
+      { venueId: "v1", _count: { _all: 3 } },
+      { venueId: "v2", _count: { _all: 1 } },
+    ];
+    const prisma = makeQueuePrisma(items, groupByResult);
+    const service = new AdminQueueService(prisma, {} as any);
+
+    const result = await service.list();
+
+    expect(prisma.contributionQueue.groupBy).toHaveBeenCalledTimes(1);
+    expect(prisma.contributionQueue.groupBy).toHaveBeenCalledWith({
+      by: ["venueId"],
+      where: { venueId: { in: ["v1", "v2"] }, type: "REPORT", status: "PENDING" },
+      _count: { _all: true },
+    });
+    expect(prisma.contributionQueue.count).not.toHaveBeenCalled();
+
+    const c1 = result.find((r) => r.id === "c1");
+    const c2 = result.find((r) => r.id === "c2");
+    const c3 = result.find((r) => r.id === "c3");
+    expect(c1?.urgent).toBe(true);
+    expect(c2?.urgent).toBe(false);
+    expect(c3?.urgent).toBe(false);
+    // Urgent items sort first.
+    expect(result[0].id).toBe("c1");
+  });
+
+  it("skips the groupBy call entirely when the page has no REPORT rows", async () => {
+    const items = [{ id: "c3", type: "EDIT", venueId: "v3", venue: { name: "C", slug: "c" } }];
+    const prisma = makeQueuePrisma(items, []);
+    const service = new AdminQueueService(prisma, {} as any);
+
+    const result = await service.list();
+
+    expect(prisma.contributionQueue.groupBy).not.toHaveBeenCalled();
+    expect(result[0].urgent).toBe(false);
+  });
+});
+
 describe("AdminQueueService.approve — REPORT vs EDIT branching", () => {
   it("REPORT: only flips ContributionQueue status, never touches Venue or VenueVersion", async () => {
     const item = { id: "c1", type: "REPORT", venueId: "v1", status: "PENDING" };
