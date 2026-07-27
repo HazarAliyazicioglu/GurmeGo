@@ -71,7 +71,9 @@ export function VenueCard({ venue }: { venue: VenueListItem }) {
                 <path d="m8 1.4 1.7 4.1 4.4.4-3.4 2.9 1 4.3L8 10.8l-3.7 2.3 1-4.3-3.4-2.9 4.4-.4L8 1.4Z" fill="currentColor" />
               </svg>
               <span>{venue.googleRating.toFixed(1)}</span>
-              {venue.googleRatingCount !== null && <span className="font-medium text-[#201d18]/35">({venue.googleRatingCount})</span>}
+              <span className="font-medium text-[#201d18]/35">
+                {venue.googleRatingCount !== null ? `· ${venue.googleRatingCount} ` : "· "}Google yorumu
+              </span>
             </span>
           ) : (
             <span />
