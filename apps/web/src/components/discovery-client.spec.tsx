@@ -270,16 +270,35 @@ describe("DiscoveryClient — loadMore freezes the coords context the cursor was
   const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
   const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
 
-  it("uses null coords (page 1's context) for loadMore even if geolocation resolves before the click", async () => {
+  it("uses null coords (page 1's context) for loadMore even if geolocation resolves and the component re-renders before the click", async () => {
     // Page 1 is fetched with no coords (matches the SSR fetch / no location yet).
     useLocationContext.mockReturnValue(null);
     getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
-    render(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    const { rerender } = render(
+      <DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />,
+    );
+    // Clicking a filter sets `userInteractedRef` so the "one-time auto-sort" effect (which would
+    // otherwise fire its own coords-driven refetch and overwrite `lastFetchCoordsRef` the moment
+    // coords resolve below) stays inert -- isolating exactly the behavior this test targets:
+    // whether `loadMore` reads the frozen ref or the live `coords` variable.
     fireEvent.click(screen.getByTestId("filter-boutique"));
     await waitFor(() => expect(screen.getByTestId("load-more")).toBeInTheDocument());
+    expect(getVenues).toHaveBeenCalledTimes(1);
 
-    // Geolocation resolves asynchronously, BEFORE the user clicks "Load more".
+    // Geolocation resolves asynchronously, BEFORE the user clicks "Load more" -- and, critically,
+    // the component actually RE-RENDERS with the new value (mirroring the established pattern from
+    // the "one-time auto-sort effect" tests above: changing the mock alone does nothing until
+    // something forces React to call the component function again and read the hook fresh). Without
+    // this `rerender`, the component's own `coords` variable never diverges from the frozen ref, so
+    // a test asserting on the eventual `loadMore` call can't tell "reads the frozen ref" apart from
+    // "reads the live `coords` variable" -- both would still see the pre-change value.
     useLocationContext.mockReturnValue({ lat: 40.99, lng: 29.02 });
+    rerender(<DiscoveryClient districtId="d1" initialVenues={[]} center={[40.99, 29.02]} districtName="Kadıköy" />);
+    // The re-render alone must not trigger a new fetch (userInteractedRef guards the auto-sort
+    // effect) -- otherwise `lastFetchCoordsRef` would legitimately update to the live coords here,
+    // which would defeat the point of the test (there'd be no frozen/live divergence left to catch).
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getVenues).toHaveBeenCalledTimes(1);
 
     getVenues.mockResolvedValueOnce({ data: [venueB], meta: { next_cursor: null, has_more: false } });
     fireEvent.click(screen.getByTestId("load-more"));

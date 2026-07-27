@@ -1,3 +1,4 @@
+import { Profiler, type ProfilerOnRenderCallback } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import FavorilerPage from "./page";
@@ -93,7 +94,7 @@ describe("FavorilerPage — no committed frame ever paints the previous session'
     useAuthMock.mockReset();
   });
 
-  it("never shows User A's lists in the DOM the instant props flip to User B's session, even synchronously right after rerender (no flush)", async () => {
+  it("never commits a single DOM frame showing User A's lists once props flip to User B's session -- not even a transient frame flushed by act() before assertions run", async () => {
     useAuthMock.mockReturnValue({
       user: { id: "user-a" },
       loading: false,
@@ -103,23 +104,57 @@ describe("FavorilerPage — no committed frame ever paints the previous session'
       { id: "list-a", userId: "user-a", name: "User A's list", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] },
     ]);
 
-    const { rerender } = render(<FavorilerPage />);
-    await waitFor(() => expect(screen.getByText("User A's list")).toBeInTheDocument());
+    // `rerender()` from Testing Library wraps the update in `act()`, which flushes `useEffect`
+    // synchronously before returning control to the test. That means a plain assertion made right
+    // after `rerender()` can't tell "cleared during render" (the actual fix, page.tsx:32-38) apart
+    // from "cleared by an effect that ran and flushed before the assertion" (the old, buggy
+    // behavior) -- both look identical by the time `rerender()` returns.
+    //
+    // To actually discriminate them we record what was on screen at EVERY commit (via
+    // `Profiler.onRender`, which fires once per commit of the profiled tree, in order), not just
+    // the final state after all commits have settled. The two implementations differ in how many
+    // commits happen and what the FIRST one shows:
+    //  - render-time clear (fix): React's "adjust state while rendering" bails out of the stale
+    //    render and re-invokes the component synchronously with `lists` already `null`, all before
+    //    anything commits. Only ONE commit happens for the whole rerender, and it never shows User
+    //    A's list.
+    //  - effect-only clear (bug): the render with new props commits FIRST with the still-stale
+    //    `lists` (User A's list still on screen), and only a SECOND commit (triggered by the
+    //    effect's `setLists(null)`, flushed synchronously inside the same `act()`) clears it.
+    // So checking every recorded commit -- not just the post-`rerender()` end state -- is what
+    // actually proves no committed frame ever showed the wrong owner's data.
+    const commits: boolean[] = [];
+    const onRender: ProfilerOnRenderCallback = () => {
+      commits.push(screen.queryByText("User A's list") !== null);
+    };
 
-    // Session flips to User B. A NEW, never-resolving promise is queued for B's fetch so we can
-    // assert on the state of the DOM immediately after the synchronous rerender -- before any
-    // microtask/effect has a chance to run -- which is exactly the window BLOCKER 1 describes.
+    const { rerender } = render(
+      <Profiler id="favoriler-probe" onRender={onRender}>
+        <FavorilerPage />
+      </Profiler>,
+    );
+    await waitFor(() => expect(screen.getByText("User A's list")).toBeInTheDocument());
+    commits.length = 0; // Only the commits from the session flip below are under test.
+
+    // Session flips to User B. A NEW, never-resolving promise is queued for B's fetch so the only
+    // way `lists` can become `null` is via the render-time clear or the effect's clear -- not via a
+    // real response resolving and being applied.
     vi.mocked(getFavoriteLists).mockReturnValue(new Promise(() => {}));
     useAuthMock.mockReturnValue({
       user: { id: "user-b" },
       loading: false,
       session: { access_token: "token-b" },
     });
-    rerender(<FavorilerPage />);
+    rerender(
+      <Profiler id="favoriler-probe" onRender={onRender}>
+        <FavorilerPage />
+      </Profiler>,
+    );
 
-    // Synchronous assertion, no `await`/`waitFor` -- proves the very first committed frame under
-    // User B's session already has User A's data cleared, not just "eventually" after an effect.
-    expect(screen.queryByText("User A's list")).not.toBeInTheDocument();
+    // At least one commit must have happened for this rerender, and NONE of them -- including the
+    // very first -- may have shown User A's list.
+    expect(commits.length).toBeGreaterThan(0);
+    expect(commits.every((hadUserAList) => hadUserAList === false)).toBe(true);
   });
 });
 
