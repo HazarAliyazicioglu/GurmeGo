@@ -18,6 +18,23 @@ describe("NativeShareButton", () => {
     expect(shareMock).toHaveBeenCalledWith({ title: "Cafe Test", url: expect.any(String) });
   });
 
+  it("does not throw an unhandled rejection when navigator.share() rejects (e.g. the user cancels the share sheet)", async () => {
+    const shareMock = vi.fn().mockRejectedValue(new DOMException("Share canceled", "AbortError"));
+    Object.defineProperty(navigator, "share", { value: shareMock, configurable: true });
+    const onUnhandledRejection = vi.fn();
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    try {
+      render(<NativeShareButton venue={{ name: "Cafe Test" }} />);
+      await waitFor(() => expect(screen.getByTestId("native-share-button")).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId("native-share-button"));
+      await waitFor(() => expect(shareMock).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 0));
+      expect(onUnhandledRejection).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    }
+  });
+
   it("never renders when navigator.share is undefined (checks typeof, not `in`)", async () => {
     Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
     render(<NativeShareButton venue={{ name: "Cafe Test" }} />);
