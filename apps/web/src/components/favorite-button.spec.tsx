@@ -170,7 +170,7 @@ describe("FavoriteButton — reactivity and race conditions", () => {
     expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("does not re-enable the button when a stale first click resolves after a second, still-in-flight click was fired", async () => {
+  it("does not re-enable the button when a stale request's response resolves while a newer request is still in flight", async () => {
     const listFixture = {
       id: "l1", userId: "u1", name: "Default", createdAt: "2026-01-01T00:00:00.000Z", favorites: [],
     };
@@ -184,9 +184,16 @@ describe("FavoriteButton — reactivity and race conditions", () => {
     await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
 
     // Fire two clicks back-to-back inside the same `act` batch, before React has a chance
-    // to flush the first click's `setPending(true)` and commit `disabled` to the DOM. This
-    // models the real-world race: a second click landing in the brief window before the
-    // button visually disables (double-click / rapid click-unclick-click).
+    // to flush the first click's `setPending(true)` and commit `disabled` to the DOM. In
+    // the real DOM a second physical click could not land here — React flushes the
+    // `disabled` attribute synchronously for discrete events like click, so an
+    // already-disabled button can't receive another click event. This is a synthetic setup
+    // that guards against a stale request's response clearing `pending` while a newer
+    // request is still in flight, which is the actual bug this test protects against (via
+    // the request-generation-counter ref). In practice, two overlapping requests without an
+    // intervening disabled-attribute check could still arise through a non-click trigger
+    // path (e.g. a keyboard-activation event racing a pointer event), so the guard has real
+    // value even though "double-click" is not literally how it would happen.
     const button = screen.getByTestId("favorite-button") as HTMLButtonElement;
     act(() => {
       fireEvent.click(button);
