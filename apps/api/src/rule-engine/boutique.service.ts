@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { getBoutiqueMaxBranches } from "../common/rule-config";
 
 interface BoutiqueInput {
   branchCount: number;
@@ -11,7 +12,7 @@ interface BoutiqueInput {
 export class BoutiqueService {
   evaluate({ branchCount, franchiseFlag, hasEditorialNote, status }: BoutiqueInput): boolean {
     if (status !== "PUBLISHED") return false;
-    const maxBranches = Number(process.env.RULES_BOUTIQUE_MAX_BRANCHES ?? 3);
+    const maxBranches = getBoutiqueMaxBranches();
     return branchCount <= maxBranches && !franchiseFlag && hasEditorialNote;
   }
 }

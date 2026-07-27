@@ -3,6 +3,7 @@ import { VenuesController } from "./venues.controller";
 import { VenuesService } from "./venues.service";
 import { VenuesRepository } from "./venues.repository";
 import { PostgresCacheStoreService } from "../common/postgres-cache-store.service";
+import { RateLimitCountersRepository } from "../common/rate-limit-counters.repository";
 import { CACHE_STORE } from "../common/cache-store.interface";
 
 @Module({
@@ -10,6 +11,7 @@ import { CACHE_STORE } from "../common/cache-store.interface";
   providers: [
     VenuesService,
     VenuesRepository,
+    RateLimitCountersRepository,
     { provide: CACHE_STORE, useClass: PostgresCacheStoreService },
   ],
   exports: [VenuesService, VenuesRepository],

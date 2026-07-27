@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { VenueSource } from "@prisma/client";
 import { stringify } from "csv-stringify/sync";
 import { PrismaService } from "../../prisma/prisma.service";
+import { getStaleDays } from "../../common/rule-config";
 
 type DistrictGroupResult = {
   districtId: string;
@@ -18,8 +19,7 @@ export class AdminReportsService {
   constructor(private prisma: PrismaService) {}
 
   async dataQuality() {
-    const rawStaleDays = Number(process.env.RULES_STALE_DAYS ?? 90);
-    const staleDays = isNaN(rawStaleDays) ? 90 : rawStaleDays;
+    const staleDays = getStaleDays();
     const cutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000);
 
     const [byDistrict, districts, staleCount, bySourceRaw] = await Promise.all([

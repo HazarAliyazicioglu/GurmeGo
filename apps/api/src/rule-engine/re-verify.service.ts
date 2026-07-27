@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { getStaleDays } from "../common/rule-config";
 
 // Postgres unique_violation (SQLSTATE 23505) on the partial unique index added by migration
 // 20260727000000_add_contribution_queue_pending_edit_unique_index (one PENDING "EDIT" row per
@@ -17,7 +18,7 @@ export class ReVerifyService {
   constructor(private prisma: PrismaService) {}
 
   async enqueueStale(): Promise<number> {
-    const staleDays = Number(process.env.RULES_STALE_DAYS ?? 90);
+    const staleDays = getStaleDays();
     const cutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000);
     const staleVenues = await this.prisma.venue.findMany({
       where: { status: "PUBLISHED", verifiedAt: { lt: cutoff } },
