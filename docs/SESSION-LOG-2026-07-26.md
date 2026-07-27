@@ -353,3 +353,74 @@ temiz" ile "bütün birlikte doğru" arasında fark var, ikisi de ayrı ayrı ge
 **PLAN 4B: GERÇEKTEN TAMAMLANDI.** `master`'a henüz merge yok (kullanıcı kararı: her şey bitince
 tek seferde). Sıradaki: Plan 4c (frontend düzeltmeleri) — `writing-plans` → `plan-red-team` →
 `subagent-driven-development`, aynı süreç.
+
+---
+
+## Plan 4c (frontend/admin düzeltmeleri) — plan-red-team (2026-07-26/27, 10 round)
+
+Plan 4c'nin implementasyon planı (`docs/superpowers/plans/2026-07-26-frontend-fixes.md`) Plan 4b'nin
+6 turunu aşarak 10 plan-red-team turu gerektirdi:
+
+- **Round 1-2:** klasik task-sözleşme çakışmaları (bir görev bir dosyayı üretiyor, başka bir görev
+  aynı dosyayı farklı şekilde tüketici olarak iddia ediyor) — üretici+tüketici tek task'ta
+  birleştirilerek çözüldü.
+- **Round 3-4:** planın hayali arayüzlere göre yazıldığının keşfi — `VenueMapLeaflet` marker array
+  almıyor (gerçek: `VenueMap` → `next/dynamic` ile `VenueMapCanvas`, bbox self-fetch), `createList`
+  yok (gerçek: `createFavoriteList(token, name)`), favoriler sayfası zaten tüm listeleri kart olarak
+  gösteriyor (switcher gereksiz), `VenueFilters`'ın prop'u `value` (`filters` değil). Bir Explore
+  agent ile ground-truth pass yapıldı; round 4 bu pass'in bile bazı satırları (örn.
+  `serializeFilters`'ın gerçekten `lat`/`lng` ürettiği) kaçırdığını buldu — **KALICI ders: bir
+  önceki pass'e güvenme, her rewrite'tan hemen önce şüpheli iddiaları tekrar `grep`/`Read` ile
+  doğrula.**
+- **Round 5 (en ciddi bulgu):** eski birleşik "discovery/map/quick-route" task'ını 3 dilime bölerken
+  (yeniden numaralandırma sırasında) **tüm bir görev (C1/C11/C12 hata yönetimi) sessizce plandan
+  düştü** — silinmedi, yalnızca unutuldu. Hiçbir yapısal kontrol bunu yakalamadı. **KALICI çözüm:**
+  plan başına her C-maddesinin hangi task'a atandığını gösteren açık bir çapraz-referans tablosu
+  eklendi; her rewrite'tan önce bu tablo tekrar doğrulanmalı.
+- **Round 6-10:** giderek küçülen yerel düzeltmeler — imkânsız test geçişleri (bir kategori
+  tıklandıktan SONRA auto-sort'un yine de tetiklenmesini beklemek, tasarımın kendi guard'ına aykırı),
+  eksik fixture alanları (`satisfies VenueListItem` ile TypeScript daraltma sorunu), design doc/plan
+  uyumsuzlukları (C4/C6/admin metni), gerçek dosyalarla son kez çapraz doğrulama.
+
+Round 10: **HAZIR**. Detaylı round-by-round bulgular ve gerekçeler `docs/superpowers/plans/
+2026-07-26-frontend-fixes.md`'nin başındaki "Round N plan-red-team" bölümlerinde kalıcı olarak
+kayıtlı (silinmedi, her round bir öncekinin üzerine yazılmadı, ekstra bağlam olarak korundu).
+
+## Plan 4c — subagent-driven-development (2026-07-27, 16/16 TAMAMLANDI)
+
+Tam ilerleme kaydı `.superpowers/sdd/progress.md`'de (worktree-lokal, git-ignored, ama commit
+hash'leri git log'da kalıcı). Özet:
+
+- **Task 1-2, 5-6, 8-13, 15:** tek seferde TEMİZ (bazılarında 1 kayda değer MINOR, davranışı
+  etkilemeyen). Task 5'in implementer'ı brief'in örnek `useMap()` mock'unun gerçek bir sonsuz
+  render döngüsü ürettiğini kendi kendine yakalayıp düzeltti (test her çağrıda yeni obje
+  döndürüyordu, `BoundsVenueLoader`'ın `[loadVisibleVenues, map]` effect'ini sonsuza tetikliyordu).
+- **Task 3 (hata yönetimi C1/C11/C12):** 2 fix turu. Round 1: `initialCheckPending` kullanıcı
+  null→gerçek geçişinde yeniden silahlanmıyordu + mount-time `getFavoriteLists` çağrısında
+  `.catch()` yoktu (2 MAJOR) artı 2 MINOR. Round 2: round 1'in düzeltmesi gerçek bir ESLint
+  regresyonu bıraktı (kayıtlı olmayan bir kuralı disable etmeye çalışmak) VE `handleClick`'in kendi
+  async zincirinde hâlâ açık bir race vardı (favorileme sırasında `venueId` değişirse yanlış mekan
+  favorilenmiş görünebilirdi) — `venue-map-leaflet.tsx`'in `latestRequest` deseni mirror'lanarak
+  düzeltildi.
+- **Task 7 (venue detail map):** 1 fix turu. React-Leaflet'in `MapContainer.center`'ının mount
+  sonrası immutable olması (aynı sorunun Task 5'te de çözüldüğü desen) `key={venue.id}` ile
+  düzeltildi; testin `focusVenue` modunu gerçekten kanıtlamadığı (yalnızca `center` tesadüfen
+  eşleşiyordu) bulgusu mock prop assertion'ıyla güçlendirildi.
+- **Task 12 (klavye erişilebilirliği C14):** review'da 3 MINOR (biri gerçek olmadığı Codex'in kendi
+  `@react-leaflet/core` kaynak kodu okumasıyla kanıtlandı — mock harness sadakatsizliği, üretim
+  bug'ı değil); tek gerçek eksik test kapsamı (`focusVenue` durumu için tam assertion) doğrudan
+  eklendi.
+- **Task 14 (boutique/openNow toggle, en acil düzeltme):** 1 fix turu. Toggle butonu düzeltildi
+  ama `serializeFilters`'ın kendisi hâlâ `!== undefined` kontrolüyle savunmasızdı — herhangi bir
+  gelecekteki çağıran `isBoutique:false` geçerse yine 400'e düşerdi. `openNow`'un zaten kullandığı
+  truthy-check desenine (`=== true`) çevrildi, doğrudan-çağrı regresyon testiyle kanıtlandı.
+
+**Task 16 (final regresyon, 2026-07-27):** apps/web 111/111 test + tsc temiz; apps/admin 39/40
+(1 hata Plan 4c'den TAMAMEN bağımsız, pre-Plan-4c baseline'da (`1fc7333`) da başarısız olduğu
+doğrulandı — `getQueue` non-REPORT item reddi eksik, ayrı bir oturumda düzeltilmeli);
+packages/api-client 2/2; `turbo typecheck lint` 0 hata (yalnızca 2 önceden kabul edilmiş
+any/unused uyarısı). C1-C14 çapraz-kontrolü: plan'ın kendi tablosundaki her madde tam olarak bir
+task'a atanmış, kayıp/çift yok.
+
+**PLAN 4C: 16/16 TAMAMLANDI.** Sıradaki: mandatory final whole-branch review (Codex-yönlü
+`code-reviewer`, Plan 4b'nin sürecini tekrarlayarak — round round TEMİZ'e kadar).
