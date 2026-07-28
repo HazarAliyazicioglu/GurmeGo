@@ -54,8 +54,31 @@ seçti** (GLM veya self-review'ı reddetti).
   hâlâ bağımsız kaldığı, yeni e2e'nin gerçekten JWT guard zincirini çalıştırdığı, getQueue
   teşhisinin doğruluğu). Testler yeşil (tüm 5 paket, apps/admin dahil 0 hata) ama bu 3-4 madde
   yargı gerektiriyor, testlerle yakalanamaz — review tamamlanmadan TEMİZ sayılamaz.
+- Plan 4'ün `idea-red-team` adımı da aynı Codex kotasına bağlı — aynı 2026-08-01 23:26'yı bekliyor.
 - Master'a merge YAPILMAYACAK (Task 26 review'ı temizlenene kadar, ayrıca kullanıcının "hepsi
   bitince tek seferde" kararı hâlâ geçerli).
+
+## Bu oturumda (2026-07-29) kota beklerken yapılanlar
+Kullanıcı talimatı: "önce döküman temizleme, sonra durmadan Plan 4 için Codex'e kadar gereken her
+şeyi hallet." İkisi de tamamlandı:
+1. **Doküman temizliği** (commit `cd9084c`): `docs/CHANGELOG.md`'nin 2026-07-25'ten beri hiç
+   girdisi olmayan büyük boşluğu (Plan 4b, Plan 4c, AUDIT, Task 17-26 — hiçbiri kayıtlı değildi)
+   tek bir konsolide girdiyle dolduruldu; birkaç iddia (isBoutique status guard, REPORT onayının
+   artık verifiedAt'e dokunmaması, open-now filtresi, eslint kural seviyesi) gerçek kodda grep
+   ile doğrulandı, varsayımla yazılmadı. `docs/RISK-MITIGATION.md` ve `docs/AUDIT-2026-07-26.md`'ye
+   "bu artık tarihsel kayıt, aktif eylem listesi değil" işaret notu eklendi.
+2. **Plan 4 tasarım taslağı** (commit `b9045a5`,
+   `docs/superpowers/specs/2026-07-29-infra-launch-design.md`): Provisioning + Auth↔User sync +
+   KVKK + pilot event-capture — dört kalem tek taslakta, açık bağımlılık sıralamasıyla (Faz A-E).
+   **`idea-red-team` ÇALIŞTIRILMADI** (Codex kotası tükendi) — kullanıcı önce kendi gözden
+   geçirmeli, özellikle taslağın §7'sindeki 5 açık varsayım (event-capture kendi tablo mu/3.
+   parti mi, hesap-silme akışı kapsamda mı, tek plan mı/bölünsün mü, KVKK hukuki onay kapsamda mı,
+   gerçek hesap açma zamanlaması) kullanıcı kararı gerektiriyor.
+
+## Sıradaki adım (kota dönünce)
+1. Task 26'nın review'ını gerçek Codex ile tekrar çalıştır (prompt hazır).
+2. Kullanıcı Plan 4 taslağını gözden geçirip §7'deki açık noktalara karar verince, `idea-red-team`
+   çalıştır.
 
 ## Yakın kararlar
 - Round 1-10 red-team kayıtları: docs/superpowers/plans/2026-07-26-frontend-fixes.md (plan
