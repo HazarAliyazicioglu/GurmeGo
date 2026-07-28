@@ -5,6 +5,82 @@ değiştirildi, neden. En yeni en üstte.
 
 ---
 
+## 2026-07-26/28 — Kapsamlı A-Z denetim + Plan 4b/4c + post-merge sertleştirme (Task 17-26)
+
+### Durum
+Bu girdi, 2026-07-25'in "Ertelenen takip maddeleri" listesinden bu yana geçen üç büyük çalışma
+turunu tek yerde özetler — hiçbiri o tarihten beri CHANGELOG'a girmemişti (detayları
+`docs/SESSION-LOG-2026-07-26.md`'de tam kronoloji olarak var, bu yalnızca özet + karar kaydı).
+
+### 1. Kapsamlı A-Z denetim (`docs/AUDIT-2026-07-26.md`, commit `9d6bead`)
+Plan 1-4a'nın tamamı iki bağımsız Codex tam-kaynak denetiminden geçirildi (backend+shared ayrı,
+web+admin ayrı). Verdikt: **"pilot kullanıcılarına açılmaya hazır değil"** — Backend 1 CRITICAL +
+16 HIGH, Frontend 9 HIGH + 18 MEDIUM. En kritik bulgu (A1): admin panelinden/API'den hiçbir mekan
+`PUBLISHED` durumuna geçemiyordu — `status` alanı create/update şemasında hiç yoktu, yani pilotun
+tek amacı (30-45 mekanı gerçek kullanıcıya göstermek) bu haliyle imkansızdı.
+
+### 2. Plan 4b (backend düzeltmeleri, 16/16, commit aralığı `2ef1db6..9c6b7e6`)
+Denetimdeki A1/A3/A4 + B3-B16'nın tamamı tek planda ele alındı. `plan-red-team` 6 tur gerektirdi
+(en ciddi bulgu: bir şema değişikliğinin gerçek tüketicisi 2-3 task sonra düzeltiliyordu — aynı
+sınıf hata 3 kez farklı alan çiftinde tekrarlandı). Ürün kararı: REPORT onayı artık `verifiedAt`'i
+kendi başına güncellemiyor ("onay = rapor haklı, düzeltme ayrı admin-update adımında olur");
+konum `X-User-Location` header'ına taşındı (ADR 004, NFR-04). Final whole-branch review 2 fix
+turu gerektirdi (partial-coordinate false-reverify bug'ı, admin-queue query şema karışıklığı),
+3. turda TEMİZ.
+
+### 3. Plan 4c (frontend/admin düzeltmeleri, 16/16)
+Denetimdeki C1-C14'ün tamamı. `plan-red-team` **10 tur** gerektirdi — en ciddi bulgu (round 5):
+bir görevi 3'e bölerken yeniden numaralandırma sırasında tüm bir task (C1/C11/C12 hata yönetimi)
+sessizce plandan düştü; kalıcı çözüm olarak her C-maddesinin hangi task'a atandığını gösteren
+çapraz-referans tablosu eklendi. Final whole-branch review TEMİZ (0 BLOCKER/MAJOR, 2 kozmetik
+MINOR düzeltildi).
+
+### 4. Task 17-26 — post-Plan-4c full-codebase review + sertleştirme (bu worktree'de, henüz merge yok)
+Kullanıcı isteğiyle: Plan 1-4c'nin TAMAMI (apps/api, apps/web, apps/admin) ayrıca üç bağımsız
+full-codebase Codex review'undan geçirildi (Plan 4b/4c'nin task-bazlı review'larının yakalayamadığı
+şeyleri bulmak için). Bulunan 1 BLOCKER + çok sayıda MAJOR/MINOR, severity sırasıyla (Task 17-25)
+düzeltildi, her fix bağımsız Codex re-review'dan TEMİZ geçti. En önemlisi: **JWT `user_role` claim
+case uyuşmazlığı** (DB'de uppercase, guard'larda lowercase karşılaştırma — canlıda hiç fark
+edilmemiş, çünkü gerçek Supabase custom access token hook henüz kurulu değil) hem apps/api hem
+apps/admin'de kapatıldı. Ardından TÜM bu fix'leri kapsayan yeni bir final whole-branch review
+(16 commit) çalıştırıldı; bu da 9 task'ın TEK TEK doğru ama BİRLİKTE eksik bıraktığı 1 BLOCKER +
+4 MAJOR + 3 MINOR gerçek cross-task entegrasyon sorunu buldu (CI'da Task 20'nin yeni zorunlu
+`RULES_*` env'leri eksikti; admin-queue urgency limit'ten SONRA değil önce hesaplanmalıydı;
+`docs/rule-engine.md`'nin re_verify öncelik seviyesi atlanmıştı; favoriler'in render-time
+session-clear'ı `newListName`/`creating`'i unutmuştu; kuyruk/import'un 401 yolu `signOut()`'u
+await etmiyordu). Task 26 olarak hepsi düzeltildi — **apps/admin ilk kez tarih boyunca 60/60,
+sıfır hata.** Task 26'nın kendi review'ı Codex kotası tükendiği için (dönüş: 2026-08-01 23:26)
+henüz tamamlanmadı — ayrıntı `docs/STATE.md`'de.
+
+### Bu turda kapanan, 2026-07-25'in "Ertelenen takip maddeleri" listesindeki eski maddeler
+- ~~RateLimitGuard `req.ip` kullanıyor, `trustProxy` yok~~ → Task 19'da `TRUST_PROXY_HOPS` eklendi.
+- ~~`rate_limit_counters` hiç temizlenmiyor~~ → Task 21'de saatlik cron eklendi.
+- ~~REPORT onayı düzeltme uygulamadan `verifiedAt`'i yeniliyor~~ → Plan 4b'nin ürün kararıyla
+  çözüldü (yukarıda #2); kodda doğrulandı (`admin-queue.service.ts:143-150`, REPORT dalı artık
+  `Venue`/`VenueVersion`'a hiç dokunmuyor).
+- ~~`isBoutique` DRAFT'ta true olabiliyor~~ → `boutique.service.ts:14`'te `status !== "PUBLISHED"`
+  kontrolü var, kodda doğrulandı (Plan 4b kapsamında düzeltilmiş).
+- ~~Plan 1: açık/kapalı (open-now) filtresi hiç implemente edilmedi~~ → var, `venue-filters.tsx`'te
+  implementasyon doğrulandı (Plan 4b/4c + Task 18'in midnight-wraparound fix'i kapsamında).
+- ~~Auth: JWT `user_role` role-case uyuşmazlığı~~ → Task 17'de kapatıldı (yukarıda). **Not:** custom
+  access token hook'un kendisi (Supabase projesi kurulunca) hâlâ ayrı, gerçek provisioning'e bağlı
+  bir iş — bu madde kısmen açık kalıyor, bkz. aşağıdaki "hâlâ açık" listesi.
+
+### Hâlâ açık kalan eski maddeler (doğrulanmadı veya bilinçli olarak ertelendi)
+- eslint `no-explicit-any`/`no-unused-vars` hâlâ `"warn"` (`eslint.config.js:23-24`) — `"error"`a
+  sıkılaştırma yapılmadı, bilinçli erteleme (pilot ölçeğinde disiplin sorunu değil).
+- Supabase Auth↔Prisma `User` senkronizasyonu (custom access token hook) — gerçek Supabase projesi
+  kurulmadan test edilemez, Plan 4 (Infra/CI/KVKK/pilot) kapsamına düşüyor.
+- Pilot karar metrikleri (Maps'e gitme/kaydetme/paylaşma, 4. hafta dönüş) için analytics/event-
+  capture kodu hâlâ yok — Plan 4 kapsamına düşüyor.
+- Gerçek Railway/Vercel/Supabase provisioning yapılmadı — Plan 4 kapsamına düşüyor.
+- Plan 2'nin E2E suite kapsamı, `useGeolocation` çift-mount, `setVenues` sıra koruması — bu
+  oturumda doğrulanmadı, ayrı bir incelemeyi hak ediyor.
+- Plan 3'ün birkaç admin controller'ındaki zararsız çift `@UseGuards(RolesGuard)` — düşük öncelik,
+  kod kalitesi notu, davranış etkisi yok.
+
+---
+
 ## 2026-07-25 — Plan 1/2/3 tamamlandı, Plan 4a red-team NO-GO + küçültme
 
 ### Durum
