@@ -1,10 +1,17 @@
-# Plan 4 (Infra/CI/KVKK/Pilot Launch) — Design
+# Plan 4 (Infra/CI/KVKK/Pilot Launch) — Design [ARŞİV — BÖLÜNDÜ]
 
-**Tarih:** 2026-07-29 · **Durum:** Taslak — `idea-red-team` (Codex) henüz çalıştırılmadı, kota
-2026-08-01 23:26'ya kadar dolu. Kullanıcı onayı bekliyor.
+**Durum (2026-07-29, kullanıcı kararıyla):** Bu tek taslak, kullanıcının §7'deki açık sorulara
+verdiği cevaplar sonrası **iki ayrı plana bölündü** — gerekçe: KVKK/event-capture normal TDD/kod
+akışına giriyor, provisioning ise kod üretmeyen, hesap açma/ödeme gerektiren, farklı bir yürütme
+şekli (runbook) gerektiren bir iş. Bu dosya artık yalnızca tarihsel kayıt:
 
-İlgili: [infrastructure.md](../../infrastructure.md) · [prd.md](../../prd.md) §4-5 ·
-[CHANGELOG.md](../../CHANGELOG.md) "2026-07-26/28" girdisi · [STATE.md](../../STATE.md)
+- **[Plan 4d — KVKK + Event-Capture + Hesap Silme](2026-07-29-plan4d-kvkk-analytics-design.md)**
+  (aktif taslak, `idea-red-team` bekliyor)
+- **[Plan 4e — Provisioning + Auth-Sync + Go-Live Runbook](2026-07-29-plan4e-provisioning-runbook-design.md)**
+  (aktif taslak, `idea-red-team` bekliyor)
+
+Aşağıdaki içerik yalnızca ilk taslağın tam metni olarak korunuyor (nasıl bölündüğünü göstermek
+için); güncel çalışma iki yeni dosyada.
 
 ---
 

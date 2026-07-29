@@ -67,18 +67,30 @@ Kullanıcı talimatı: "önce döküman temizleme, sonra durmadan Plan 4 için C
    artık verifiedAt'e dokunmaması, open-now filtresi, eslint kural seviyesi) gerçek kodda grep
    ile doğrulandı, varsayımla yazılmadı. `docs/RISK-MITIGATION.md` ve `docs/AUDIT-2026-07-26.md`'ye
    "bu artık tarihsel kayıt, aktif eylem listesi değil" işaret notu eklendi.
-2. **Plan 4 tasarım taslağı** (commit `b9045a5`,
-   `docs/superpowers/specs/2026-07-29-infra-launch-design.md`): Provisioning + Auth↔User sync +
-   KVKK + pilot event-capture — dört kalem tek taslakta, açık bağımlılık sıralamasıyla (Faz A-E).
-   **`idea-red-team` ÇALIŞTIRILMADI** (Codex kotası tükendi) — kullanıcı önce kendi gözden
-   geçirmeli, özellikle taslağın §7'sindeki 5 açık varsayım (event-capture kendi tablo mu/3.
-   parti mi, hesap-silme akışı kapsamda mı, tek plan mı/bölünsün mü, KVKK hukuki onay kapsamda mı,
-   gerçek hesap açma zamanlaması) kullanıcı kararı gerektiriyor.
+2. **Plan 4 tasarım taslağı, kullanıcı cevaplarıyla ikiye bölündü:** İlk taslak
+   (`docs/superpowers/specs/2026-07-29-infra-launch-design.md`, artık ARŞİV) kullanıcıya 5 açık
+   soru sordu. Kullanıcı cevapları: (1) event-capture kendi Postgres tablosu (üçüncü parti değil),
+   (2) hesap silme akışı bu faza dahil + admin'de görünür olsun, (3) provisioning ile
+   KVKK/analytics ayrı plana bölünsün (kullanıcı da bağımsız aynı sonuca vardı), (4) KVKK hukuki
+   onayı en sona bırakıldı, (5) "hesap açma/ödeme" Supabase/Railway/Vercel/Cloudflare gerçek
+   hesapları anlamına geliyor açıklandı. Sonuç iki yeni taslak:
+   - **Plan 4d** (`docs/superpowers/specs/2026-07-29-plan4d-kvkk-analytics-design.md`) — KVKK
+     metni + `AnalyticsEvent` tablosu/event-capture + hesap silme akışı. Tamamen kod+doküman,
+     normal TDD/`subagent-driven-development` ile yürütülebilir, gerçek hesap gerektirmez. 4 açık
+     soru kaldı (§4): Supabase Auth kaydı da silinsin mi yoksa yalnızca Prisma User mı, soft-delete
+     mi ayrı log tablosu mu, favoriden çıkarma "karar eylemi" sayılır mı, anonim kullanıcı
+     event'leri de yakalansın mı.
+   - **Plan 4e** (`docs/superpowers/specs/2026-07-29-plan4e-provisioning-runbook-design.md`) —
+     gerçek provisioning + auth-sync hook + go-live. Kod üretmiyor, bir runbook — her hesap açma/
+     ödeme adımında kullanıcı onayı zorunlu, `subagent-driven-development`'ın diff-review döngüsüne
+     uymuyor. 3 açık soru kaldı (§6): bütçe/zamanlama, domain durumu, admin erişim kısıtlama
+     yöntemi.
+   **Her iki plan için de `idea-red-team` ÇALIŞTIRILMADI** (Codex kotası tükendi).
 
 ## Sıradaki adım (kota dönünce)
 1. Task 26'nın review'ını gerçek Codex ile tekrar çalıştır (prompt hazır).
-2. Kullanıcı Plan 4 taslağını gözden geçirip §7'deki açık noktalara karar verince, `idea-red-team`
-   çalıştır.
+2. Plan 4d ve Plan 4e'nin kalan açık sorularına kullanıcı karar verince (veya doğrudan
+   `idea-red-team`'e sorulsun denirse), ikisini de ayrı ayrı `idea-red-team`'den geçir.
 
 ## Yakın kararlar
 - Round 1-10 red-team kayıtları: docs/superpowers/plans/2026-07-26-frontend-fixes.md (plan
