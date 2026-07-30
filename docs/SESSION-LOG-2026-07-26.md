@@ -7,7 +7,159 @@ dosya her anlamlı adımdan sonra güncellenir — en yeni durum en üstte "ŞU 
 
 ---
 
-## ŞU AN NEREDEYİZ (en son güncelleme: Plan 4b/4c tasarımı idea-red-team'den HAZIR aldı, writing-plans'a geçiliyor)
+## ŞU AN NEREDEYİZ (en son güncelleme: 2026-07-30 — Codex kotası bekleniyor, iki plan taslağı hazır)
+
+**Branch:** `worktree-mvp-backend-foundation` (worktree: `.claude/worktrees/mvp-backend-foundation`).
+`master`'a HİÇBİR ŞEY merge edilmedi — kullanıcı kararı, hepsi bitince tek seferde.
+
+**Tamamlanan planlar:** Plan 1 (24/24), Plan 2 (12/12), Plan 3 (7/7), Plan 4a (3/3), Plan 4b
+(16/16), Plan 4c (16/16) — hepsi final whole-branch review + zorunlu Codex cross-model-review'dan
+TEMİZ geçti. Ayrıntı: bu dosyanın altındaki ilgili bölümler (kronolojik sırayla).
+
+**Plan 4c'den SONRA, henüz merge edilmemiş branch üzerinde ek bir "post-merge sertleştirme" turu
+yapıldı (Task 17-26, 2026-07-26/30 arası) — bu bölüm o turun TAM özeti:**
+
+Kullanıcı isteği (2026-07-26): "Plan 1'den 4c'ye kadar HER ŞEY'i (apps/api, apps/web, apps/admin)
+teste ve review'a sok, detaylı ve parça parça." Üç paketin TAM kaynak kodu ayrı ayrı Codex'e
+(`codex exec`, tam kaynak inline verilerek) full-codebase review ettirildi:
+- apps/api: 0 BLOCKER, çok sayıda MAJOR/MINOR.
+- apps/web: 0 BLOCKER, 5 MAJOR.
+- apps/admin: **1 BLOCKER** (JWT `user_role` claim case uyuşmazlığı — DB'de uppercase enum,
+  guard'larda lowercase karşılaştırma; production'da hiç fark edilmemiş çünkü gerçek Supabase
+  custom access token hook henüz kurulu değil), 2 MAJOR.
+
+Kullanıcı: "büyükten küçüğe her türlü sorunu çöz, düzelttiğini tekrar review ve testten geçir."
+Bulgular severity sırasıyla Task 17-25 olarak `subagent-driven-development` disipliniyle
+(implementer sonnet → code-reviewer Codex-yönlendirmeli → bulgu varsa fix → re-review, TEMİZ
+oluncaya kadar) yürütüldü:
+
+| Task | Konu | Sonuç |
+|---|---|---|
+| 17 | BLOCKER: JWT rol-case (apps/api `jwt-auth.guard.ts` + apps/admin `auth-context.tsx`) | TEMİZ, ilk turda |
+| 18 | apps/api MAJOR: keyset pagination cursor, openNow gece-yarısı sarması, 3 race condition (row-lock/conditional updateMany), 404 dönüşümleri, reports venue-existence kontrolü | TEMİZ (1 non-blocking MINOR) |
+| 19 | apps/api MAJOR: rate-limit env validasyonu, Fastify trustProxy, bbox alan/satır tavanı, admin-queue pagination limiti, JWKS_URL requireEnv güvenliği | TEMİZ, ilk turda |
+| 20 | apps/api mimari: raw SQL `postgres-cache-store.service.ts`'ten `rate-limit-counters.repository.ts`'e taşındı (ADR 002), rule-engine eşikleri (`rule-config.ts`) tek zorunlu kaynağa toplandı, hardcoded fallback yok | 1 fix turu (4 test-kalitesi MINOR'ı — vestigial env atamaları, zayıf assertion'lar), sonra TEMİZ |
+| 21 | apps/api MINOR küme (7 bulgu: `any` kaldırma, admin-export format validasyonu, favorites venueId UUID validasyonu, csv-import off-by-one + async parsing, rate_limit_counters temizlik cron'u, yanıltıcı queue-sort yorumu) | TEMİZ, ilk turda |
+| 22 | apps/web MAJOR: SSR pagination metadata akışı, `getVenueBySlug` 404-vs-diğer-hata ayrımı (`ApiHttpError`), **favoriler sayfası session-değişimi privacy bug'ı** | **3 fix turu** — round 1 fix'inde reviewer 2 YENİ BLOCKER buldu (privacy leak render-timing'de hâlâ vardı: `useEffect` tabanlı temizlik commit'ten SONRA çalışıyordu, tek bir committed frame User A'nın verisini User B'nin oturumunda gösterebiliyordu; create-list yanıtı guard'sızdı); round 2'de 2 testin bu class of bug'ı GERÇEKTEN ayırt etmediği bulundu (reviewer fix'i geçici geri alıp testin yine geçtiğini kanıtladı) → Profiler-tabanlı commit-probe testiyle güçlendirildi; round 3'te o genişletilmiş testlerin de dar kapsamlı olduğu bulundu (yalnızca TEK senaryo kanıtlıyordu, "hiçbir zaman" gibi genel iddiayı değil) → daha da genişletildi. TEMİZ. |
+| 23 | apps/web MINOR: `favorite-button.tsx` pending state'i request-generation counter ile korundu (mevcut click-guard'dan BİLİNÇLİ ayrı tutuldu), `venue-detail.tsx`'in `googleRating` falsy-check'i `!= null`'a çevrildi (0 geçerli bir puan) | TEMİZ (1 kozmetik test-yorumu MINOR'ı ile) |
+| 24 | apps/admin MAJOR: `kuyruk/page.tsx` refetch race'i request-counter ile kapatıldı, 401→signOut+redirect vs 403→izin-mesajı ayrımı eklendi | 1 fix turu (`AuthProvider`'ın `value`/`signOut` referansının `useMemo`/`useCallback` ile stabilize edilmesi — MINOR, sonsuz döngü değildi ama gereksiz ekstra refetch riski), TEMİZ |
+| 25 | apps/admin MINOR: `erisim-yok` (403) sayfasına çıkış butonu eklendi | TEMİZ, ilk turda |
+
+**Önemli metodolojik olay:** Task 25'in review'ında reviewer'ın Codex'e delege ETMEDİĞİ (kendi
+başına Sonnet olarak review yapıp "TEMİZ" dediği) fark edildi — kendi raporunda dürüstçe itiraf
+etti. Aynı commit gerçek Codex-yönlendirmeli review'a tekrar sokuldu, TEMİZ doğrulandı. **KALICI
+DERS: her review raporunda Codex'in GERÇEKTEN çağrıldığını (token kullanımı, session id gibi somut
+kanıtla) teyit et, rapor formatına/self-report'a güvenme.**
+
+**Task 17-25 bitince kullanıcı bir final whole-branch review istedi** (d268f96..1ecbb2e, 16
+commit, Task 17-25'in TAMAMI tek diff'te). Codex (`model_reasoning_effort=high`) 9 task'ın TEK TEK
+doğru ama BİRLİKTE eksik bıraktığı **1 BLOCKER + 4 MAJOR + 3 MINOR gerçek cross-task entegrasyon
+sorunu** buldu:
+- **BLOCKER:** `.github/workflows/ci.yml`'nin smoke-API adımı Task 20'nin yeni zorunlu
+  `RULES_*` env değişkenlerini set etmiyordu — temiz bir CI çalışması artık `/health` smoke'unu
+  hiç boot edemezdi.
+- **MAJOR 1:** `admin-queue.service.ts`'te `take: limit` urgency hesaplanmadan ÖNCE uygulanıyordu
+  — 100. sıradan sonraki acil (urgent) item'lar asla listeye giremezdi.
+- **MAJOR 2:** `docs/rule-engine.md`'nin gerçekten talep ettiği bir `re_verify` öncelik seviyesi
+  (tier) atlanmıştı; koddaki yorum bunun "hiçbir dokümanda istenmediğini" iddia ediyordu — bu
+  iddia YANLIŞTI (Codex dokümanı bizzat okuyup doğruladı).
+- **MAJOR 3:** `favoriler/page.tsx`'in render-time session-clear'ı yalnızca `lists`'i temizliyordu,
+  `newListName`/`creating` gibi diğer session-scoped UI state'i unutmuştu — aynı sınıf privacy
+  sızıntısının küçük ölçekli bir tekrarı.
+- **MAJOR 4:** `kuyruk`/`import` sayfalarının 401 yolu `signOut()`'u `await` etmiyordu (veya
+  hata dönüşünü kontrol etmiyordu) — `erisim-yok`/`layout.tsx`'in kendi doğru deseniyle tutarsız.
+- **MINOR'lar:** `favorite-button.tsx`'in dual-counter'ı identity değişiminde reset olmuyordu;
+  JWT guard→403 zincirini GERÇEKTEN uçtan uca test eden bir e2e yoktu (var olanlar hep bir yerde
+  bypass ediyordu); apps/admin'in bilinen tek eski test hatası aslında yapısal olarak imkansız bir
+  senaryoyu test ediyordu (production `getQueue` her zaman yalnızca `type=REPORT` gönderiyor).
+
+Hepsi **Task 26** olarak tek seferde (5 commit: `a3832d1`, `8f4ed9b`, `911189d`, `cd4e875`,
+`c0e2e80`) düzeltildi. Sonuç: **apps/admin ilk kez tarih boyunca 60/60, sıfır hata** (eski
+`getQueue` baseline hatası da bu turda gerçekten kapandı). Tüm 5 paket (apps/api 225/225,
+apps/web 132/132, apps/admin 60/60, packages/api-client 7/7, packages/shared 50/50) yeşil,
+`tsc --noEmit` ve `eslint` temiz.
+
+**Task 26'nın kendi review'ı Codex kotasının tükenmesiyle bloke oldu** — `codex exec` iki ayrı
+denemede de ("gerçek 8 maddelik prompt" ve "sadece OK yaz" minimal prova) aynı hatayı verdi:
+`ERROR: You've hit your usage limit ... try again at Aug 1st, 2026 11:26 PM`. Bu prompt-boyutu
+veya `model_reasoning_effort` sorunu DEĞİL — gerçek ChatGPT Plus kota tükenmesi, **kota sıfırlanma:
+2026-08-01 23:26 (Türkiye saati).** Global CLAUDE.md kuralı gereği ("kota bitince sessizce başka
+modele kaçma — dur, kullanıcıya söyle") kullanıcıya durum bildirildi; kullanıcı GLM'e geçmeyi veya
+self-review'ı kabul etmedi, **1 Ağustos'u beklemeyi seçti.**
+
+**Bu bekleme sırasında (2026-07-29/30) kullanıcı iki iş istedi, ikisi de tamamlandı:**
+
+1. **Doküman temizliği** (commit `cd9084c`): `docs/CHANGELOG.md`'nin 2026-07-25'ten beri (Plan 4b,
+   Plan 4c, tam A-Z denetim, Task 17-26 dahil hiçbiri) kayıtsız kalan büyük boşluğu tek konsolide
+   girdiyle dolduruldu. Birkaç eski "ertelenen madde" iddiası (isBoutique'ın artık `status !==
+   "PUBLISHED"` kontrolü içermesi, REPORT onayının artık `Venue`/`verifiedAt`'e hiç dokunmaması,
+   open-now filtresinin implemente edilmiş olması, eslint kuralının hâlâ `"warn"` seviyesinde
+   kalması) gerçek kodda `grep`'lenerek doğrulandı, varsayımla yazılmadı. `docs/RISK-MITIGATION.md`
+   ve `docs/AUDIT-2026-07-26.md`'ye "bu artık tarihsel kayıt, aktif eylem listesi değil" işaret
+   notu eklendi (ikisi de kendi içinde eski, çözülmüş kararlara "henüz karar verilmedi" diyordu).
+
+2. **Plan 4 (Infra/CI/KVKK/Pilot) tasarım taslağı** — kullanıcı talebi: "durmadan Plan 4 için
+   Codex'e kadar gerekli her şeyi hallet." STATE.md/SESSION-LOG'da dağınık duran dört kalem
+   (gerçek altyapı provisioning'i, Supabase Auth↔Prisma User senkronizasyonu, KVKK metinleri,
+   pilot karar metrikleri için event-capture) tek bir taslakta toplandı
+   (`docs/superpowers/specs/2026-07-29-infra-launch-design.md`, commit `b9045a5`) — 5 açık soru
+   ile kullanıcıya sunuldu. Kullanıcı cevapları (2026-07-29):
+   - Event-capture: **kendi Postgres tablosu**, üçüncü parti araç (Plausible/PostHog) DEĞİL.
+   - Hesap silme akışı: **kapsamda**, ayrıca **admin panelden görülebilir** olmalı.
+   - Provisioning ile KVKK/analytics: **ayrı plana bölünsün** — kullanıcı kendi kendine, benim
+     önerdiğim gerekçeyle (biri normal TDD/kod, diğeri hesap-açma/runbook — farklı yürütme şekli)
+     aynı sonuca ulaştı.
+   - KVKK metinlerinin hukuki onayı: **en sona bırakıldı**, bu planın kapsamında değil.
+   - "Hesap açma/ödeme" ne demek sorusuna: Supabase/Railway/Vercel/Cloudflare'de GERÇEK (bazıları
+     ücretli) hesaplar açmak olarak açıklandı.
+
+   Sonuç, taslak ikiye bölündü (commit `2ff0c50`), orijinal taslak ARŞİV olarak işaretlenip
+   içeriği korundu:
+   - **Plan 4d** — `docs/superpowers/specs/2026-07-29-plan4d-kvkk-analytics-design.md`: KVKK
+     aydınlatma/rıza metni + `AnalyticsEvent` tablosu/repository + 3 event noktası (`MAPS_CLICK`,
+     `FAVORITE_ADD`, `SHARE_CLICK`) + 4. hafta geri dönüş kohort raporu (admin panelde) + hesap
+     silme akışı (`DELETE /v1/me`, soft-delete/log kararı açık). Tamamen kod+doküman, gerçek
+     hesap gerektirmiyor, normal `subagent-driven-development`/TDD ile yürütülebilir. **4 açık
+     soru kaldı** (dosyanın §4'ü): (a) hesap silme Supabase Auth kaydını da mı siliyor yoksa
+     yalnızca Prisma `User`'ı mı; (b) admin görünürlüğü soft-delete (`deletedAt`) mi yoksa ayrı
+     PII-içermeyen bir log tablosu mu; (c) favoriden ÇIKARMA da "karar eylemi" sayılır mı yoksa
+     yalnızca EKLEME mi; (d) anonim (giriş yapmamış) kullanıcı event'leri de yakalanmalı mı.
+   - **Plan 4e** — `docs/superpowers/specs/2026-07-29-plan4e-provisioning-runbook-design.md`:
+     gerçek Supabase/Railway/Vercel/Cloudflare provisioning + Supabase Custom Access Token Hook
+     (Auth↔Prisma User sync, Task 17'nin role-case fix'inin production'da İLK KEZ gerçek veriyle
+     test edileceği yer) + gerçek env değerleri + gerçek smoke test + go-live. Kod ÜRETMİYOR —
+     `subagent-driven-development`'ın diff-review döngüsüne uymuyor, adım adım bir runbook olarak
+     tasarlandı; her hesap açma/ödeme adımında kullanıcı onayı ayrıca istenecek (genel proje
+     kuralı: geri dönüşü zor/parasal işlemler önce onay gerektirir). **3 açık soru kaldı**
+     (dosyanın §6'sı): (a) bütçe/zamanlama — adımlar ne zaman, hangi kartla; (b) domain zaten var
+     mı yoksa yeni mi alınacak; (c) admin paneli erişim kısıtlaması Vercel seviyesinde mi yoksa
+     yalnızca mevcut `RolesGuard`'a mı güvenilecek.
+
+   **`idea-red-team` (Codex) HİÇBİRİ İÇİN ÇALIŞTIRILMADI** — aynı kota bloğu.
+
+## SIRADAKİ ADIM (yeni bir oturum buradan devam etmeli)
+
+1. **Önce kontrol et:** kota gerçekten döndü mü (`codex exec "OK yaz"` gibi minimal bir prova ile,
+   büyük bir prompt harcamadan önce). Kota bilgisi: 2026-08-01 23:26 (Türkiye saati) — ama bu
+   oturumun kendi tahmini, kullanıcıdan taze bir teyit iyi olur.
+2. Task 26'nın (commit `1ecbb2e..c0e2e80`) review'ını gerçek Codex ile tekrar çalıştır. Review
+   paketi zaten üretilmiş olabilir (`.superpowers/sdd/2026-07-26-frontend-fixes/` altında, git-
+   ignored — yoksa `scripts/review-package` ile yeniden üret). 8 maddelik tam prompt bu dosyanın
+   yukarıdaki Task 26 bölümünde özetlenmiş bulguların doğrulanmasını istiyor.
+   - TEMİZ çıkarsa: final whole-branch review de tamamlanmış sayılır, kullanıcıya bildir, master'a
+     merge kararını sor (kullanıcının kendi kararı, otomatik yapılmaz).
+   - Bulgu çıkarsa: aynı fix→re-review döngüsüne devam et.
+3. Task 26 TEMİZ olduktan sonra: kullanıcıya Plan 4d ve Plan 4e'nin kalan açık sorularını
+   (yukarıda listelendi) sor, ya da kullanıcı "doğrudan Codex'e sorulsun" derse öyle ilerle.
+4. Plan 4d ve Plan 4e'yi (muhtemelen paralel, ikisi de bağımsız taslak) `idea-red-team`'den geçir
+   — her ikisi de HAZIR bloğu bekliyor. Round sayısı önceki planlarda 6-10 arasında değişti,
+   şaşırma.
+5. `idea-red-team` sonrası: `writing-plans` → `plan-red-team` → `subagent-driven-development`,
+   standart akış. Plan 4e'nin gerçek hesap-açma adımlarında MUTLAKA durup kullanıcı onayı al.
+
+---
+
+## (ESKİ) ŞU AN NEREDEYİZ (2026-07-26, Plan 4b/4c tasarımı idea-red-team'den HAZIR aldı, writing-plans'a geçiliyor)
 
 **Aktif iş:** Plan 4b (backend) + Plan 4c (frontend) tasarım dokümanları **5 idea-red-team
 turundan** geçti (4 PIVOT + son turda HAZIR). Bulgular her turda küçüldü: round 1 (7 gerçek
