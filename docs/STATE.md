@@ -31,35 +31,19 @@ gerçek hesap gerektirmez) ve **Plan 4e**'ye (gerçek provisioning+auth-sync+go-
    ikisini de `idea-red-team`'den geçir.
 
 ## Bloke olanlar
-- Task 26 review'ı + Plan 4d/4e'nin `idea-red-team`'i — ikisi de aynı Codex kotasını bekliyor
-  (2026-08-01 23:26).
-- Master'a merge yok (Task 26 review'ı temizlenene + kullanıcının "hepsi bitince" kararı gereği).
+- Task 26 review'ı + Plan 4d/4e'nin `idea-red-team`'i — ikisi de aynı Codex kotasını bekliyor.
+- Master'a merge yok (Task 26 temizlenene + "hepsi bitince tek seferde" kararı gereği).
 
-## Yakın kararlar
-- Round 1-10 red-team kayıtları: `docs/superpowers/plans/2026-07-26-frontend-fixes.md`,
-  `docs/SESSION-LOG-2026-07-26.md`.
-- Plan 4d/4e tasarımları: `docs/superpowers/specs/2026-07-29-plan4d-*.md` /
-  `2026-07-29-plan4e-*.md` (orijinal bölünmemiş taslak: `2026-07-29-infra-launch-design.md`,
-  artık arşiv).
+## Yakın kararlar / ertelenen maddeler
+- Round 1-10 red-team kayıtları + Plan 4d/4e tasarımları (`docs/superpowers/specs/2026-07-29-*`):
+  bkz. SESSION-LOG. Ertelenen küçük maddeler (venue-map-leaflet aria-label, Plan 2 E2E kapsamı,
+  Plan 3'ün zararsız çift `@UseGuards`): CHANGELOG "2026-07-26/28" girdisinin "hâlâ açık" bölümü.
 
-## Ertelenen/izlenen maddeler
-- `apps/web/src/app/favoriler/page.spec.tsx`'te `next/navigation` mock'u stabilize edildi;
-  kardeş spec dosyaları hâlâ eski desende — zararsız, biri `router`-bağımlı effect kazanırsa
-  gözden geçirilmeli.
-- `venue-map-leaflet.tsx`: marker mount sonrası `venue.name` değişirse `aria-label` bayat
-  kalabilir — test edilmemiş, pratikte risksiz kenar durum.
-- Plan 2 E2E kapsamı, `useGeolocation` çift-mount, Plan 3'ün zararsız çift `@UseGuards` — hiçbiri
-  bu oturumda doğrulanmadı, ayrı incelemeyi hak ediyor (CHANGELOG "2026-07-26/28" girdisi).
-
-## Denenmiş ve ELENMİŞ yaklaşımlar
-- Tam menü, semantic search, geniş kullanıcı katkısı (MVP'de), React Native (MVP'de), Gurme
-  Puanı/yorum (MVP'de): ELENDİ → Faz 2. KALICI.
-- Review/red-team'i tek turda bitirmeyi ummak: ELENDİ — Codex gerçekten TEMİZ/HAZIR diyene kadar
-  kesme. Aynı dosya/mantık birden fazla kez düzeltiliyorsa regresyon riski artıyor, azalmıyor.
-- Bir sözleşme değişikliğini tüketicisinden farklı task'a koymak: ELENDİ (defalarca). KALICI:
-  her plan rewrite'ında C/gereksinim → task çapraz-referans tablosu tut.
-- Bir review raporunun "TEMİZ" demesine, Codex'in gerçekten çağrıldığını doğrulamadan güvenmek:
-  ELENDİ (Task 25'te bir reviewer kendi başına Sonnet olarak review yapıp TEMİZ dedi). KALICI:
-  her review'da somut kanıt (token kullanımı, session id) iste.
-- Kota bittiğinde sessizce başka modele/self-review'a kaçmak: ELENDİ (global kural, Task 26'da
-  test edildi — kullanıcıya durup sorma doğru seçim oldu).
+## Denenmiş ve ELENMİŞ yaklaşımlar (KALICI dersler)
+- Tam menü/semantic search/geniş kullanıcı katkısı/React Native/Gurme Puanı (MVP'de): Faz 2'ye.
+- Review/red-team'i tek turda bitirmeyi ummak: ELENDİ — Codex TEMİZ/HAZIR diyene kadar kesme.
+- Bir sözleşme değişikliğini tüketicisinden farklı task'a koymak: ELENDİ (defalarca) — her plan
+  rewrite'ında C/gereksinim → task çapraz-referans tablosu tut.
+- Review raporunun "TEMİZ" demesine, Codex'in gerçekten çağrıldığı doğrulanmadan güvenmek: ELENDİ
+  (Task 25'te bir reviewer kendi başına review yapıp TEMİZ dedi) — her review'da somut kanıt iste.
+- Kota bittiğinde sessizce başka modele/self-review'a kaçmak: ELENDİ, kullanıcıya durup sor.
