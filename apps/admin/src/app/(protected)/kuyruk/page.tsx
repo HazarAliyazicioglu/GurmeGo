@@ -54,6 +54,16 @@ export default function KuyrukPage() {
   const identity = user?.id ?? null;
   const identityRef = useRef(identity);
   identityRef.current = identity;
+  // Seventh Codex cross-model review pass (Task 27, MAJOR): `identity` alone is the right signal
+  // for "should a stale-token call's response still apply" (a same-curator token refresh should),
+  // but it is the WRONG signal for "should a 401 from this call trigger signOut". A 401 on an OLD,
+  // already-superseded token is not reliable evidence the CURRENT session is invalid -- Supabase
+  // already refreshed to a new, presumably-valid token by the time this fires. Signing out based on
+  // that would forcibly log out a curator who is, in fact, still validly signed in. `currentTokenRef`
+  // is the correct guard specifically for "is this 401 still about the CURRENT token" -- independent
+  // of whether identity changed too.
+  const currentTokenRef = useRef(token);
+  currentTokenRef.current = token;
 
   // Shared 401 sign-out handler, used by both the refetch() 401 path and the mutation 401 path.
   // Established pattern (matches (protected)/layout.tsx and erisim-yok/page.tsx): Supabase's
@@ -104,6 +114,12 @@ export default function KuyrukPage() {
     } catch (err) {
       if (requestId !== latestQueueRequest.current) return; // stale error, a newer refetch is already in flight/resolved
       if (err instanceof ApiHttpError && err.status === 401) {
+        // Seventh Codex cross-model review pass (Task 27, MAJOR): if `token` (this call's own,
+        // captured at the top of `refetch`) no longer matches the CURRENT token, this 401 is about
+        // an already-superseded token (e.g. a same-curator refresh happened mid-call) -- not
+        // reliable evidence the current session is invalid. Silently drop it instead of signing out
+        // a curator who is, in fact, still validly signed in with a newer token.
+        if (token !== currentTokenRef.current) return;
         // Session expired server-side. Sign out to clear the stale client session too, then send
         // the curator back to login rather than showing a generic, unactionable error.
         // MAJOR fix (final whole-branch review): this used to fire-and-forget `signOut()` (not
@@ -144,7 +160,7 @@ export default function KuyrukPage() {
     });
   }
 
-  async function handleMutationError(err: unknown, requestIdentity: string | null) {
+  async function handleMutationError(err: unknown, requestIdentity: string | null, requestToken: string) {
     if (requestIdentity !== identityRef.current) {
       // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): the session changed while this
       // mutation was in flight -- this error (401 included) now belongs to a session that is no
@@ -156,6 +172,13 @@ export default function KuyrukPage() {
       return;
     }
     if (err instanceof ApiHttpError && err.status === 401) {
+      // Seventh Codex cross-model review pass (Task 27, MAJOR): `identity` matching is not enough
+      // to decide whether to sign out. If `requestToken` no longer matches the CURRENT token (a
+      // same-curator refresh happened mid-mutation), this 401 is about an already-superseded
+      // token, not reliable evidence the current session is invalid -- see `currentTokenRef`'s own
+      // comment above. Silently drop it instead of forcibly signing out a still-validly-signed-in
+      // curator.
+      if (requestToken !== currentTokenRef.current) return;
       // MAJOR fix (final whole-branch review): same unawaited/unchecked `signOut()` bug as
       // refetch()'s 401 path above — see handleSignOutFor401's comment for the established
       // await + `{ error }`-check pattern this now follows.
@@ -179,7 +202,7 @@ export default function KuyrukPage() {
       await approveQueueItem(requestToken, id);
       await refetch();
     } catch (err) {
-      await handleMutationError(err, requestIdentity);
+      await handleMutationError(err, requestIdentity, requestToken);
     } finally {
       removeMutatingId(id);
     }
@@ -195,7 +218,7 @@ export default function KuyrukPage() {
       await rejectQueueItem(requestToken, id);
       await refetch();
     } catch (err) {
-      await handleMutationError(err, requestIdentity);
+      await handleMutationError(err, requestIdentity, requestToken);
     } finally {
       removeMutatingId(id);
     }

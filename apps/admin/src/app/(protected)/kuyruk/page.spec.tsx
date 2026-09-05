@@ -537,6 +537,81 @@ describe("KuyrukPage", () => {
     expect(screen.getByTestId("empty-state")).toBeInTheDocument();
   });
 
+  // Seventh Codex cross-model review pass (Task 27, MAJOR): the previous pass's fix made
+  // handleMutationError's guard check `identity`, which is right for deciding whether to act at
+  // all, but WRONG for deciding whether a 401 should trigger signOut. If the SAME curator's token
+  // merely refreshed mid-mutation, the OLD (now-superseded) token can legitimately 401 -- that is
+  // NOT evidence the current session (with its new, valid token) is invalid. Signing out here would
+  // forcibly log out a curator who is, in fact, still validly signed in.
+  it("does not sign out the SAME curator when the mutation itself 401s using an old token that was superseded by a refresh mid-mutation", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // initial load, tok
+    let rejectApprove: (err: unknown) => void;
+    approveQueueItem.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectApprove = reject; }));
+    const { rerender } = render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+    await waitFor(() => expect(approveQueueItem).toHaveBeenCalledWith("tok", "q1"));
+
+    // SAME curator (u1), token silently refreshes.
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // effect-driven refetch, tok-refreshed
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-refreshed" },
+      role: "curator",
+      loading: false,
+      user: { id: "u1" },
+      signOut,
+    });
+    rerender(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING" }));
+
+    // The approve itself (still using the OLD, now-superseded "tok") fails with a 401 -- this must
+    // NOT sign out the still-validly-signed-in curator.
+    await act(async () => {
+      rejectApprove!(new ApiHttpError(401, "unauthorized"));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(signOut).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
+  // Same concern as above, but for refetch()'s OWN 401 path (triggered by a successful mutation's
+  // follow-up refetch using the old, superseded token) rather than the mutation call itself.
+  it("does not sign out the SAME curator when a follow-up refetch 401s using an old token that was superseded by a refresh mid-mutation", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // initial load, tok
+    let resolveApprove: (value: unknown) => void;
+    approveQueueItem.mockReturnValueOnce(new Promise((resolve) => { resolveApprove = resolve; }));
+    const { rerender } = render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+    await waitFor(() => expect(approveQueueItem).toHaveBeenCalledWith("tok", "q1"));
+
+    // SAME curator (u1), token silently refreshes.
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // effect-driven refetch, tok-refreshed
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-refreshed" },
+      role: "curator",
+      loading: false,
+      user: { id: "u1" },
+      signOut,
+    });
+    rerender(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING" }));
+
+    // The approve succeeds, triggering its own follow-up refetch() using the OLD "tok" -- that
+    // refetch itself now 401s. This must NOT sign out the still-validly-signed-in curator either.
+    getQueue.mockRejectedValueOnce(new ApiHttpError(401, "unauthorized"));
+    await act(async () => {
+      resolveApprove!(undefined);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(signOut).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
   it("shows the generic mutation-failed message (distinct from the 403 permission message) on a plain/500 error", async () => {
     getQueue.mockResolvedValueOnce([BASE_ITEM]);
     approveQueueItem.mockRejectedValueOnce(new Error("network error"));
