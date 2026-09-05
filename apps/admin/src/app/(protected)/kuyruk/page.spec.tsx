@@ -526,14 +526,16 @@ describe("KuyrukPage", () => {
     await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING" }));
 
     // The approve (still holding the OLD "tok" closure) now succeeds, triggering its own
-    // `refetch()` call using "tok" -- this must NOT be discarded, since identity never changed.
+    // `refetch()` call -- this must NOT be discarded, since identity never changed. Ninth Codex
+    // cross-model review pass: it now uses the FRESHEST token ("tok-refreshed"), not the stale
+    // closure's "tok", so it has the best chance of actually succeeding.
     getQueue.mockResolvedValueOnce([]); // the approved item is gone now
     await act(async () => {
       resolveApprove!(undefined);
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(getQueue).toHaveBeenCalledWith("tok", { status: "PENDING" });
+    expect(getQueue).toHaveBeenLastCalledWith("tok-refreshed", { status: "PENDING" });
     expect(screen.getByTestId("empty-state")).toBeInTheDocument();
   });
 
@@ -576,9 +578,13 @@ describe("KuyrukPage", () => {
     expect(push).not.toHaveBeenCalledWith("/giris");
   });
 
-  // Same concern as above, but for refetch()'s OWN 401 path (triggered by a successful mutation's
-  // follow-up refetch using the old, superseded token) rather than the mutation call itself.
-  it("does not sign out the SAME curator when a follow-up refetch 401s using an old token that was superseded by a refresh mid-mutation", async () => {
+  // Ninth Codex cross-model review pass (Task 27): refetch() now uses the FRESHEST token
+  // (`currentTokenRef.current`) for its actual request, not the possibly-stale closure value that
+  // triggered it -- so a successful approve's follow-up refetch, even one triggered from an OLD
+  // closure, always calls `getQueue` with the CURRENT token. If THAT genuinely current token then
+  // 401s, there is no fresher token left to blame it on -- this now correctly IS reliable evidence
+  // the current session is invalid, and signing out is the right behavior.
+  it("signs out when a follow-up refetch 401s using the CURRENT (already-freshest) token -- there is no fresher token left to explain it away", async () => {
     getQueue.mockResolvedValueOnce([BASE_ITEM]); // initial load, tok
     let resolveApprove: (value: unknown) => void;
     approveQueueItem.mockReturnValueOnce(new Promise((resolve) => { resolveApprove = resolve; }));
@@ -600,16 +606,17 @@ describe("KuyrukPage", () => {
     rerender(<KuyrukPage />);
     await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING" }));
 
-    // The approve succeeds, triggering its own follow-up refetch() using the OLD "tok" -- that
-    // refetch itself now 401s. This must NOT sign out the still-validly-signed-in curator either.
+    // The approve succeeds, triggering its own follow-up refetch() -- which now uses the CURRENT
+    // "tok-refreshed" token, not the stale "tok" the click originally captured. That call 401s.
     getQueue.mockRejectedValueOnce(new ApiHttpError(401, "unauthorized"));
     await act(async () => {
       resolveApprove!(undefined);
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(signOut).not.toHaveBeenCalled();
-    expect(push).not.toHaveBeenCalledWith("/giris");
+    expect(getQueue).toHaveBeenLastCalledWith("tok-refreshed", { status: "PENDING" });
+    expect(signOut).toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("/giris");
   });
 
   it("shows the generic mutation-failed message (distinct from the 403 permission message) on a plain/500 error", async () => {

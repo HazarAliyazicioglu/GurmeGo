@@ -106,20 +106,31 @@ export default function KuyrukPage() {
     // just-approved/rejected row stale on screen. `identity` doesn't change on a token refresh.
     if (identity !== identityRef.current) return;
     const requestId = ++latestQueueRequest.current;
+    // Ninth Codex cross-model review pass (Task 27, MAJOR): using `token` (this call's own,
+    // possibly stale closure value) for the actual request meant a same-curator follow-up refetch
+    // triggered after a token refresh would call `getQueue` with an already-superseded token -- if
+    // that token had truly been invalidated, the call 401s (harmlessly not signing out, per the
+    // fix below, but ALSO not refreshing the display, leaving the just-mutated row stale).
+    // `currentTokenRef.current` is always the freshest token as of this exact moment (kept in sync
+    // every render) -- capturing and using IT for the request means this call always has the best
+    // chance of actually succeeding and refreshing the display, regardless of how stale the
+    // closure that triggered it was.
+    const tokenForThisCall = currentTokenRef.current ?? token;
     try {
-      const data = await getQueue(token, { status: "PENDING" });
+      const data = await getQueue(tokenForThisCall, { status: "PENDING" });
       if (requestId !== latestQueueRequest.current) return; // a newer refetch has since started — discard this stale response
       setItems(data);
       setLoadError(null);
     } catch (err) {
       if (requestId !== latestQueueRequest.current) return; // stale error, a newer refetch is already in flight/resolved
       if (err instanceof ApiHttpError && err.status === 401) {
-        // Seventh Codex cross-model review pass (Task 27, MAJOR): if `token` (this call's own,
-        // captured at the top of `refetch`) no longer matches the CURRENT token, this 401 is about
-        // an already-superseded token (e.g. a same-curator refresh happened mid-call) -- not
-        // reliable evidence the current session is invalid. Silently drop it instead of signing out
-        // a curator who is, in fact, still validly signed in with a newer token.
-        if (token !== currentTokenRef.current) return;
+        // Seventh Codex cross-model review pass (Task 27, MAJOR): if `tokenForThisCall` (what THIS
+        // call actually sent -- the freshest token as of when it started, not necessarily `token`,
+        // the outer closure's own value) no longer matches the CURRENT token, ANOTHER refresh has
+        // happened since this call started, and this 401 is about an already-superseded token --
+        // not reliable evidence the current session is invalid. Silently drop it instead of signing
+        // out a curator who is, in fact, still validly signed in with a newer token.
+        if (tokenForThisCall !== currentTokenRef.current) return;
         // Session expired server-side. Sign out to clear the stale client session too, then send
         // the curator back to login rather than showing a generic, unactionable error.
         // MAJOR fix (final whole-branch review): this used to fire-and-forget `signOut()` (not
