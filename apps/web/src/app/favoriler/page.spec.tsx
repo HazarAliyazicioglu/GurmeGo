@@ -335,7 +335,73 @@ describe("FavorilerPage — a stale create-list request's `finally` does not clo
       await new Promise((r) => setTimeout(r, 0));
     });
 
+    // The button being disabled right after a successful submit is expected (the input is now
+    // empty) -- that alone doesn't prove `creating` was cleared. Typing new text and submitting
+    // again does: if `creating` were still stuck `true`, this second submit would be a no-op
+    // (handleCreateList's own `if (... || creating) return;` guard).
+    vi.mocked(createFavoriteList).mockResolvedValueOnce({
+      id: "list-2", userId: "user-a", name: "Second list", createdAt: "2026-01-01T00:00:00.000Z", favorites: [],
+    });
+    fireEvent.change(screen.getByLabelText(/liste adı/i), { target: { value: "Second list" } });
     expect(screen.getByRole("button", { name: /oluştur/i })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /oluştur/i }));
+    await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("token-a-refreshed", "Second list"));
+  });
+
+  // Sixth Codex cross-model review pass (Task 27, MAJOR): an EARLIER version of this guard
+  // compared `identity` (a plain string) instead of a counter. That flaw: if identity flips
+  // A -> B -> A while User A's OLD request is still in flight, and a NEW User A request then
+  // starts, the old request's captured identity ("user-a") matches `listsIdentityRef.current`
+  // again by the time it resolves -- indistinguishable from actually still being current. A
+  // dedicated monotonic counter (bumped by every identity change, never re-usable like a string)
+  // does not have this flaw.
+  it("does not let a request from BEFORE an A -> B -> A round trip clobber a NEW request from the same (returning) user A", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "user-a" },
+      loading: false,
+      session: { access_token: "token-a-1" },
+    });
+    vi.mocked(getFavoriteLists).mockResolvedValue([]);
+    let resolveOldA: (v: unknown) => void;
+    vi.mocked(createFavoriteList).mockImplementationOnce(
+      () => new Promise<unknown>((resolve) => { resolveOldA = resolve; }) as ReturnType<typeof createFavoriteList>,
+    );
+
+    const { rerender } = render(<FavorilerPage />);
+    await waitFor(() => expect(screen.getByLabelText(/liste adı/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/liste adı/i), { target: { value: "Old A list" } });
+    fireEvent.click(screen.getByRole("button", { name: /oluştur/i }));
+    await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("token-a-1", "Old A list"));
+
+    // A -> B
+    useAuthMock.mockReturnValue({ user: { id: "user-b" }, loading: false, session: { access_token: "token-b" } });
+    rerender(<FavorilerPage />);
+    await waitFor(() => expect(screen.getByLabelText(/liste adı/i)).toBeInTheDocument());
+
+    // B -> A (a NEW A session, e.g. a shared device signing back in)
+    useAuthMock.mockReturnValue({ user: { id: "user-a" }, loading: false, session: { access_token: "token-a-2" } });
+    rerender(<FavorilerPage />);
+    await waitFor(() => expect(screen.getByLabelText(/liste adı/i)).toBeInTheDocument());
+
+    // The returning User A starts a NEW create-list request -- held pending.
+    let resolveNewA: (v: unknown) => void;
+    vi.mocked(createFavoriteList).mockImplementationOnce(
+      () => new Promise<unknown>((resolve) => { resolveNewA = resolve; }) as ReturnType<typeof createFavoriteList>,
+    );
+    fireEvent.change(screen.getByLabelText(/liste adı/i), { target: { value: "New A list" } });
+    fireEvent.click(screen.getByRole("button", { name: /oluştur/i }));
+    await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("token-a-2", "New A list"));
+    expect(screen.getByRole("button", { name: /oluştur/i })).toBeDisabled();
+
+    // NOW the OLD (pre-round-trip) A request finally resolves. It must not touch the NEW request's
+    // own `creating` state.
+    await act(async () => {
+      resolveOldA!({ id: "list-old", userId: "user-a", name: "Old A list", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.getByRole("button", { name: /oluştur/i })).toBeDisabled();
+    void resolveNewA!; // never resolved -- this test only asserts the stale-old-A-resolution effect
   });
 });
 

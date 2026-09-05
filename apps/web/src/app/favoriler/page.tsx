@@ -21,6 +21,18 @@ export default function FavorilerPage() {
   // came from the GET fetch or from a create-list submission. Mirrors the same `requestId` guard
   // `favorite-button.tsx` uses for its own session-change race.
   const latestListsRequest = useRef(0);
+  // Sixth Codex cross-model review pass (Task 27, MAJOR): `latestListsRequest` is shared with the
+  // GET-fetch effect below, which bumps it on every `session?.access_token` change -- including a
+  // same-user token refresh that has nothing to do with a create-list submission's own staleness.
+  // Using `identity` (a plain string) instead of that counter fixed the token-refresh case, but
+  // introduced its own: if identity flips A -> B -> A while an OLD A request is still in flight,
+  // and a NEW A request then starts, the old request's `identity` (captured back when it started)
+  // matches `listsIdentityRef.current` again by the time it resolves -- indistinguishable from
+  // still being current. A dedicated, monotonic counter -- bumped ONLY by an actual identity
+  // change (render-time reset below) and by handleCreateList's own start, never by the GET-fetch
+  // effect's unrelated token-refresh re-runs -- has neither flaw: it can't be "same value again"
+  // like a re-used identity string can, and it isn't polluted by same-identity token refreshes.
+  const latestCreateRequest = useRef(0);
 
   // `user?.id` is the identity `lists` was rendered for. This is intentionally checked and, if
   // stale, corrected DURING render (React's "adjusting state while rendering" pattern) rather than
@@ -34,6 +46,7 @@ export default function FavorilerPage() {
   if (listsIdentityRef.current !== identity) {
     listsIdentityRef.current = identity;
     ++latestListsRequest.current;
+    ++latestCreateRequest.current;
     if (lists !== null) setLists(null);
     // MAJOR fix (final whole-branch review): the render-time identity-gated clear above only
     // reset `lists`. `newListName` (the create-list input's typed-but-not-submitted text) and
@@ -52,17 +65,10 @@ export default function FavorilerPage() {
     const name = newListName.trim();
     if (!name || !session?.access_token || creating) return;
     setCreating(true);
-    const requestId = ++latestListsRequest.current;
-    // Fifth Codex cross-model review pass (Task 27, MAJOR): `latestListsRequest` is ALSO bumped by
-    // the token-effect below on every `session?.access_token` change -- including a plain token
-    // REFRESH for the SAME user, not just an actual identity change. Guarding `finally` with only
-    // the requestId check meant a same-user token refresh mid-request permanently stranded
-    // `creating` as `true` (the requestId comparison fails even though nothing about the session
-    // actually changed). `identity` is this specific concern's real invalidation signal.
-    const requestIdentity = identity;
+    const requestId = ++latestCreateRequest.current;
     try {
       const created = await createFavoriteList(session.access_token, name);
-      if (requestId !== latestListsRequest.current) {
+      if (requestId !== latestCreateRequest.current) {
         // The session changed while this create-list request was in flight -- applying it now
         // would append User A's newly-created list into User B's `lists` state. Drop it silently
         // (matching how the stale-GET response case is handled) rather than mutate the wrong
@@ -78,10 +84,10 @@ export default function FavorilerPage() {
       // eventually settles, with no check that it's still the latest request -- it would clobber a
       // NEWER request's own genuinely-in-flight `creating` state back to `false`, letting the new
       // session's submit button re-enable (and be double-clicked) while its own request is still
-      // pending. Checking `identity` (not `requestId`) is what makes this specific to an actual
-      // session change: a same-user token refresh still bumps `requestId` (via the token-effect
-      // below), but must NOT strand `creating` as `true` forever.
-      if (requestIdentity === listsIdentityRef.current) setCreating(false);
+      // pending. `latestCreateRequest` (see its own comment above) is dedicated to exactly this
+      // check, so it's neither polluted by the GET-effect's same-user token refreshes nor
+      // re-usable like an identity string across an A -> B -> A round trip.
+      if (requestId === latestCreateRequest.current) setCreating(false);
     }
   }
 
