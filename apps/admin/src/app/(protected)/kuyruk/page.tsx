@@ -75,23 +75,24 @@ export default function KuyrukPage() {
 
   const refetch = useCallback(async () => {
     if (!token) return;
+    // Third Codex cross-model review pass (Task 27, MAJOR): checking the token only AFTER
+    // `getQueue` resolved/rejected was not enough. Bumping the SHARED `latestQueueRequest` counter
+    // BEFORE that check meant a stale-token call (e.g. one triggered by handleApprove/
+    // handleReject succeeding after the session already changed) could still "poison" the
+    // counter -- making a genuinely current-token refetch that started earlier (and is still
+    // pending) look stale by count alone once IT resolves, discarding its legitimate response.
+    // Checking identity FIRST, before touching the counter or calling `getQueue` at all, means a
+    // stale-token call has zero side effects: it never increments the counter and never makes the
+    // request.
+    if (token !== currentTokenRef.current) return;
     const requestId = ++latestQueueRequest.current;
     try {
       const data = await getQueue(token, { status: "PENDING" });
-      // Same token-identity check as the catch block below -- a stale-token refetch succeeding
-      // after the session changed must not overwrite the new session's list either.
-      if (requestId !== latestQueueRequest.current || token !== currentTokenRef.current) return; // a newer refetch has since started — discard this stale response
+      if (requestId !== latestQueueRequest.current) return; // a newer refetch has since started — discard this stale response
       setItems(data);
       setLoadError(null);
     } catch (err) {
-      // Second Codex cross-model review pass (Task 27, MAJOR): `requestId !== latestQueueRequest.current`
-      // alone is not enough. A refetch() call bumps the SHARED counter regardless of which token it
-      // used, so a call bound to an OLD token (e.g. one triggered by handleApprove/handleReject
-      // succeeding after the session already changed) can still look like "the newest" by count
-      // alone. Checking `token` (this closure's own, fixed at the point `refetch` was created)
-      // against the always-current `currentTokenRef` catches that: if they differ, this call's
-      // token is no longer the active session's, whatever the counter says.
-      if (requestId !== latestQueueRequest.current || token !== currentTokenRef.current) return; // stale error, a newer refetch is already in flight/resolved
+      if (requestId !== latestQueueRequest.current) return; // stale error, a newer refetch is already in flight/resolved
       if (err instanceof ApiHttpError && err.status === 401) {
         // Session expired server-side. Sign out to clear the stale client session too, then send
         // the curator back to login rather than showing a generic, unactionable error.

@@ -444,6 +444,59 @@ describe("KuyrukPage", () => {
     expect(push).not.toHaveBeenCalledWith("/giris");
   });
 
+  // Third Codex cross-model review pass (Task 27): the second pass's fix checked the token
+  // AFTER `getQueue` resolved/rejected, but `refetch()` bumped the SHARED `latestQueueRequest`
+  // counter at its very start regardless of token -- so a stale (old-token) refetch call could
+  // still "poison" that counter, making a genuinely current-token refetch that started earlier
+  // (and is still pending) look stale by count alone once IT resolves, discarding its legitimate
+  // response. The fix must check the token BEFORE incrementing the counter or calling `getQueue`
+  // at all, so a stale-token call never touches the counter in the first place.
+  it("does not let a stale-token refetch call poison a genuinely current, still-pending refetch's own response", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // initial load, tok
+    let resolveApprove: (value: unknown) => void;
+    approveQueueItem.mockReturnValueOnce(new Promise((resolve) => { resolveApprove = resolve; }));
+    const { rerender } = render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+    await waitFor(() => expect(approveQueueItem).toHaveBeenCalledWith("tok", "q1"));
+
+    // A different curator signs in. This fires the effect's own tok-2 refetch -- held pending,
+    // not yet resolved.
+    let resolveNewSessionQueue: (value: unknown) => void;
+    getQueue.mockReturnValueOnce(new Promise((resolve) => { resolveNewSessionQueue = resolve; }));
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-2" },
+      role: "curator",
+      loading: false,
+      user: { id: "u2" },
+      signOut,
+    });
+    rerender(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING" }));
+    const getQueueCallsBeforeStaleResolve = getQueue.mock.calls.length;
+
+    // The stale approve (still holding the OLD "tok" closure) now succeeds, triggering its own
+    // `refetch()` call.
+    await act(async () => {
+      resolveApprove!(undefined);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // The stale-token refetch must never even call getQueue again -- it should bail before
+    // touching the shared request counter or making any network call.
+    expect(getQueue.mock.calls.length).toBe(getQueueCallsBeforeStaleResolve);
+
+    // NOW the genuinely current (tok-2) refetch, which was already in flight before the stale
+    // call ran, resolves. Its response must still be applied.
+    await act(async () => {
+      resolveNewSessionQueue!([OTHER_ITEM]);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.getByText("Other Cafe")).toBeInTheDocument();
+  });
+
   it("shows the generic mutation-failed message (distinct from the 403 permission message) on a plain/500 error", async () => {
     getQueue.mockResolvedValueOnce([BASE_ITEM]);
     approveQueueItem.mockRejectedValueOnce(new Error("network error"));
