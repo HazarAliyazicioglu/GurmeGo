@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiHttpError } from "@gurmego/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -13,16 +13,29 @@ export default function ImportPage() {
   const [result, setResult] = useState<CsvImportResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): tracks the current session's token
+  // so a stale upload's delayed 401 can be told apart from one belonging to the still-current
+  // session. Updated on every render (not in a `useEffect`) so it's already correct by the time an
+  // in-flight request's `.catch()` reads it, however soon after a session change that happens.
+  const currentTokenRef = useRef(session?.access_token);
+  currentTokenRef.current = session?.access_token;
 
   async function handleUpload() {
     if (!session?.access_token || !file) return;
+    const requestToken = session.access_token;
     setUploading(true);
     setError(null);
     setResult(null);
     try {
-      const res = await importCsv(session.access_token, file);
+      const res = await importCsv(requestToken, file);
       setResult(res);
     } catch (err) {
+      if (requestToken !== currentTokenRef.current) {
+        // The session/token changed while this upload was in flight -- a 401 (or any other error)
+        // now belongs to a session that is no longer current. Signing out or showing an error here
+        // would incorrectly act on the NEW session because of a request that was never its own.
+        return;
+      }
       if (err instanceof ApiHttpError && err.status === 401) {
         // Session expired server-side — sign out to clear the stale client session and send the
         // curator back to login instead of showing a generic, unactionable upload-failure message.
@@ -51,7 +64,9 @@ export default function ImportPage() {
           : "Yükleme başarısız oldu. Dosyayı kontrol edip tekrar dene.",
       );
     } finally {
-      setUploading(false);
+      // Same requestToken guard as the catch block above: a stale request's `finally` must not
+      // clobber a NEWER (post session-change) upload's own genuinely-in-flight `uploading` state.
+      if (requestToken === currentTokenRef.current) setUploading(false);
     }
   }
 

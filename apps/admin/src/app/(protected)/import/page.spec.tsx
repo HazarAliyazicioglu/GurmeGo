@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { ApiHttpError } from "@gurmego/api-client";
 import ImportPage from "./page";
 
 const signOut = vi.fn().mockResolvedValue({ error: null });
-vi.mock("@/lib/auth-context", () => ({
-  useAuth: () => ({ session: { access_token: "tok" }, role: "curator", loading: false, user: { id: "u1" }, signOut }),
-}));
+// TASK 27 fix (Codex cross-model review of Task 26): was a fixed factory returning a static
+// object. Made reconfigurable (same pattern as apps/web/src/app/favoriler/page.spec.tsx's
+// `useAuthMock`) so a test can simulate the session/token changing mid-request via `rerender()`.
+const useAuthMock = vi.fn();
+vi.mock("@/lib/auth-context", () => ({ useAuth: () => useAuthMock() }));
 const push = vi.fn();
 const routerMock = { push };
 vi.mock("next/navigation", () => ({ useRouter: () => routerMock }));
@@ -23,6 +25,13 @@ beforeEach(() => {
   importCsv.mockReset();
   signOut.mockReset().mockResolvedValue({ error: null });
   push.mockReset();
+  useAuthMock.mockReset().mockReturnValue({
+    session: { access_token: "tok" },
+    role: "curator",
+    loading: false,
+    user: { id: "u1" },
+    signOut,
+  });
 });
 
 describe("ImportPage", () => {
@@ -121,6 +130,37 @@ describe("ImportPage", () => {
 
     await waitFor(() => expect(signOut).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
+  // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): a stale upload's delayed 401
+  // response used to trigger `signOut()` unconditionally, even if the curator's session/token had
+  // already changed (a different curator signed in) before that response arrived -- incorrectly
+  // signing out the NEW curator's session because of an error that belonged to the OLD one.
+  it("does not sign out the new curator when a stale upload's delayed 401 arrives after the session token has already changed", async () => {
+    let rejectUpload: (err: unknown) => void;
+    importCsv.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectUpload = reject; }));
+    const { rerender } = render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    await waitFor(() => expect(importCsv).toHaveBeenCalledWith("tok", expect.any(File)));
+
+    // A different curator signs in before the stale upload's response arrives.
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-2" },
+      role: "curator",
+      loading: false,
+      user: { id: "u2" },
+      signOut,
+    });
+    rerender(<ImportPage />);
+
+    await act(async () => {
+      rejectUpload!(new ApiHttpError(401, "unauthorized"));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(signOut).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalledWith("/giris");
   });
 
