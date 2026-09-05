@@ -140,6 +140,17 @@ export default function ImportPage() {
                 CSV dosyası
               </label>
               <input
+                // Fifth Codex cross-model review pass (Task 27, MINOR): `setFile(null)` on
+                // identity change only clears React state -- the uncontrolled native file input's
+                // own displayed filename is untouched by that, so the previous curator's filename
+                // could remain visibly shown, and re-selecting the SAME file might not even fire
+                // `change` (browsers dedupe by path). Keying the input on `identity` forces React
+                // to unmount/remount it (a fresh native element) on every identity change, which
+                // resets the browser's own file-picker display. Not covered by an automated test:
+                // jsdom's file input `.value` is always `""` regardless of this fix (the same
+                // browser-security behavior real browsers also enforce), so there is no observable
+                // difference to assert against in this test environment.
+                key={identity}
                 id="csv-file"
                 type="file"
                 accept=".csv"
