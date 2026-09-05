@@ -1,4 +1,12 @@
 import { AdminQueueService } from "./admin-queue.service";
+import { VenuesRepository } from "../../venues/venues.repository";
+
+// TASK 27 fix (Codex cross-model review of Task 26, MINOR): `list()` never calls
+// `venuesRepository` at all, so the `list()`-focused tests below only need a type-correct
+// placeholder, not a real mock. `{} as any` (the prior version) violated the project's `any` ban
+// with no justification; `as unknown as VenuesRepository` keeps the same "unused placeholder"
+// intent without introducing `any` into the file.
+const unusedVenuesRepository = {} as unknown as VenuesRepository;
 
 // Builds a prisma-like mock whose `$transaction` invokes the callback with a `tx` object that
 // mirrors `prisma` itself — mirrors how real Prisma's interactive transactions work, so the
@@ -38,55 +46,61 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
     } as any;
   }
 
-  // MAJOR 1 fix (final whole-branch review): `limit` used to be passed straight through as the
-  // findMany `take`, which meant urgency/priority was computed AFTER the DB had already discarded
-  // everything past `limit` in raw insertion order -- an urgent/re_verify row ranked past `limit`
-  // could never surface regardless of priority. The findMany now always fetches the larger,
-  // bounded `CANDIDATE_FETCH_CAP` candidate set; `limit` only slices the final, already-sorted
-  // response. These two tests assert that decoupling directly.
-  it("fetches the bounded internal candidate cap on the findMany query, NOT the caller's `limit`", async () => {
+  // TASK 27 fix (Codex cross-model review of Task 26, MAJOR 1): `CANDIDATE_FETCH_CAP` (2000)
+  // reintroduced the exact bug it claimed to fix, just moved further out -- an urgent/re_verify
+  // row ranked past row 2000 in `createdAt asc` order was still never fetched, so it could never
+  // surface regardless of priority. docs/rule-engine.md §5 documents the pilot's actual scale (30-
+  // 45 venues, single "bilgi yanlış" report flow) -- there is no scale justification for ANY
+  // DB-level cap here. The fix removes it entirely: `findMany` fetches every matching row, and
+  // `limit` only ever slices the final, already-sorted response.
+  it("fetches every matching row with no DB-level cap -- priority sorting always sees the true candidate set", async () => {
     const prisma = makeQueuePrisma([], []);
-    const service = new AdminQueueService(prisma, {} as any);
+    const service = new AdminQueueService(prisma, unusedVenuesRepository);
 
     await service.list(undefined, "PENDING", 25);
 
-    expect(prisma.contributionQueue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 2000 }));
+    const callArgs = prisma.contributionQueue.findMany.mock.calls[0][0];
+    expect(callArgs).not.toHaveProperty("take");
   });
 
-  it("still respects a small `limit` for the RESPONSE size even though the DB fetch uses the larger candidate cap", async () => {
+  it("still respects a small `limit` for the RESPONSE size even though the DB fetch is uncapped", async () => {
     const items = Array.from({ length: 5 }, (_, i) => ({ id: `c${i}`, type: "EDIT", venueId: null, venue: null }));
     const prisma = makeQueuePrisma(items, []);
-    const service = new AdminQueueService(prisma, {} as any);
+    const service = new AdminQueueService(prisma, unusedVenuesRepository);
 
     const result = await service.list(undefined, "PENDING", 2);
 
     expect(result).toHaveLength(2);
   });
 
-  it("defaults `limit` to 100 when not passed (response size, not the DB fetch)", async () => {
-    const prisma = makeQueuePrisma([], []);
-    const service = new AdminQueueService(prisma, {} as any);
+  // MINOR 6 fix (Codex cross-model review of Task 26): the old version of this test only checked
+  // the DB fetch's `take` value with an EMPTY items array -- it never actually proved the
+  // RESPONSE was sliced to the default limit. This uses a real >100-item candidate set.
+  it("defaults `limit` to 100 when not passed, slicing the response to exactly 100 items", async () => {
+    const items = Array.from({ length: 150 }, (_, i) => ({ id: `c${i}`, type: "EDIT", venueId: null, venue: null }));
+    const prisma = makeQueuePrisma(items, []);
+    const service = new AdminQueueService(prisma, unusedVenuesRepository);
 
-    await service.list();
+    const result = await service.list();
 
-    expect(prisma.contributionQueue.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 2000 }));
+    const callArgs = prisma.contributionQueue.findMany.mock.calls[0][0];
+    expect(callArgs).not.toHaveProperty("take");
+    expect(result).toHaveLength(100);
   });
 
-  it("returns an urgent item even when it is inserted LAST and total items exceed `limit` -- proves urgency is computed before the client-facing slice, not after (MAJOR 1 regression test)", async () => {
+  // MINOR 7 fix (Codex cross-model review of Task 26): the old version of this test used only 5
+  // items and relied on a mock that never actually implemented `take`, so it could not have
+  // caught the real bug (an urgent row beyond the DB-level cap never being fetched at all) even
+  // before this cap was removed. This uses an item count large enough that the OLD 2000-item cap
+  // would not have been the thing hiding the bug, and the urgent item is placed past a small
+  // `limit` to prove urgency is computed on the full fetched set, before the response slice.
+  it("returns an urgent item even when it is inserted LAST among many items and exceeds `limit` -- proves urgency is computed before the client-facing slice, not after (MAJOR 1 regression test)", async () => {
     const limit = 3;
-    // 4 non-urgent EDIT items (older, createdAt-asc first) + 1 urgent REPORT item inserted LAST.
-    // A naive `take: limit` at the DB level would fetch only the first 3 (all non-urgent EDITs)
-    // and never even see the urgent REPORT row, regardless of any later sort.
-    const items = [
-      { id: "old-1", type: "EDIT", venueId: null, venue: null },
-      { id: "old-2", type: "EDIT", venueId: null, venue: null },
-      { id: "old-3", type: "EDIT", venueId: null, venue: null },
-      { id: "old-4", type: "EDIT", venueId: null, venue: null },
-      { id: "urgent-last", type: "REPORT", venueId: "v1", venue: { name: "A", slug: "a" } },
-    ];
+    const oldItems = Array.from({ length: 10 }, (_, i) => ({ id: `old-${i}`, type: "EDIT", venueId: null, venue: null }));
+    const items = [...oldItems, { id: "urgent-last", type: "REPORT", venueId: "v1", venue: { name: "A", slug: "a" } }];
     const groupByResult = [{ venueId: "v1", _count: { _all: 3 } }]; // >= default threshold 3 -> urgent
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma, {} as any);
+    const service = new AdminQueueService(prisma, unusedVenuesRepository);
 
     const result = await service.list(undefined, "PENDING", limit);
 
@@ -106,7 +120,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
     ];
     const groupByResult = [{ venueId: "v1", _count: { _all: 3 } }];
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma, {} as any);
+    const service = new AdminQueueService(prisma, unusedVenuesRepository);
 
     const result = await service.list();
 
@@ -125,7 +139,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
       { venueId: "v2", _count: { _all: 1 } },
     ];
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma, {} as any);
+    const service = new AdminQueueService(prisma, unusedVenuesRepository);
 
     const result = await service.list();
 
@@ -150,7 +164,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   it("skips the groupBy call entirely when the page has no REPORT rows", async () => {
     const items = [{ id: "c3", type: "EDIT", venueId: "v3", venue: { name: "C", slug: "c" } }];
     const prisma = makeQueuePrisma(items, []);
-    const service = new AdminQueueService(prisma, {} as any);
+    const service = new AdminQueueService(prisma, unusedVenuesRepository);
 
     const result = await service.list();
 

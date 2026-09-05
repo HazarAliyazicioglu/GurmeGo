@@ -25,34 +25,29 @@ function notFoundError() {
   return ex;
 }
 
-// Bounded internal candidate-fetch cap -- deliberately much larger than any client-requested
-// `limit` (max 500, see `AdminQueueListQuerySchema`). FINAL WHOLE-BRANCH REVIEW FINDING (MAJOR 1):
-// urgency/priority used to be computed AFTER a DB-level `take: limit`, which meant an urgent (or
-// re_verify) row ranked past `limit` in raw `createdAt asc` insertion order was never even
-// fetched, so it could never surface at the top regardless of priority -- the sort only reordered
-// whatever page happened to be fetched. Fetching this larger bounded candidate set FIRST, then
-// computing priority and sorting, and ONLY THEN slicing to the client's `limit`, fixes that: the
-// content of the returned array (up to `limit` items) is now genuinely the highest-priority items,
-// not an artifact of DB insertion order. A real cursor-based pagination scheme was explicitly
-// deferred in Task 19 because it would break apps/admin's existing bare-array response parsing;
-// this cap is a pragmatic middle ground given the MVP scale assumption in docs/rule-engine.md §5-6
-// (only the single "bilgi yanlış" report flow + automatic re_verify feed the queue -- no
-// user-submitted-contribution volume yet), not a genuine offset/cursor pagination replacement. If
-// the PENDING queue ever plausibly exceeds this cap, revisit with real keyset pagination.
-const CANDIDATE_FETCH_CAP = 2000;
-
 @Injectable()
 export class AdminQueueService {
   constructor(private prisma: PrismaService, private venuesRepository: VenuesRepository) {}
 
-  // Security/ops finding: this endpoint used to (a) fetch every matching row with no limit at
-  // all, and (b) run one SEPARATE `count()` query per REPORT row to compute urgency -- the same
-  // venue's report count getting recomputed redundantly across its own multiple queue rows, and
-  // the whole endpoint getting slower (both in row count and query count) as the queue grows.
-  // `CANDIDATE_FETCH_CAP` (see above) now caps (a) instead of the client-facing `limit` -- see that
-  // constant's comment for why. A single `groupBy` over all REPORT rows' distinct venueIds in the
-  // candidate set -- computed once, not once per row -- replaces the N separate `count()` calls
-  // for (b).
+  // Security/ops finding: this used to run one SEPARATE `count()` query per REPORT row to compute
+  // urgency -- the same venue's report count getting recomputed redundantly across its own
+  // multiple queue rows, and the whole endpoint getting slower (both in row count and query count)
+  // as the queue grows. A single `groupBy` over all REPORT rows' distinct venueIds replaces the N
+  // separate `count()` calls.
+  //
+  // TASK 27 fix (Codex cross-model review of Task 26, MAJOR 1): `findMany` intentionally has NO
+  // `take` here -- Task 26 introduced a `CANDIDATE_FETCH_CAP` (2000) meant to fix an earlier bug
+  // (urgency computed AFTER a DB-level `take: limit` meant a low-priority page could hide a truly
+  // urgent row past that cutoff), but a fixed cap reintroduces the exact same class of bug, just
+  // moved further out: a row past position 2000 in `createdAt asc` order is still never fetched,
+  // still never seen by the priority sort. docs/rule-engine.md §5 documents the pilot's actual
+  // scale (30-45 venues, a single "bilgi yanlış" report flow) -- there is no scale that justifies
+  // ANY DB-level cap on this table today. `limit` (validated, max 500, by
+  // `AdminQueueListQuerySchema`) only ever slices the final, already-sorted response below, so the
+  // content of the returned array is genuinely the highest-priority items, not an artifact of
+  // where a cutoff happened to fall. If the PENDING queue ever plausibly grows into the thousands
+  // of rows, revisit with real keyset pagination (deferred in Task 19 because it would break
+  // apps/admin's existing bare-array response parsing).
   async list(type?: ContributionType, status?: ContributionStatus, limit = 100) {
     const items = await this.prisma.contributionQueue.findMany({
       where: {
@@ -66,7 +61,6 @@ export class AdminQueueService {
         status: status ?? "PENDING",
       },
       orderBy: { createdAt: "asc" },
-      take: CANDIDATE_FETCH_CAP,
       include: { venue: { select: { name: true, slug: true } } },
     });
 
