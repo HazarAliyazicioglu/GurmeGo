@@ -7,7 +7,7 @@ import { importCsv } from "@/lib/api";
 import type { CsvImportResult } from "@gurmego/shared";
 
 export default function ImportPage() {
-  const { session, signOut } = useAuth();
+  const { session, user, signOut } = useAuth();
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<CsvImportResult | null>(null);
@@ -19,6 +19,23 @@ export default function ImportPage() {
   // in-flight request's `.catch()` reads it, however soon after a session change that happens.
   const currentTokenRef = useRef(session?.access_token);
   currentTokenRef.current = session?.access_token;
+
+  // Fourth Codex cross-model review pass (Task 27, MAJOR): identity change only ever updated
+  // `currentTokenRef` -- `result`, `error`, and the selected `file` were never cleared, so a new
+  // curator signing in (same component instance, no remount) could still see the PREVIOUS
+  // curator's upload summary/error, or accidentally submit the previous curator's selected file
+  // under their own token. Same render-time identity-gated reset pattern as
+  // apps/web/src/app/favoriler/page.tsx's `listsIdentityRef`: adjusting state DURING render (not
+  // in a `useEffect`, which only runs after commit/paint) means no committed frame ever shows the
+  // previous curator's data under the new session.
+  const identity = user?.id ?? null;
+  const identityRef = useRef<string | null>(identity);
+  if (identityRef.current !== identity) {
+    identityRef.current = identity;
+    if (file !== null) setFile(null);
+    if (result !== null) setResult(null);
+    if (error !== null) setError(null);
+  }
 
   async function handleUpload() {
     if (!session?.access_token || !file) return;

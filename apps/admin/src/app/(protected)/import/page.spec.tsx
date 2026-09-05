@@ -226,6 +226,33 @@ describe("ImportPage", () => {
     expect(screen.getByRole("button", { name: /yükle/i })).not.toBeDisabled();
   });
 
+  // Fourth Codex cross-model review pass (Task 27, MAJOR): identity change only updated
+  // `currentTokenRef` -- `result`, `error`, and the selected `file` were never cleared, so a new
+  // curator signing in (same component instance, no remount) could still see the PREVIOUS
+  // curator's upload summary/error, and could accidentally submit the previous curator's selected
+  // file under their own token.
+  it("clears a previous curator's result, error, and selected file when the session identity changes", async () => {
+    importCsv.mockResolvedValueOnce({ created: 3, skipped: 1, errors: [] });
+    const { rerender } = render(<ImportPage />);
+    const file = selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    await waitFor(() => expect(screen.getByText(/3.*oluşturuldu/i)).toBeInTheDocument());
+
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-2" },
+      role: "curator",
+      loading: false,
+      user: { id: "u2" },
+      signOut,
+    });
+    rerender(<ImportPage />);
+
+    expect(screen.queryByTestId("import-result")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /yükle/i })).toBeDisabled(); // no file selected for the new curator
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    expect(importCsv).not.toHaveBeenCalledWith("tok-2", file);
+  });
+
   it("still shows the generic upload-failed message (not the 403 permission message) on a plain/500 error", async () => {
     importCsv.mockRejectedValue(new Error("Import failed: 500"));
     render(<ImportPage />);
