@@ -103,16 +103,16 @@ export default function FavorilerPage() {
       // favorites, even for a moment.
       //
       // Eighth Codex cross-model review pass (Task 27): this effect re-runs and re-blanks `lists`
-      // on ANY `session?.access_token` change, including a same-user token refresh -- a benign
-      // refresh that happens to land between a create-list success and this effect's own refetch
-      // resolving can therefore still show a brief "created, then blanked, then re-populated once
-      // the fresh GET resolves" flicker, and if that fresh GET's snapshot predates the create
-      // server-side, the created list is briefly missing until a later refetch. This is a
-      // pre-existing trait of "always re-blank-and-refetch on any token change" (present before
-      // Task 27's `latestCreateRequest`/`latestListsRequest` split too -- the original single
-      // counter just discarded the create's own response outright in this window instead), not a
-      // regression the split introduced; the eventual, settled state always reflects the server's
-      // real data either way.
+      // on ANY `session?.access_token` change, including a same-user token refresh. If that
+      // refresh's own refetch happens to be IN FLIGHT when a create-list request (started before
+      // the refresh) succeeds, the create's append is visible only until this effect's own,
+      // pre-creation GET snapshot resolves and replaces `lists` wholesale -- there is no guarantee
+      // a LATER refetch corrects this; without one (no further token change, no manual reload), the
+      // created list stays missing from view until the curator navigates away and back. The list
+      // still exists server-side throughout. This is a pre-existing trait of "always re-blank-and-
+      // refetch on any token change" (present before Task 27's `latestCreateRequest`/
+      // `latestListsRequest` split too -- the original single counter just discarded the create's
+      // own response outright in this window instead), not a regression the split introduced.
       setLists(null);
       getFavoriteLists(session.access_token)
         .then((data) => {
