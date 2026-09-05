@@ -66,7 +66,13 @@ export default function FavorilerPage() {
       setLists((prev) => [...(prev ?? []), created]);
       setNewListName("");
     } finally {
-      setCreating(false);
+      // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): this used to be an unconditional
+      // `setCreating(false)`. A stale (session-changed) request's `finally` still fires whenever it
+      // eventually settles, with no check that it's still the latest request -- it would clobber a
+      // NEWER request's own genuinely-in-flight `creating` state back to `false`, letting the new
+      // session's submit button re-enable (and be double-clicked) while its own request is still
+      // pending. Same requestId guard the response-append branch above already uses.
+      if (requestId === latestListsRequest.current) setCreating(false);
     }
   }
 

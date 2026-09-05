@@ -229,6 +229,72 @@ describe("FavorilerPage — create-list response guarded against a session chang
   });
 });
 
+// TASK 27 fix (Codex cross-model review of Task 26, MAJOR): the render-time identity-gated reset
+// (page.tsx:34-48) clears `creating` back to `false` the moment the session changes. But User A's
+// stale `createFavoriteList` call still has its OWN unconditional `finally { setCreating(false) }`
+// that fires whenever that promise eventually settles -- with no check that IT is still the latest
+// request. If User B (the new session) starts their OWN create-list submission before User A's
+// stale call resolves, User A's stale `finally` clobbers User B's genuinely-in-flight `creating`
+// state back to `false`, letting User B's submit button re-enable (and be double-clicked) while
+// their own request is still pending.
+describe("FavorilerPage — a stale create-list request's `finally` does not clobber a newer request's own `creating` state", () => {
+  beforeEach(() => {
+    push.mockClear();
+    vi.mocked(getFavoriteLists).mockReset();
+    vi.mocked(createFavoriteList).mockReset();
+    useAuthMock.mockReset();
+  });
+
+  it("keeps `creating` (submit button disabled) true for User B's own in-flight request when User A's stale request resolves afterward", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "user-a" },
+      loading: false,
+      session: { access_token: "token-a" },
+    });
+    vi.mocked(getFavoriteLists).mockResolvedValue([]);
+    let resolveA: (v: unknown) => void;
+    vi.mocked(createFavoriteList).mockImplementationOnce(
+      () => new Promise<unknown>((resolve) => { resolveA = resolve; }) as ReturnType<typeof createFavoriteList>,
+    );
+
+    const { rerender } = render(<FavorilerPage />);
+    await waitFor(() => expect(screen.getByLabelText(/liste adı/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/liste adı/i), { target: { value: "User A's list" } });
+    fireEvent.click(screen.getByRole("button", { name: /oluştur/i }));
+    await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("token-a", "User A's list"));
+
+    // Session changes to User B before User A's create-list request resolves.
+    vi.mocked(getFavoriteLists).mockResolvedValueOnce([]);
+    useAuthMock.mockReturnValue({
+      user: { id: "user-b" },
+      loading: false,
+      session: { access_token: "token-b" },
+    });
+    rerender(<FavorilerPage />);
+    await waitFor(() => expect(screen.getByLabelText(/liste adı/i)).toBeInTheDocument());
+
+    // User B starts their own create-list submission -- still in flight, never resolved in this test.
+    let resolveB: (v: unknown) => void;
+    vi.mocked(createFavoriteList).mockImplementationOnce(
+      () => new Promise<unknown>((resolve) => { resolveB = resolve; }) as ReturnType<typeof createFavoriteList>,
+    );
+    fireEvent.change(screen.getByLabelText(/liste adı/i), { target: { value: "User B's list" } });
+    fireEvent.click(screen.getByRole("button", { name: /oluştur/i }));
+    await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("token-b", "User B's list"));
+    expect(screen.getByRole("button", { name: /oluştur/i })).toBeDisabled();
+
+    // NOW User A's stale request resolves. It must not re-enable the submit button while User B's
+    // own request is still genuinely pending.
+    await act(async () => {
+      resolveA!({ id: "list-a", userId: "user-a", name: "User A's list", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.getByRole("button", { name: /oluştur/i })).toBeDisabled();
+    void resolveB!; // never resolved -- this test only asserts the stale-A-resolution effect
+  });
+});
+
 describe("FavorilerPage — visible loading state instead of a silent blank screen", () => {
   beforeEach(() => {
     push.mockClear();
