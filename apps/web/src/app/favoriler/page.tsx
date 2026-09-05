@@ -101,6 +101,18 @@ export default function FavorilerPage() {
       // Clear any previous session's lists immediately rather than leaving them on screen until
       // the new fetch resolves -- a session change should never risk flashing the prior user's
       // favorites, even for a moment.
+      //
+      // Eighth Codex cross-model review pass (Task 27): this effect re-runs and re-blanks `lists`
+      // on ANY `session?.access_token` change, including a same-user token refresh -- a benign
+      // refresh that happens to land between a create-list success and this effect's own refetch
+      // resolving can therefore still show a brief "created, then blanked, then re-populated once
+      // the fresh GET resolves" flicker, and if that fresh GET's snapshot predates the create
+      // server-side, the created list is briefly missing until a later refetch. This is a
+      // pre-existing trait of "always re-blank-and-refetch on any token change" (present before
+      // Task 27's `latestCreateRequest`/`latestListsRequest` split too -- the original single
+      // counter just discarded the create's own response outright in this window instead), not a
+      // regression the split introduced; the eventual, settled state always reflects the server's
+      // real data either way.
       setLists(null);
       getFavoriteLists(session.access_token)
         .then((data) => {
