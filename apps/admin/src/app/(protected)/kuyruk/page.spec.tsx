@@ -497,6 +497,46 @@ describe("KuyrukPage", () => {
     expect(screen.getByText("Other Cafe")).toBeInTheDocument();
   });
 
+  // Sixth Codex cross-model review pass (Task 27, MAJOR): the previous pass's guards compared raw
+  // TOKEN, not identity -- a plain token refresh for the SAME curator also changes the token, so a
+  // same-curator approve's own follow-up refetch() was wrongly treated as cross-session and
+  // skipped entirely, leaving the just-approved row stale on screen (not a permanent lock, just
+  // stale data). Comparing `identity` (the curator's user id, unaffected by a token refresh) fixes
+  // this: the SAME curator's own follow-up refetch must still go through.
+  it("still applies the just-approved item's refetch when only the SAME curator's token refreshed mid-mutation (no identity change)", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // initial load, tok
+    let resolveApprove: (value: unknown) => void;
+    approveQueueItem.mockReturnValueOnce(new Promise((resolve) => { resolveApprove = resolve; }));
+    const { rerender } = render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+    await waitFor(() => expect(approveQueueItem).toHaveBeenCalledWith("tok", "q1"));
+
+    // SAME curator (u1), token silently refreshes.
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // effect-driven refetch, tok-refreshed
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-refreshed" },
+      role: "curator",
+      loading: false,
+      user: { id: "u1" },
+      signOut,
+    });
+    rerender(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING" }));
+
+    // The approve (still holding the OLD "tok" closure) now succeeds, triggering its own
+    // `refetch()` call using "tok" -- this must NOT be discarded, since identity never changed.
+    getQueue.mockResolvedValueOnce([]); // the approved item is gone now
+    await act(async () => {
+      resolveApprove!(undefined);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(getQueue).toHaveBeenCalledWith("tok", { status: "PENDING" });
+    expect(screen.getByTestId("empty-state")).toBeInTheDocument();
+  });
+
   it("shows the generic mutation-failed message (distinct from the 403 permission message) on a plain/500 error", async () => {
     getQueue.mockResolvedValueOnce([BASE_ITEM]);
     approveQueueItem.mockRejectedValueOnce(new Error("network error"));

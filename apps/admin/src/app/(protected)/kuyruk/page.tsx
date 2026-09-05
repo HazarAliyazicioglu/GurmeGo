@@ -8,7 +8,7 @@ import { QueueItem } from "@/components/queue-item";
 import type { AdminQueueItem } from "@gurmego/shared";
 
 export default function KuyrukPage() {
-  const { session, signOut } = useAuth();
+  const { session, user, signOut } = useAuth();
   const router = useRouter();
   const [items, setItems] = useState<AdminQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,11 +43,17 @@ export default function KuyrukPage() {
   // guarded by `latestQueueRequest`), the mutation 401 path (handleApprove/handleReject ->
   // handleMutationError) had no staleness check at all -- a stale approve/reject call's delayed
   // 401 would sign out whichever curator's session happened to be current by the time it arrived,
-  // even if that belonged to a DIFFERENT curator than the one who started the request. Tracks the
-  // current token on every render (not in a `useEffect`) so it's already correct by the time an
-  // in-flight mutation's `.catch()` reads it, however soon after a session change that happens.
-  const currentTokenRef = useRef(token);
-  currentTokenRef.current = token;
+  // even if that belonged to a DIFFERENT curator than the one who started the request.
+  //
+  // Sixth Codex cross-model review pass: comparing raw TOKEN (as this originally did) rather than
+  // IDENTITY has its own problem -- a plain token REFRESH for the SAME curator also changes
+  // `token`, so a same-curator mutation's own follow-up `refetch()` would be wrongly treated as
+  // cross-session and skipped, leaving the just-approved/rejected row stale on screen indefinitely
+  // (no permanent lock, just wrong data -- but still wrong). `identity` (the curator's user id) is
+  // the real cross-session signal; a token refresh alone must not trip these guards.
+  const identity = user?.id ?? null;
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
 
   // Shared 401 sign-out handler, used by both the refetch() 401 path and the mutation 401 path.
   // Established pattern (matches (protected)/layout.tsx and erisim-yok/page.tsx): Supabase's
@@ -75,16 +81,20 @@ export default function KuyrukPage() {
 
   const refetch = useCallback(async () => {
     if (!token) return;
-    // Third Codex cross-model review pass (Task 27, MAJOR): checking the token only AFTER
+    // Third Codex cross-model review pass (Task 27, MAJOR): checking identity only AFTER
     // `getQueue` resolved/rejected was not enough. Bumping the SHARED `latestQueueRequest` counter
-    // BEFORE that check meant a stale-token call (e.g. one triggered by handleApprove/
-    // handleReject succeeding after the session already changed) could still "poison" the
-    // counter -- making a genuinely current-token refetch that started earlier (and is still
-    // pending) look stale by count alone once IT resolves, discarding its legitimate response.
-    // Checking identity FIRST, before touching the counter or calling `getQueue` at all, means a
-    // stale-token call has zero side effects: it never increments the counter and never makes the
-    // request.
-    if (token !== currentTokenRef.current) return;
+    // BEFORE that check meant a stale call (e.g. one triggered by handleApprove/handleReject
+    // succeeding after the session already changed) could still "poison" the counter -- making a
+    // genuinely current refetch that started earlier (and is still pending) look stale by count
+    // alone once IT resolves, discarding its legitimate response. Checking identity FIRST, before
+    // touching the counter or calling `getQueue` at all, means a stale-identity call has zero side
+    // effects: it never increments the counter and never makes the request.
+    //
+    // Sixth Codex cross-model review pass (Task 27, MAJOR): this compared TOKEN, not identity --
+    // a plain token refresh for the SAME curator also changes `token`, so a same-curator mutation's
+    // own follow-up refetch() was wrongly treated as cross-session and skipped, leaving the
+    // just-approved/rejected row stale on screen. `identity` doesn't change on a token refresh.
+    if (identity !== identityRef.current) return;
     const requestId = ++latestQueueRequest.current;
     try {
       const data = await getQueue(token, { status: "PENDING" });
@@ -116,7 +126,7 @@ export default function KuyrukPage() {
     } finally {
       if (requestId === latestQueueRequest.current) setLoading(false);
     }
-  }, [token, signOut, router, handleSignOutFor401]);
+  }, [token, identity, signOut, router, handleSignOutFor401]);
 
   useEffect(() => {
     void refetch();
@@ -134,12 +144,15 @@ export default function KuyrukPage() {
     });
   }
 
-  async function handleMutationError(err: unknown, requestToken: string) {
-    if (requestToken !== currentTokenRef.current) {
-      // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): the session/token changed while
-      // this mutation was in flight -- this error (401 included) now belongs to a session that is
-      // no longer current. Signing out or showing an error here would incorrectly act on the NEW
+  async function handleMutationError(err: unknown, requestIdentity: string | null) {
+    if (requestIdentity !== identityRef.current) {
+      // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): the session changed while this
+      // mutation was in flight -- this error (401 included) now belongs to a session that is no
+      // longer current. Signing out or showing an error here would incorrectly act on the NEW
       // session because of a request that was never its own.
+      //
+      // Sixth Codex cross-model review pass: compares `identity`, not the raw token -- a same-
+      // curator token refresh must not trip this guard (see `identity`'s own comment above).
       return;
     }
     if (err instanceof ApiHttpError && err.status === 401) {
@@ -159,13 +172,14 @@ export default function KuyrukPage() {
   async function handleApprove(id: string) {
     if (!token) return;
     const requestToken = token;
+    const requestIdentity = identity;
     addMutatingId(id);
     setMutationError(null);
     try {
       await approveQueueItem(requestToken, id);
       await refetch();
     } catch (err) {
-      await handleMutationError(err, requestToken);
+      await handleMutationError(err, requestIdentity);
     } finally {
       removeMutatingId(id);
     }
@@ -174,13 +188,14 @@ export default function KuyrukPage() {
   async function handleReject(id: string) {
     if (!token) return;
     const requestToken = token;
+    const requestIdentity = identity;
     addMutatingId(id);
     setMutationError(null);
     try {
       await rejectQueueItem(requestToken, id);
       await refetch();
     } catch (err) {
-      await handleMutationError(err, requestToken);
+      await handleMutationError(err, requestIdentity);
     } finally {
       removeMutatingId(id);
     }
