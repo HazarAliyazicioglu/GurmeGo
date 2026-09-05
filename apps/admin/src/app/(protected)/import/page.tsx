@@ -30,24 +30,34 @@ export default function ImportPage() {
   // previous curator's data under the new session.
   const identity = user?.id ?? null;
   const identityRef = useRef<string | null>(identity);
+  // Tenth Codex cross-model review pass (Task 27, MAJOR): comparing `identity` (a plain, re-usable
+  // string) directly has the same A -> B -> A flaw apps/web/src/app/favoriler/page.tsx's
+  // `latestCreateRequest` was introduced to fix -- if identity flips A -> B -> A while User A's OLD
+  // upload is still in flight, and a NEW User A upload then starts, the old upload's captured
+  // identity ("A") matches `identityRef.current` again by the time it resolves, indistinguishable
+  // from actually still being current. A dedicated, monotonic counter (bumped ONLY by an actual
+  // identity change here and by handleUpload's own start, never re-usable like a string) has
+  // neither this flaw nor the earlier token-refresh one.
+  const latestUploadRequest = useRef(0);
   if (identityRef.current !== identity) {
     identityRef.current = identity;
+    ++latestUploadRequest.current;
     if (file !== null) setFile(null);
     if (result !== null) setResult(null);
     if (error !== null) setError(null);
     // Eighth Codex cross-model review pass (Task 27, MINOR): `uploading` was left out of this
     // reset -- if the PREVIOUS curator's request never settles (or settles very slowly), the new
     // curator's upload button stayed disabled until it eventually did. Resetting it here unblocks
-    // the new curator immediately; `finally` below is now identity-guarded too (see its own
-    // comment), so the old curator's eventual `finally` no longer clobbers the new curator's own,
-    // genuinely different, in-flight upload.
+    // the new curator immediately; `finally` below is now guarded too (see its own comment), so the
+    // old curator's eventual `finally` no longer clobbers the new curator's own, genuinely
+    // different, in-flight upload.
     if (uploading) setUploading(false);
   }
 
   async function handleUpload() {
     if (!session?.access_token || !file) return;
     const requestToken = session.access_token;
-    const requestIdentity = identity;
+    const requestId = ++latestUploadRequest.current;
     setUploading(true);
     setError(null);
     setResult(null);
@@ -57,14 +67,17 @@ export default function ImportPage() {
       // error/401 path below -- a stale upload that resolves SUCCESSFULLY after the session
       // changed would still have written the OLD session's result onto the NEW curator's screen.
       //
-      // Eighth Codex cross-model review pass: guarding on `requestToken` (not `identity`) meant a
+      // Eighth Codex cross-model review pass: guarding on `requestToken` (not identity) meant a
       // same-curator token REFRESH mid-upload silently discarded a genuinely successful result --
-      // the curator never saw their own completed import. `identity` is the correct signal for
-      // "should this benign outcome still apply"; a token refresh alone must not drop it.
-      if (requestIdentity !== identityRef.current) return;
+      // the curator never saw their own completed import.
+      //
+      // Tenth Codex cross-model review pass: guarding on a plain `identity` string comparison had
+      // its own A -> B -> A flaw (see `latestUploadRequest`'s own comment above). The dedicated
+      // counter is the correct signal for "should this benign outcome still apply".
+      if (requestId !== latestUploadRequest.current) return;
       setResult(res);
     } catch (err) {
-      if (requestIdentity !== identityRef.current) {
+      if (requestId !== latestUploadRequest.current) {
         // The session changed while this upload was in flight -- this error now belongs to a
         // session that is no longer current. Showing an error here would incorrectly act on the
         // NEW session because of a request that was never its own.
@@ -113,7 +126,7 @@ export default function ImportPage() {
       // genuinely in flight when a NEW curator starts their own. Guarding here the same way the
       // result/error paths already do prevents the old curator's eventual `finally` from clobbering
       // the new curator's own, unrelated, in-flight upload.
-      if (requestIdentity === identityRef.current) setUploading(false);
+      if (requestId === latestUploadRequest.current) setUploading(false);
     }
   }
 

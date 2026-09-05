@@ -306,6 +306,47 @@ describe("ImportPage", () => {
     expect(screen.getByRole("button", { name: /yükle/i })).not.toBeDisabled();
   });
 
+  // Tenth Codex cross-model review pass (Task 27, MAJOR): comparing a plain `identity` string has
+  // an A -> B -> A flaw -- if identity flips A -> B -> A while User A's OLD upload is still in
+  // flight, and a NEW User A upload then starts, the old upload's captured identity ("A") matches
+  // `identityRef.current` again by the time it resolves, indistinguishable from actually still
+  // being current. A dedicated, monotonic counter does not have this flaw.
+  it("does not let a stale upload from BEFORE an A -> B -> A round trip clobber a NEW upload from the same (returning) curator A", async () => {
+    let resolveOldA: (value: unknown) => void;
+    importCsv.mockReturnValueOnce(new Promise((resolve) => { resolveOldA = resolve; }));
+    const { rerender } = render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    await waitFor(() => expect(importCsv).toHaveBeenCalledWith("tok", expect.any(File)));
+
+    // A -> B
+    useAuthMock.mockReturnValue({ session: { access_token: "tok-b" }, role: "curator", loading: false, user: { id: "u2" }, signOut });
+    rerender(<ImportPage />);
+
+    // B -> A (a NEW A session, e.g. a shared device signing back in)
+    useAuthMock.mockReturnValue({ session: { access_token: "tok-a-2" }, role: "curator", loading: false, user: { id: "u1" }, signOut });
+    rerender(<ImportPage />);
+
+    // The returning curator A starts a NEW upload -- held pending.
+    let resolveNewA: (value: unknown) => void;
+    importCsv.mockReturnValueOnce(new Promise((resolve) => { resolveNewA = resolve; }));
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    await waitFor(() => expect(importCsv).toHaveBeenCalledWith("tok-a-2", expect.any(File)));
+    expect(screen.getByRole("button", { name: /yükle/i })).toBeDisabled();
+
+    // NOW the OLD (pre-round-trip) A upload finally resolves. It must not touch the NEW upload's
+    // own `uploading` state or show its (now stale) result.
+    await act(async () => {
+      resolveOldA!({ created: 1, skipped: 0, errors: [] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.getByRole("button", { name: /yükle/i })).toBeDisabled();
+    expect(screen.queryByTestId("import-result")).not.toBeInTheDocument();
+    void resolveNewA!; // never resolved -- this test only asserts the stale-old-A-resolution effect
+  });
+
   it("still shows the generic upload-failed message (not the 403 permission message) on a plain/500 error", async () => {
     importCsv.mockRejectedValue(new Error("Import failed: 500"));
     render(<ImportPage />);
