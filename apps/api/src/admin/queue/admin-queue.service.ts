@@ -48,6 +48,12 @@ export class AdminQueueService {
   // where a cutoff happened to fall. If the PENDING queue ever plausibly grows into the thousands
   // of rows, revisit with real keyset pagination (deferred in Task 19 because it would break
   // apps/admin's existing bare-array response parsing).
+  //
+  // Second Codex cross-model review pass flagged this as reintroducing an earlier "unbounded
+  // query" ops finding. Explicit product decision (not an oversight): at the documented pilot
+  // scale this is a non-issue, and a cap only trades one bug for another (see above) without a
+  // real pagination scheme -- accepted as a KNOWN, revisit-when-scale-changes trade-off rather than
+  // adding a second half-measure cap on top of this one.
   async list(type?: ContributionType, status?: ContributionStatus, limit = 100) {
     const items = await this.prisma.contributionQueue.findMany({
       where: {

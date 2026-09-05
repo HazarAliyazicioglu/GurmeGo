@@ -1,5 +1,6 @@
 import { AdminQueueService } from "./admin-queue.service";
 import { VenuesRepository } from "../../venues/venues.repository";
+import { PrismaService } from "../../prisma/prisma.service";
 
 // TASK 27 fix (Codex cross-model review of Task 26, MINOR): `list()` never calls
 // `venuesRepository` at all, so the `list()`-focused tests below only need a type-correct
@@ -36,14 +37,20 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   // SEPARATE `count()` per REPORT row to compute urgency -- the same venue's count recomputed
   // redundantly across its own rows. Both must be fixed: a `take` limit on the findMany, and a
   // single `groupBy` covering every REPORT row's venueId in the page (not one query per row).
-  function makeQueuePrisma(items: any[], groupByResult: any[]) {
+  // TASK 27 fix (second Codex cross-model review pass, MINOR): was `(items: any[], groupByResult:
+  // any[])` returning `{...} as any` -- violated the project's `any` ban with no justification.
+  // Returning this minimal, concrete shape (instead of casting straight to `PrismaService`) keeps
+  // `.mock.calls` etc. visible on the jest mocks at each call site below; callers cast to
+  // `PrismaService` only at the `new AdminQueueService(...)` boundary, where a real `PrismaService`
+  // is actually required.
+  function makeQueuePrisma(items: Record<string, unknown>[], groupByResult: Record<string, unknown>[]) {
     return {
       contributionQueue: {
         findMany: jest.fn().mockResolvedValue(items),
         groupBy: jest.fn().mockResolvedValue(groupByResult),
         count: jest.fn(), // must never be called -- would indicate the N+1 pattern regressed
       },
-    } as any;
+    };
   }
 
   // TASK 27 fix (Codex cross-model review of Task 26, MAJOR 1): `CANDIDATE_FETCH_CAP` (2000)
@@ -55,7 +62,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   // `limit` only ever slices the final, already-sorted response.
   it("fetches every matching row with no DB-level cap -- priority sorting always sees the true candidate set", async () => {
     const prisma = makeQueuePrisma([], []);
-    const service = new AdminQueueService(prisma, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
 
     await service.list(undefined, "PENDING", 25);
 
@@ -66,7 +73,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   it("still respects a small `limit` for the RESPONSE size even though the DB fetch is uncapped", async () => {
     const items = Array.from({ length: 5 }, (_, i) => ({ id: `c${i}`, type: "EDIT", venueId: null, venue: null }));
     const prisma = makeQueuePrisma(items, []);
-    const service = new AdminQueueService(prisma, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
 
     const result = await service.list(undefined, "PENDING", 2);
 
@@ -79,7 +86,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   it("defaults `limit` to 100 when not passed, slicing the response to exactly 100 items", async () => {
     const items = Array.from({ length: 150 }, (_, i) => ({ id: `c${i}`, type: "EDIT", venueId: null, venue: null }));
     const prisma = makeQueuePrisma(items, []);
-    const service = new AdminQueueService(prisma, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
 
     const result = await service.list();
 
@@ -100,7 +107,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
     const items = [...oldItems, { id: "urgent-last", type: "REPORT", venueId: "v1", venue: { name: "A", slug: "a" } }];
     const groupByResult = [{ venueId: "v1", _count: { _all: 3 } }]; // >= default threshold 3 -> urgent
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
 
     const result = await service.list(undefined, "PENDING", limit);
 
@@ -120,7 +127,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
     ];
     const groupByResult = [{ venueId: "v1", _count: { _all: 3 } }];
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
 
     const result = await service.list();
 
@@ -139,7 +146,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
       { venueId: "v2", _count: { _all: 1 } },
     ];
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
 
     const result = await service.list();
 
@@ -164,7 +171,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   it("skips the groupBy call entirely when the page has no REPORT rows", async () => {
     const items = [{ id: "c3", type: "EDIT", venueId: "v3", venue: { name: "C", slug: "c" } }];
     const prisma = makeQueuePrisma(items, []);
-    const service = new AdminQueueService(prisma, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
 
     const result = await service.list();
 
