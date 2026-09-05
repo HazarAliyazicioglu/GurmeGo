@@ -401,6 +401,49 @@ describe("KuyrukPage", () => {
     expect(push).not.toHaveBeenCalledWith("/giris");
   });
 
+  // Second Codex cross-model review pass (Task 27, MAJOR): the first pass's guard only covered
+  // the mutation call itself failing with 401. It missed this path: a stale (old-token) approve
+  // SUCCEEDS after the session changed, and handleApprove's own `await refetch()` afterward is
+  // still bound to the OLD token (the closure captured at click time) -- but that refetch() call
+  // bumps the SHARED `latestQueueRequest` counter, making itself look like the newest request by
+  // count alone, even though it used a token that is no longer current. If THAT refetch's own
+  // response is a 401, the old requestId-only guard would not catch it, and it would sign out the
+  // NEW curator's session.
+  it("does not sign out the new curator when a stale approve SUCCEEDS after the session changed, and its own follow-up refetch then gets a 401 using the old token", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // initial load, tok
+    let resolveApprove: (value: unknown) => void;
+    approveQueueItem.mockReturnValueOnce(new Promise((resolve) => { resolveApprove = resolve; }));
+    const { rerender } = render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+    await waitFor(() => expect(approveQueueItem).toHaveBeenCalledWith("tok", "q1"));
+
+    // A different curator signs in before the stale approve resolves. This fires its own
+    // token-"tok-2" refetch via the effect.
+    getQueue.mockResolvedValueOnce([BASE_ITEM]); // effect-driven refetch, tok-2
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-2" },
+      role: "curator",
+      loading: false,
+      user: { id: "u2" },
+      signOut,
+    });
+    rerender(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING" }));
+
+    // The stale approve (still holding the OLD "tok" closure) now succeeds, triggering its own
+    // `refetch()` call -- which uses "tok", not "tok-2" -- and that call gets a 401.
+    getQueue.mockRejectedValueOnce(new ApiHttpError(401, "unauthorized"));
+    await act(async () => {
+      resolveApprove!(undefined);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(signOut).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
   it("shows the generic mutation-failed message (distinct from the 403 permission message) on a plain/500 error", async () => {
     getQueue.mockResolvedValueOnce([BASE_ITEM]);
     approveQueueItem.mockRejectedValueOnce(new Error("network error"));
