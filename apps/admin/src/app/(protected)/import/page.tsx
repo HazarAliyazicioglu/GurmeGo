@@ -35,11 +35,19 @@ export default function ImportPage() {
     if (file !== null) setFile(null);
     if (result !== null) setResult(null);
     if (error !== null) setError(null);
+    // Eighth Codex cross-model review pass (Task 27, MINOR): `uploading` was left out of this
+    // reset -- if the PREVIOUS curator's request never settles (or settles very slowly), the new
+    // curator's upload button stayed disabled until it eventually did. Resetting it here unblocks
+    // the new curator immediately; `finally` below is now identity-guarded too (see its own
+    // comment), so the old curator's eventual `finally` no longer clobbers the new curator's own,
+    // genuinely different, in-flight upload.
+    if (uploading) setUploading(false);
   }
 
   async function handleUpload() {
     if (!session?.access_token || !file) return;
     const requestToken = session.access_token;
+    const requestIdentity = identity;
     setUploading(true);
     setError(null);
     setResult(null);
@@ -48,16 +56,28 @@ export default function ImportPage() {
       // Second Codex cross-model review pass (Task 27, MAJOR): the first pass only guarded the
       // error/401 path below -- a stale upload that resolves SUCCESSFULLY after the session
       // changed would still have written the OLD session's result onto the NEW curator's screen.
-      if (requestToken !== currentTokenRef.current) return;
+      //
+      // Eighth Codex cross-model review pass: guarding on `requestToken` (not `identity`) meant a
+      // same-curator token REFRESH mid-upload silently discarded a genuinely successful result --
+      // the curator never saw their own completed import. `identity` is the correct signal for
+      // "should this benign outcome still apply"; a token refresh alone must not drop it.
+      if (requestIdentity !== identityRef.current) return;
       setResult(res);
     } catch (err) {
-      if (requestToken !== currentTokenRef.current) {
-        // The session/token changed while this upload was in flight -- a 401 (or any other error)
-        // now belongs to a session that is no longer current. Signing out or showing an error here
-        // would incorrectly act on the NEW session because of a request that was never its own.
+      if (requestIdentity !== identityRef.current) {
+        // The session changed while this upload was in flight -- this error now belongs to a
+        // session that is no longer current. Showing an error here would incorrectly act on the
+        // NEW session because of a request that was never its own.
         return;
       }
       if (err instanceof ApiHttpError && err.status === 401) {
+        // Eighth Codex cross-model review pass (Task 27, MAJOR): `identity` matching is not enough
+        // to decide whether to sign out -- a 401 on an OLD, already-superseded token (one a
+        // same-curator refresh has since replaced) is not reliable evidence the CURRENT session is
+        // invalid. Signing out here would forcibly log out a curator who is, in fact, still
+        // validly signed in with a newer token. Same distinction as
+        // (protected)/kuyruk/page.tsx's `currentTokenRef`.
+        if (requestToken !== currentTokenRef.current) return;
         // Session expired server-side — sign out to clear the stale client session and send the
         // curator back to login instead of showing a generic, unactionable upload-failure message.
         // MAJOR fix (final whole-branch review): this used to fire-and-forget `signOut()` (not
@@ -85,12 +105,15 @@ export default function ImportPage() {
           : "Yükleme başarısız oldu. Dosyayı kontrol edip tekrar dene.",
       );
     } finally {
-      // Second Codex cross-model review pass (Task 27, MAJOR): unlike the result/error paths
-      // above, this page has no other mechanism that resets `uploading` for a new session --
-      // guarding this too (the first pass's fix) left the button permanently disabled for the new
-      // curator. Deliberately unconditional: the upload button is disabled while `uploading`, so
-      // there is never a second, genuinely-concurrent upload for a stale `finally` to clobber.
-      setUploading(false);
+      // Second Codex cross-model review pass (Task 27, MAJOR): this was unconditional at first,
+      // reasoning that only one upload can be in flight at a time (the button is disabled while
+      // `uploading`). Eighth Codex cross-model review pass: that reasoning missed the identity-
+      // change case -- the render-time reset above now clears `uploading` (and unblocks the new
+      // curator) the moment identity changes, so the OLD curator's own upload can still be
+      // genuinely in flight when a NEW curator starts their own. Guarding here the same way the
+      // result/error paths already do prevents the old curator's eventual `finally` from clobbering
+      // the new curator's own, unrelated, in-flight upload.
+      if (requestIdentity === identityRef.current) setUploading(false);
     }
   }
 

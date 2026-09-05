@@ -253,6 +253,59 @@ describe("ImportPage", () => {
     expect(importCsv).not.toHaveBeenCalledWith("tok-2", file);
   });
 
+  // Eighth Codex cross-model review pass (Task 27, MAJOR): the previous guard compared
+  // `requestToken` for the result-applying path, which meant a SAME curator's plain token refresh
+  // mid-upload silently discarded a genuinely successful result -- the curator never saw their own
+  // completed import. `identity` is the correct signal for "should this benign outcome still
+  // apply"; a token refresh alone must not drop it.
+  it("still shows a successful upload's result when only the SAME curator's token refreshed mid-upload (no identity change)", async () => {
+    let resolveUpload: (value: unknown) => void;
+    importCsv.mockReturnValueOnce(new Promise((resolve) => { resolveUpload = resolve; }));
+    const { rerender } = render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    await waitFor(() => expect(importCsv).toHaveBeenCalledWith("tok", expect.any(File)));
+
+    // SAME curator (u1), token silently refreshes.
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-refreshed" },
+      role: "curator",
+      loading: false,
+      user: { id: "u1" },
+      signOut,
+    });
+    rerender(<ImportPage />);
+
+    await act(async () => {
+      resolveUpload!({ created: 5, skipped: 0, errors: [] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.getByText(/5.*oluşturuldu/i)).toBeInTheDocument();
+  });
+
+  // Same concern as above, applied to identity change unblocking `uploading` immediately: the new
+  // curator must not have to wait for the OLD curator's (possibly slow or hung) request to settle.
+  it("re-enables the upload button for a new curator IMMEDIATELY on identity change, without waiting for the previous curator's request to settle", async () => {
+    importCsv.mockReturnValueOnce(new Promise(() => {})); // never settles in this test
+    const { rerender } = render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /yükle/i })).toBeDisabled());
+
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-2" },
+      role: "curator",
+      loading: false,
+      user: { id: "u2" },
+      signOut,
+    });
+    rerender(<ImportPage />);
+
+    selectFile();
+    expect(screen.getByRole("button", { name: /yükle/i })).not.toBeDisabled();
+  });
+
   it("still shows the generic upload-failed message (not the 403 permission message) on a plain/500 error", async () => {
     importCsv.mockRejectedValue(new Error("Import failed: 500"));
     render(<ImportPage />);
