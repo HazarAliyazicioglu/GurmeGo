@@ -293,6 +293,50 @@ describe("FavorilerPage — a stale create-list request's `finally` does not clo
     expect(screen.getByRole("button", { name: /oluştur/i })).toBeDisabled();
     void resolveB!; // never resolved -- this test only asserts the stale-A-resolution effect
   });
+
+  // Fifth Codex cross-model review pass (Task 27, MAJOR): the requestId guard on `finally` uses
+  // `latestListsRequest`, which is ALSO bumped by the token-effect below on every
+  // `session?.access_token` change -- including a plain token REFRESH for the SAME user (no
+  // identity change at all). If that effect's own bump happens while a create-list request for
+  // the SAME user is still in flight, the requestId comparison fails even though nothing about
+  // the session actually changed, permanently stranding `creating` as `true`.
+  it("still clears `creating` (re-enables the submit button) when the SAME user's token merely refreshes while a create-list request is in flight", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "user-a" },
+      loading: false,
+      session: { access_token: "token-a" },
+    });
+    vi.mocked(getFavoriteLists).mockResolvedValue([]);
+    let resolveCreate: (v: unknown) => void;
+    vi.mocked(createFavoriteList).mockImplementationOnce(
+      () => new Promise<unknown>((resolve) => { resolveCreate = resolve; }) as ReturnType<typeof createFavoriteList>,
+    );
+
+    const { rerender } = render(<FavorilerPage />);
+    await waitFor(() => expect(screen.getByLabelText(/liste adı/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/liste adı/i), { target: { value: "My list" } });
+    fireEvent.click(screen.getByRole("button", { name: /oluştur/i }));
+    await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("token-a", "My list"));
+    expect(screen.getByRole("button", { name: /oluştur/i })).toBeDisabled();
+
+    // Same user (user-a), token silently refreshes -- this re-runs the token-effect below, which
+    // bumps latestListsRequest even though the identity never changed.
+    vi.mocked(getFavoriteLists).mockResolvedValueOnce([]);
+    useAuthMock.mockReturnValue({
+      user: { id: "user-a" },
+      loading: false,
+      session: { access_token: "token-a-refreshed" },
+    });
+    rerender(<FavorilerPage />);
+    await waitFor(() => expect(getFavoriteLists).toHaveBeenCalledWith("token-a-refreshed"));
+
+    await act(async () => {
+      resolveCreate!({ id: "list-1", userId: "user-a", name: "My list", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.getByRole("button", { name: /oluştur/i })).not.toBeDisabled();
+  });
 });
 
 describe("FavorilerPage — visible loading state instead of a silent blank screen", () => {

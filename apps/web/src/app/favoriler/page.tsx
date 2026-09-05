@@ -53,6 +53,13 @@ export default function FavorilerPage() {
     if (!name || !session?.access_token || creating) return;
     setCreating(true);
     const requestId = ++latestListsRequest.current;
+    // Fifth Codex cross-model review pass (Task 27, MAJOR): `latestListsRequest` is ALSO bumped by
+    // the token-effect below on every `session?.access_token` change -- including a plain token
+    // REFRESH for the SAME user, not just an actual identity change. Guarding `finally` with only
+    // the requestId check meant a same-user token refresh mid-request permanently stranded
+    // `creating` as `true` (the requestId comparison fails even though nothing about the session
+    // actually changed). `identity` is this specific concern's real invalidation signal.
+    const requestIdentity = identity;
     try {
       const created = await createFavoriteList(session.access_token, name);
       if (requestId !== latestListsRequest.current) {
@@ -71,8 +78,10 @@ export default function FavorilerPage() {
       // eventually settles, with no check that it's still the latest request -- it would clobber a
       // NEWER request's own genuinely-in-flight `creating` state back to `false`, letting the new
       // session's submit button re-enable (and be double-clicked) while its own request is still
-      // pending. Same requestId guard the response-append branch above already uses.
-      if (requestId === latestListsRequest.current) setCreating(false);
+      // pending. Checking `identity` (not `requestId`) is what makes this specific to an actual
+      // session change: a same-user token refresh still bumps `requestId` (via the token-effect
+      // below), but must NOT strand `creating` as `true` forever.
+      if (requestIdentity === listsIdentityRef.current) setCreating(false);
     }
   }
 
