@@ -28,6 +28,10 @@ export default function ImportPage() {
     setResult(null);
     try {
       const res = await importCsv(requestToken, file);
+      // Second Codex cross-model review pass (Task 27, MAJOR): the first pass only guarded the
+      // error/401 path below -- a stale upload that resolves SUCCESSFULLY after the session
+      // changed would still have written the OLD session's result onto the NEW curator's screen.
+      if (requestToken !== currentTokenRef.current) return;
       setResult(res);
     } catch (err) {
       if (requestToken !== currentTokenRef.current) {
@@ -64,9 +68,12 @@ export default function ImportPage() {
           : "Yükleme başarısız oldu. Dosyayı kontrol edip tekrar dene.",
       );
     } finally {
-      // Same requestToken guard as the catch block above: a stale request's `finally` must not
-      // clobber a NEWER (post session-change) upload's own genuinely-in-flight `uploading` state.
-      if (requestToken === currentTokenRef.current) setUploading(false);
+      // Second Codex cross-model review pass (Task 27, MAJOR): unlike the result/error paths
+      // above, this page has no other mechanism that resets `uploading` for a new session --
+      // guarding this too (the first pass's fix) left the button permanently disabled for the new
+      // curator. Deliberately unconditional: the upload button is disabled while `uploading`, so
+      // there is never a second, genuinely-concurrent upload for a stale `finally` to clobber.
+      setUploading(false);
     }
   }
 

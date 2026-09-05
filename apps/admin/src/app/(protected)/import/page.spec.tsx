@@ -164,6 +164,68 @@ describe("ImportPage", () => {
     expect(push).not.toHaveBeenCalledWith("/giris");
   });
 
+  // Second Codex cross-model review pass (Task 27): the first pass's fix only guarded the
+  // error/401 path, not a stale request that resolves SUCCESSFULLY after the session changed --
+  // that would have written the old session's upload summary onto the new curator's screen.
+  it("does not show a stale upload's successful result once the session token has already changed", async () => {
+    let resolveUpload: (value: unknown) => void;
+    importCsv.mockReturnValueOnce(new Promise((resolve) => { resolveUpload = resolve; }));
+    const { rerender } = render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    await waitFor(() => expect(importCsv).toHaveBeenCalledWith("tok", expect.any(File)));
+
+    // A different curator signs in before the stale upload's response arrives.
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-2" },
+      role: "curator",
+      loading: false,
+      user: { id: "u2" },
+      signOut,
+    });
+    rerender(<ImportPage />);
+
+    await act(async () => {
+      resolveUpload!({ created: 7, skipped: 0, errors: [] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.queryByTestId("import-result")).not.toBeInTheDocument();
+  });
+
+  // Second Codex cross-model review pass (Task 27): the first pass guarded the stale request's
+  // `finally { setUploading(false) }` with the same requestToken check as the error path, but this
+  // page has no other mechanism that resets `uploading` for the new session -- guarding it left
+  // the upload button permanently disabled for the new curator until they somehow triggered their
+  // own upload. There is at most one upload in flight at a time (the button is disabled while
+  // `uploading`), so unlike the error/result paths above, unconditionally clearing `uploading` in
+  // `finally` cannot clobber a second, genuinely-concurrent request -- it should not be guarded.
+  it("re-enables the upload button for the new curator after a stale upload settles post session-change", async () => {
+    let resolveUpload: (value: unknown) => void;
+    importCsv.mockReturnValueOnce(new Promise((resolve) => { resolveUpload = resolve; }));
+    const { rerender } = render(<ImportPage />);
+    selectFile();
+    fireEvent.click(screen.getByRole("button", { name: /yükle/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /yükle/i })).toBeDisabled());
+
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-2" },
+      role: "curator",
+      loading: false,
+      user: { id: "u2" },
+      signOut,
+    });
+    rerender(<ImportPage />);
+
+    await act(async () => {
+      resolveUpload!({ created: 0, skipped: 0, errors: [] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    selectFile();
+    expect(screen.getByRole("button", { name: /yükle/i })).not.toBeDisabled();
+  });
+
   it("still shows the generic upload-failed message (not the 403 permission message) on a plain/500 error", async () => {
     importCsv.mockRejectedValue(new Error("Import failed: 500"));
     render(<ImportPage />);
