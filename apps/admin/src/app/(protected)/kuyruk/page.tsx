@@ -39,6 +39,15 @@ export default function KuyrukPage() {
   const latestQueueRequest = useRef(0);
 
   const token = session?.access_token;
+  // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): unlike refetch()'s 401 path (already
+  // guarded by `latestQueueRequest`), the mutation 401 path (handleApprove/handleReject ->
+  // handleMutationError) had no staleness check at all -- a stale approve/reject call's delayed
+  // 401 would sign out whichever curator's session happened to be current by the time it arrived,
+  // even if that belonged to a DIFFERENT curator than the one who started the request. Tracks the
+  // current token on every render (not in a `useEffect`) so it's already correct by the time an
+  // in-flight mutation's `.catch()` reads it, however soon after a session change that happens.
+  const currentTokenRef = useRef(token);
+  currentTokenRef.current = token;
 
   // Shared 401 sign-out handler, used by both the refetch() 401 path and the mutation 401 path.
   // Established pattern (matches (protected)/layout.tsx and erisim-yok/page.tsx): Supabase's
@@ -115,7 +124,14 @@ export default function KuyrukPage() {
     });
   }
 
-  async function handleMutationError(err: unknown) {
+  async function handleMutationError(err: unknown, requestToken: string) {
+    if (requestToken !== currentTokenRef.current) {
+      // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): the session/token changed while
+      // this mutation was in flight -- this error (401 included) now belongs to a session that is
+      // no longer current. Signing out or showing an error here would incorrectly act on the NEW
+      // session because of a request that was never its own.
+      return;
+    }
     if (err instanceof ApiHttpError && err.status === 401) {
       // MAJOR fix (final whole-branch review): same unawaited/unchecked `signOut()` bug as
       // refetch()'s 401 path above — see handleSignOutFor401's comment for the established
@@ -132,13 +148,14 @@ export default function KuyrukPage() {
 
   async function handleApprove(id: string) {
     if (!token) return;
+    const requestToken = token;
     addMutatingId(id);
     setMutationError(null);
     try {
-      await approveQueueItem(token, id);
+      await approveQueueItem(requestToken, id);
       await refetch();
     } catch (err) {
-      await handleMutationError(err);
+      await handleMutationError(err, requestToken);
     } finally {
       removeMutatingId(id);
     }
@@ -146,13 +163,14 @@ export default function KuyrukPage() {
 
   async function handleReject(id: string) {
     if (!token) return;
+    const requestToken = token;
     addMutatingId(id);
     setMutationError(null);
     try {
-      await rejectQueueItem(token, id);
+      await rejectQueueItem(requestToken, id);
       await refetch();
     } catch (err) {
-      await handleMutationError(err);
+      await handleMutationError(err, requestToken);
     } finally {
       removeMutatingId(id);
     }

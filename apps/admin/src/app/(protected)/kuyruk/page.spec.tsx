@@ -8,9 +8,11 @@ const signOut = vi.fn().mockResolvedValue({ error: null });
 // its reference is stable across renders -- it's a `refetch`/`handleApprove` useCallback dependency,
 // and an unstable reference here would re-create `refetch` every render, re-firing the mount effect
 // and re-calling getQueue() indefinitely (exhausting `mockResolvedValueOnce` queues into `undefined`).
-vi.mock("@/lib/auth-context", () => ({
-  useAuth: () => ({ session: { access_token: "tok" }, role: "curator", loading: false, user: { id: "u1" }, signOut }),
-}));
+// TASK 27 fix (Codex cross-model review of Task 26): was a fixed factory returning a static
+// object. Made reconfigurable (same pattern as apps/web/src/app/favoriler/page.spec.tsx's
+// `useAuthMock`) so a test can simulate the session/token changing mid-request via `rerender()`.
+const useAuthMock = vi.fn();
+vi.mock("@/lib/auth-context", () => ({ useAuth: () => useAuthMock() }));
 const push = vi.fn();
 // Same stability concern as `signOut` above, and the same pattern apps/web/src/app/favoriler/page.spec.tsx
 // uses (`useRouter: () => router` with a module-level `router` object): the router OBJECT itself, not
@@ -32,6 +34,13 @@ beforeEach(() => {
   rejectQueueItem.mockReset().mockResolvedValue(undefined);
   signOut.mockReset().mockResolvedValue({ error: null });
   push.mockReset();
+  useAuthMock.mockReset().mockReturnValue({
+    session: { access_token: "tok" },
+    role: "curator",
+    loading: false,
+    user: { id: "u1" },
+    signOut,
+  });
 });
 
 const BASE_ITEM = {
@@ -353,6 +362,42 @@ describe("KuyrukPage", () => {
     render(<KuyrukPage />);
     await waitFor(() => expect(signOut).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalledWith("/giris");
+  });
+
+  // TASK 27 fix (Codex cross-model review of Task 26, MAJOR): unlike refetch()'s 401 path (already
+  // guarded by `latestQueueRequest`), the mutation 401 path (handleApprove/handleReject ->
+  // handleMutationError) had NO staleness check at all -- a stale approve/reject call's delayed
+  // 401 would sign out whichever curator's session happened to be current by the time it arrived,
+  // even if that was a DIFFERENT curator than the one who started the request.
+  it("does not sign out the new curator when a stale approve's delayed 401 arrives after the session token has already changed", async () => {
+    getQueue.mockResolvedValueOnce([BASE_ITEM]);
+    let rejectApprove: (err: unknown) => void;
+    approveQueueItem.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectApprove = reject; }));
+    const { rerender } = render(<KuyrukPage />);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
+    await waitFor(() => expect(approveQueueItem).toHaveBeenCalledWith("tok", "q1"));
+
+    // A different curator signs in before the stale approve's response arrives.
+    getQueue.mockResolvedValueOnce([BASE_ITEM]);
+    useAuthMock.mockReturnValue({
+      session: { access_token: "tok-2" },
+      role: "curator",
+      loading: false,
+      user: { id: "u2" },
+      signOut,
+    });
+    rerender(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING" }));
+
+    await act(async () => {
+      rejectApprove!(new ApiHttpError(401, "unauthorized"));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(signOut).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalledWith("/giris");
   });
 
