@@ -1,6 +1,5 @@
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
-import { APP_GUARD } from "@nestjs/core";
 import { AdminQueueController } from "../src/admin/queue/admin-queue.controller";
 import { AdminQueueService } from "../src/admin/queue/admin-queue.service";
 
@@ -9,9 +8,16 @@ import { AdminQueueService } from "../src/admin/queue/admin-queue.service";
 // RolesGuard's behavior given a `req.user`, but never prove that a real JWT, decoded by the real
 // JwtAuthGuard (Task 17's lowercase-role-normalization fix), actually reaches RolesGuard and
 // produces the 403 shape apps/admin's `ApiHttpError` parsing expects. This test closes that gap:
-// it boots the REAL `JwtAuthGuard` + `RolesGuard` classes (registered the same way auth.module.ts
-// registers them, via APP_GUARD, in the same order) in front of the real `AdminQueueController`,
-// and sends a real `Authorization: Bearer <token>` header through the real guard chain.
+// it boots the REAL `JwtAuthGuard` + `RolesGuard` classes in front of the real
+// `AdminQueueController`, and sends a real `Authorization: Bearer <token>` header through the real
+// guard chain.
+//
+// TASK 27 fix (Codex cross-model review of Task 26, MINOR): this used to register
+// `{ provide: APP_GUARD, useClass: JwtAuthGuard }` / `RolesGuard` by hand in the test module,
+// duplicating (not importing) auth.module.ts's own registration -- if auth.module.ts's real
+// wiring ever regressed (a guard removed, the registration order swapped), this test would still
+// pass, since it never actually exercised that module. Importing the real `AuthModule` closes
+// that gap: this test now fails if AuthModule itself stops registering both guards in order.
 //
 // The one thing mocked is `jose`'s cryptographic verification (`jwtVerify`/`createRemoteJWKSet`),
 // the same mocking boundary apps/api/src/auth/jwt-auth.guard.spec.ts already uses -- no real
@@ -43,20 +49,14 @@ describe("Real JwtAuthGuard + RolesGuard chain (e2e) — GET /admin/queue", () =
     // Import AFTER env vars are set and AFTER the `jose` mock is registered, mirroring
     // jwt-auth.guard.spec.ts's `jest.resetModules()` + dynamic-import pattern -- JwtAuthGuard's
     // module reads `SUPABASE_JWKS_URL` and calls `createRemoteJWKSet` once at import time.
-    const { JwtAuthGuard } = await import("../src/auth/jwt-auth.guard");
-    const { RolesGuard } = await import("../src/auth/roles.guard");
+    const { AuthModule } = await import("../src/auth/auth.module");
 
     service = { list: jest.fn(), approve: jest.fn(), reject: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
+      imports: [AuthModule],
       controllers: [AdminQueueController],
-      providers: [
-        { provide: AdminQueueService, useValue: service },
-        // Same registration order as auth.module.ts: JwtAuthGuard first (populates req.user),
-        // then RolesGuard (reads it) -- both real classes, not test doubles.
-        { provide: APP_GUARD, useClass: JwtAuthGuard },
-        { provide: APP_GUARD, useClass: RolesGuard },
-      ],
+      providers: [{ provide: AdminQueueService, useValue: service }],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -114,5 +114,35 @@ describe("Real JwtAuthGuard + RolesGuard chain (e2e) — GET /admin/queue", () =
 
     expect(res.statusCode).toBe(200);
     expect(service.list).toHaveBeenCalled();
+  });
+
+  // TASK 27 fix (Codex cross-model review of Task 26, MINOR): the suite above only ever mocked
+  // `jwtVerify` to SUCCEED -- there was no test proving the real guard chain rejects a request with
+  // no Authorization header at all, or one carrying a token that fails verification outright. Both
+  // must produce a 401, before any request ever reaches AdminQueueController/AdminQueueService.
+  it("returns a real 401 when the request carries no Authorization header at all", async () => {
+    const res = await app.inject({ method: "GET", url: "/admin/queue" });
+
+    expect(jwtVerifyMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+    expect(service.list).not.toHaveBeenCalled();
+    const body = JSON.parse(res.body);
+    expect(body).toMatchObject({ error: { code: expect.any(String), message: expect.any(String) } });
+  });
+
+  it("returns a real 401 when the real (mock-verified) JWT verification itself rejects (expired/tampered/malformed token)", async () => {
+    jwtVerifyMock.mockRejectedValue(new Error("signature verification failed"));
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/queue",
+      headers: { authorization: "Bearer tampered.or.expired.token" },
+    });
+
+    expect(jwtVerifyMock).toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+    expect(service.list).not.toHaveBeenCalled();
+    const body = JSON.parse(res.body);
+    expect(body).toMatchObject({ error: { code: "INVALID_TOKEN", message: expect.any(String) } });
   });
 });
