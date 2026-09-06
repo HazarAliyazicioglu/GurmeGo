@@ -563,18 +563,14 @@ RULES_MOD_AUTO_HIDE_REPORTS=3
 
 ```prisma
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   extensions = [postgis(map: "postgis")]
-}
-
-generator json {
-  provider = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
 }
 
 enum PriceRange {
@@ -976,7 +972,7 @@ git commit -m "feat(api): add PrismaService with connection lifecycle hooks"
 
 **Files:**
 - Create: `apps/api/src/districts/districts.module.ts`, `districts.controller.ts`, `districts.service.ts`
-- Test: `apps/api/src/districts/districts.service.spec.ts`, `apps/api/src/districts/districts.controller.spec.ts`
+- Test: `apps/api/src/districts/districts.service.spec.ts` (no controller spec — the service test covers `findAll`/`findNearest` logic; the controller is a thin pass-through with no branching logic of its own)
 
 **Interfaces:**
 - Consumes: `PrismaService` (Task 4)
@@ -2312,7 +2308,7 @@ git commit -m "chore(api): add empty AdminModule shell"
 
 **Interfaces:**
 - Consumes: `PrismaService`, `Roles`/`RolesGuard` (Task 10), `getUrgentReportThreshold()` from `apps/api/src/common/rule-config.ts` (Task 12 — same function, not a re-read of the env var)
-- Produces: `AdminQueueService.list(type?, status?)`, `.approve(id, reviewerId)`, `.reject(id, reviewerId, reason)` — writes `VenueVersion` snapshot + updates `verified_at` on approve (`architecture.md §5`)
+- Produces: `AdminQueueService.list(type?, status?)`, `.approve(id, reviewerId)`, `.reject(id, reviewerId)` (no `reason` param — `ContributionQueue` has no field to store one, per Task 2's schema) — writes `VenueVersion` snapshot + updates `verified_at` on approve (`architecture.md §5`)
 
 - [ ] **Step 1: Write the failing test**
 

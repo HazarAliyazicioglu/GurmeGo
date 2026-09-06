@@ -5,32 +5,172 @@ değiştirildi, neden. En yeni en üstte.
 
 ---
 
-## 2026-07-25 — Plan 1/2/3 tamamlandı (worktree'de), root/worktree senkronizasyon dersi
+## 2026-09-05 — Task 27: Task 26'nın kendi review'ının bulduğu her şey, 11 Codex turunda TEMİZ
 
-### Bağlam
-Bu tarihten itibaren kod ilerlemesi artık bu dosyanın implied ettiği "henüz kod yok" durumundan
-öteye geçti — ama **`master` branch'inde değil**, kilitli bir native worktree'de
-(`.claude/worktrees/mvp-backend-foundation`, branch `worktree-mvp-backend-foundation`). Bir önceki
-oturum session limitine çarpıp Plan 3 Task 7'nin ortasında yarım kesilmişti; root `docs/STATE.md`
-hiç güncellenmemiş kaldı. Bu oturum açıldığında root'tan devam edilmeye çalışılınca bu STATE.md'nin
-"Plan 1 hiç başlamadı" beyanına güvenilip **yanlışlıkla ikinci, gereksiz bir worktree açılıp zaten
-bitmiş Task 0/1 tekrar yürütüldü** — worktree keşfedilince fark edilip geri alındı.
+### Durum
+Task 26'nın final whole-branch review'ı (1 BLOCKER+4 MAJOR+3 MINOR, aşağıda) düzeltildikten sonra
+**Codex kotası döndüğünde gerçek review çalıştırıldı**: 3 MAJOR + 5 MINOR yeni bulgu (2000-satır
+cap Task 26'nın kendi bug'ını geri getiriyordu; kuyruk/import'un 401 yolları farklı curator'ın
+oturumunu kapatabiliyordu; favoriler'in create-list `finally`'si daha yeni bir isteği kilitleyebi-
+liyordu; JWT guard e2e testi gerçek `AuthModule`'ü kullanmıyordu). **Task 27** olarak düzeltildi —
+ama düzeltme **11 art arda Codex turu** gerektirdi: her turda bir önceki turun fix'i kendi yeni,
+daha ince bulgusunu doğurdu (token-vs-identity karışıklığı → yanlış signOut ya da kalıcı UI
+kilidi; plain identity string karşılaştırması → A→B→A round-trip'te yetersiz kalıyor; paylaşılan
+request-sayaçları farklı amaçlar için kullanılınca birbirini "kirletiyor"). 11. turda **TEMİZ**.
+20 commit (`1ecbb2e..d71cd69`). İki dar-kapsamlı sınır (admin-queue'nun sınırsız fetch'i, pilot
+ölçeği 30-45 mekan olduğu için; favoriler'in GET-vs-create sıralama sınırı) kullanıcı onayıyla
+**bilinçli kabul edilmiş MVP trade-off'u** olarak koda yorumla belgelendi, düzeltilmedi. Ayrıntı:
+worktree'nin `docs/STATE.md`'si.
 
-### Durum (bu tarih itibariyle, worktree'de)
-- **Plan 1 (Backend + Data Foundation): 24/24 task ✅**, final review temiz.
-- **Plan 2 (Web/PWA consumer client): 12/12 task ✅**, final review temiz.
-- **Plan 3 (Admin panel): 7/7 task ✅.** Task 7'nin final review'ı 4 fix/re-review turu gerektirdi —
-  her turda bir önceki fix'in kendisi yeni bir regresyon yarattı (JWT guard fix → kuyruk sayfası
-  hata yönetimi → o fix'in kendi regresyonu → CI lint script'i → header metni → test assertion
-  gücü), 5. Codex geçişi TEMİZ verdi. Ayrıntı: worktree'nin `.superpowers/sdd/progress.md`'si.
-- Hiçbir plan henüz `master`'a merge edilmedi (kullanıcı kararı, sabit).
+### Dersler (KALICI)
+- **Cross-session guard'larda tek sinyal kullanmak:** ELENDİ — "401→signOut" kararı TOKEN
+  eşleşmesiyle, "stale-ama-aynı-kullanıcı yanıtı uygula" kararı IDENTITY ile verilmeli. İkisini
+  karıştırmak (aynı sinyali her iki karar için kullanmak) ya yanlış signOut ya kalıcı UI kilidi
+  üretiyor — bu proje boyunca 3 farklı dosyada (kuyruk, import, favoriler) aynı hatayı yaptık.
+- **Cross-session invalidation için plain identity string karşılaştırması:** ELENDİ — A→B→A
+  round-trip'te eski isteğin identity'si tekrar günceli eşleyebilir. SADECE identity değişiminde
+  ve o işlemin kendi başında bumplanan, o işleme ÖZEL ayrı bir sayaç kullan (favoriler'in
+  `latestCreateRequest`'i, import'un `latestUploadRequest`'i).
+- **Paylaşılan bir request-sayacını iki farklı amaç için kullanmak:** ELENDİ — GET-fetch'in kendi
+  staleness'ı ile bir mutasyonun kendi staleness'ı aynı sayacı paylaşırsa, biri diğerini
+  "kirletebilir" (stale bir çağrı sayaç bumplayıp gerçekten güncel bir çağrıyı stale gösterebilir).
 
-### Değişiklikler / dersler
-| # | Neydi | Ne oldu | Neden |
-|---|---|---|---|
-| 1 | Root `docs/STATE.md`, worktree'de anlamlı ilerleme olsa bile güncellenmiyordu | Root STATE.md artık worktree'nin varlığını ve genel durumunu özetleyen bir işaretçi tutuyor, tam detayı tekrarlamıyor | Senkronizasyon eksikliği bu oturumda gerçek bir iş tekrarına (duplicate worktree + tamamlanmış Task 0/1'in yeniden yürütülmesi) yol açtı |
-| 2 | Final review'da tek fix turuyla "muhtemelen temizdir" varsayımı | Review loop'u Codex gerçekten TEMİZ diyene kadar sürdürme kuralı somut bir örnekle doğrulandı (4 tur) | Her turda önceki fix kendi regresyonunu yarattı — özellikle aynı state/dosya birden fazla kez dokunulduğunda risk artıyor, azalmıyor |
-| 3 | `codex exec`'e büyük diff'i (>150KB) tek komut satırı argümanı olarak verme | Diff stdin'den pipe ediliyor (`codex exec - < prompt.txt`), gerekirse mantıksal parçalara bölünüyor | Argüman limiti aşımı ("Argument list too long") ve/veya süresiz hang riski |
+## 2026-07-26/28 — Kapsamlı A-Z denetim + Plan 4b/4c + post-merge sertleştirme (Task 17-26)
+
+### Durum
+Bu girdi, 2026-07-25'in "Ertelenen takip maddeleri" listesinden bu yana geçen üç büyük çalışma
+turunu tek yerde özetler — hiçbiri o tarihten beri CHANGELOG'a girmemişti (detayları
+`docs/SESSION-LOG-2026-07-26.md`'de tam kronoloji olarak var, bu yalnızca özet + karar kaydı).
+
+### 1. Kapsamlı A-Z denetim (`docs/AUDIT-2026-07-26.md`, commit `9d6bead`)
+Plan 1-4a'nın tamamı iki bağımsız Codex tam-kaynak denetiminden geçirildi (backend+shared ayrı,
+web+admin ayrı). Verdikt: **"pilot kullanıcılarına açılmaya hazır değil"** — Backend 1 CRITICAL +
+16 HIGH, Frontend 9 HIGH + 18 MEDIUM. En kritik bulgu (A1): admin panelinden/API'den hiçbir mekan
+`PUBLISHED` durumuna geçemiyordu — `status` alanı create/update şemasında hiç yoktu, yani pilotun
+tek amacı (30-45 mekanı gerçek kullanıcıya göstermek) bu haliyle imkansızdı.
+
+### 2. Plan 4b (backend düzeltmeleri, 16/16, commit aralığı `2ef1db6..9c6b7e6`)
+Denetimdeki A1/A3/A4 + B3-B16'nın tamamı tek planda ele alındı. `plan-red-team` 6 tur gerektirdi
+(en ciddi bulgu: bir şema değişikliğinin gerçek tüketicisi 2-3 task sonra düzeltiliyordu — aynı
+sınıf hata 3 kez farklı alan çiftinde tekrarlandı). Ürün kararı: REPORT onayı artık `verifiedAt`'i
+kendi başına güncellemiyor ("onay = rapor haklı, düzeltme ayrı admin-update adımında olur");
+konum `X-User-Location` header'ına taşındı (ADR 004, NFR-04). Final whole-branch review 2 fix
+turu gerektirdi (partial-coordinate false-reverify bug'ı, admin-queue query şema karışıklığı),
+3. turda TEMİZ.
+
+### 3. Plan 4c (frontend/admin düzeltmeleri, 16/16)
+Denetimdeki C1-C14'ün tamamı. `plan-red-team` **10 tur** gerektirdi — en ciddi bulgu (round 5):
+bir görevi 3'e bölerken yeniden numaralandırma sırasında tüm bir task (C1/C11/C12 hata yönetimi)
+sessizce plandan düştü; kalıcı çözüm olarak her C-maddesinin hangi task'a atandığını gösteren
+çapraz-referans tablosu eklendi. Final whole-branch review TEMİZ (0 BLOCKER/MAJOR, 2 kozmetik
+MINOR düzeltildi).
+
+### 4. Task 17-26 — post-Plan-4c full-codebase review + sertleştirme (bu worktree'de, henüz merge yok)
+Kullanıcı isteğiyle: Plan 1-4c'nin TAMAMI (apps/api, apps/web, apps/admin) ayrıca üç bağımsız
+full-codebase Codex review'undan geçirildi (Plan 4b/4c'nin task-bazlı review'larının yakalayamadığı
+şeyleri bulmak için). Bulunan 1 BLOCKER + çok sayıda MAJOR/MINOR, severity sırasıyla (Task 17-25)
+düzeltildi, her fix bağımsız Codex re-review'dan TEMİZ geçti. En önemlisi: **JWT `user_role` claim
+case uyuşmazlığı** (DB'de uppercase, guard'larda lowercase karşılaştırma — canlıda hiç fark
+edilmemiş, çünkü gerçek Supabase custom access token hook henüz kurulu değil) hem apps/api hem
+apps/admin'de kapatıldı. Ardından TÜM bu fix'leri kapsayan yeni bir final whole-branch review
+(16 commit) çalıştırıldı; bu da 9 task'ın TEK TEK doğru ama BİRLİKTE eksik bıraktığı 1 BLOCKER +
+4 MAJOR + 3 MINOR gerçek cross-task entegrasyon sorunu buldu (CI'da Task 20'nin yeni zorunlu
+`RULES_*` env'leri eksikti; admin-queue urgency limit'ten SONRA değil önce hesaplanmalıydı;
+`docs/rule-engine.md`'nin re_verify öncelik seviyesi atlanmıştı; favoriler'in render-time
+session-clear'ı `newListName`/`creating`'i unutmuştu; kuyruk/import'un 401 yolu `signOut()`'u
+await etmiyordu). Task 26 olarak hepsi düzeltildi — **apps/admin ilk kez tarih boyunca 60/60,
+sıfır hata.** Task 26'nın kendi review'ı Codex kotası tükendiği için (dönüş: 2026-08-01 23:26)
+henüz tamamlanmadı — ayrıntı `docs/STATE.md`'de.
+
+### Bu turda kapanan, 2026-07-25'in "Ertelenen takip maddeleri" listesindeki eski maddeler
+- ~~RateLimitGuard `req.ip` kullanıyor, `trustProxy` yok~~ → Task 19'da `TRUST_PROXY_HOPS` eklendi.
+- ~~`rate_limit_counters` hiç temizlenmiyor~~ → Task 21'de saatlik cron eklendi.
+- ~~REPORT onayı düzeltme uygulamadan `verifiedAt`'i yeniliyor~~ → Plan 4b'nin ürün kararıyla
+  çözüldü (yukarıda #2); kodda doğrulandı (`admin-queue.service.ts:143-150`, REPORT dalı artık
+  `Venue`/`VenueVersion`'a hiç dokunmuyor).
+- ~~`isBoutique` DRAFT'ta true olabiliyor~~ → `boutique.service.ts:14`'te `status !== "PUBLISHED"`
+  kontrolü var, kodda doğrulandı (Plan 4b kapsamında düzeltilmiş).
+- ~~Plan 1: açık/kapalı (open-now) filtresi hiç implemente edilmedi~~ → var, `venue-filters.tsx`'te
+  implementasyon doğrulandı (Plan 4b/4c + Task 18'in midnight-wraparound fix'i kapsamında).
+- ~~Auth: JWT `user_role` role-case uyuşmazlığı~~ → Task 17'de kapatıldı (yukarıda). **Not:** custom
+  access token hook'un kendisi (Supabase projesi kurulunca) hâlâ ayrı, gerçek provisioning'e bağlı
+  bir iş — bu madde kısmen açık kalıyor, bkz. aşağıdaki "hâlâ açık" listesi.
+
+### Hâlâ açık kalan eski maddeler (doğrulanmadı veya bilinçli olarak ertelendi)
+- eslint `no-explicit-any`/`no-unused-vars` hâlâ `"warn"` (`eslint.config.js:23-24`) — `"error"`a
+  sıkılaştırma yapılmadı, bilinçli erteleme (pilot ölçeğinde disiplin sorunu değil).
+- Supabase Auth↔Prisma `User` senkronizasyonu (custom access token hook) — gerçek Supabase projesi
+  kurulmadan test edilemez, Plan 4 (Infra/CI/KVKK/pilot) kapsamına düşüyor.
+- Pilot karar metrikleri (Maps'e gitme/kaydetme/paylaşma, 4. hafta dönüş) için analytics/event-
+  capture kodu hâlâ yok — Plan 4 kapsamına düşüyor.
+- Gerçek Railway/Vercel/Supabase provisioning yapılmadı — Plan 4 kapsamına düşüyor.
+- Plan 2'nin E2E suite kapsamı, `useGeolocation` çift-mount, `setVenues` sıra koruması — bu
+  oturumda doğrulanmadı, ayrı bir incelemeyi hak ediyor.
+- Plan 3'ün birkaç admin controller'ındaki zararsız çift `@UseGuards(RolesGuard)` — düşük öncelik,
+  kod kalitesi notu, davranış etkisi yok.
+
+---
+
+## 2026-07-25 — Plan 1/2/3 tamamlandı, Plan 4a red-team NO-GO + küçültme
+
+### Durum
+Plan 1 (Backend+Data, 24/24), Plan 2 (Web/PWA, 12/12), Plan 3 (Admin panel, 7/7) tamamlandı — hepsi
+final review'dan (Superpowers + zorunlu Codex cross-model) geçti. Plan 3'ün final review'ı 4
+fix/re-review turu gerektirdi: her turda bir önceki fix'in kendisi yeni bir regresyon yarattı (JWT
+guard fix → kuyruk sayfası hata yönetimi → o fix'in kendi regresyonu → CI lint script'i → header
+metni → test assertion gücü), 5. Codex geçişi TEMİZ verdi. Hiçbir plan `master`'a merge edilmedi
+(kullanıcı kararı, sabit).
+
+### Plan 4a (Infra/CI) — idea-red-team NO-GO ve kapsam küçültme
+Orijinal tasarım (staging ortamı + GitHub Environments manuel onay gate'i + otomatik
+migration→deploy sıralaması + Sentry/pino aynı planda) Codex'ten **NO-GO** aldı. Gerekçe özet:
+150 kullanıcılık/6 haftalık bir pilotun önüne henüz hiçbir hesabı olmayan bir kurumsal CI/CD
+koreografisi konuyordu; ayrıca birkaç gerçek teknik hata vardı (GitHub Environments job-ortasında
+beklemez, Vercel git-push'ta otomatik deploy edip gate'i beklemez, tanımsız secret "temiz hata"
+değil boş string üretir, multi-stage Dockerfile'ın pnpm monorepo pruning'i muhtemelen kırık,
+`.nvmrc`'nin gerçek içeriği (22.19.0) tasarım dokümanındaki varsayılan sürümle (20) uyuşmuyordu).
+
+**Kabul edilenler (plana işlendi):** Deploy job'unun tamamı çıkarıldı; Railway/Vercel'in kendi
+native git-push deploy'una güvenme kararına dönüştü; Dockerfile varsayılan değil, Nixpacks
+yetmezse geri düşülecek seçenek oldu; Sentry+pino bu plandan çıkarıldı; `.nvmrc` sürümüne dokümanda
+sabit numara yazılmaması kuralına çevrildi.
+
+**Ayrıca bulunan, bu plana dahil edilmeyen gerçek boşluk:** `prd.md §5`'teki Pilot Karar
+Sözleşmesi'nin metrikleri (Maps'e gitme/kaydetme/paylaşma "karar eylemi", 4. hafta geri dönüş
+kohortu) hiçbir yerde event-capture/analytics ile ölçülmüyor — Sentry/pino bunu karşılamaz. Kendi
+planını hak eden ayrı bir iş, `docs/STATE.md`'ye takip maddesi olarak düşüldü.
+
+**Reddedilenler:** Yok — round 1 raporu tamamen kabul edildi.
+
+### Ertelenen takip maddeleri (tam liste)
+- Pilot karar metrikleri ölçülemiyor (yukarıda).
+- Auth: JWT `user_role` claim'i gerçek projede kalıcı bir custom access token hook gerektirir —
+  Plan 3 Task 7'de lokal olarak geçici kurulup doğrulandı (2026-07-25'te tekrar doğrulandı).
+- `RateLimitGuard` `req.ip` kullanıyor, `trustProxy` yok; `rate_limit_counters` hiç temizlenmiyor.
+- `VenueVersion` snapshot'ı yalnızca admin-queue approve() akışında oluşuyor.
+- `isBoutique` DRAFT'ta true olabiliyor, kısmi update'lerde bayat kalabiliyor.
+- REPORT onayı düzeltme uygulamadan `verifiedAt`'i yeniliyor — ürün semantiği sorusu.
+- eslint `no-explicit-any`/`no-unused-vars` "warn", "error"a sıkılaştırılmalı (86 pre-existing warning).
+- Plan 1: açık/kapalı (open-now) filtresi hiç implemente edilmedi.
+- Plan 2 final review Minor bulguları: E2E suite 2/4-5 senaryo, `useGeolocation` iki kez mount
+  oluyor, `setVenues`'ta sıra koruması yok. Plan 2 Task 9: `FavoriteButton`'da double-click guard yok.
+- Plan 3: birkaç admin controller'da artık gereksiz (zararsız) çift `@UseGuards(RolesGuard)`.
+
+### Dersler (KALICI)
+- **Review loop'u erken kesme:** final review'da "muhtemelen temizdir" varsayımıyla tek fix
+  turunda bitirmeyi ummak yanlıştı — 4 tur gerekti, her turda önceki fix kendi regresyonunu
+  yarattı. Codex gerçekten TEMİZ diyene kadar devam et; aynı dosya/state mantığı birden fazla kez
+  düzeltiliyorsa bu regresyon riskinin arttığının işaretidir, azaldığının değil.
+- **`codex exec`'e büyük diff verme:** >150KB diff'i komut satırı argümanı olarak embed etmek
+  "Argument list too long" veya süresiz hang'e yol açıyor. Çözüm: diff'i stdin'den pipe et
+  (`codex exec --skip-git-repo-check - < prompt.txt`), gerekirse mantıksal parçalara böl.
+- **Root `docs/STATE.md`'yi worktree'deki ilerlemeyle senkronize etmeden bırakmak:** bir önceki
+  oturum session limitine çarptığında root STATE.md güncellenmeden kaldı, bu da bu oturumun
+  başında yanlışlıkla ikinci bir worktree açıp bitmiş işin tekrarlanmasına yol açtı. Artık root
+  STATE.md worktree'nin varlığına işaret ediyor, detayı tekrarlamıyor.
+- **Bu ölçekte (150 kullanıcı/6 hafta) kurumsal CD koreografisi gereksiz:** platformların native
+  git-deploy'una güvenmek yeterli; staging ortamı + manuel onay gate'i pilotu hızlandırmaz,
+  geciktirir.
 
 ---
 
@@ -224,3 +364,49 @@ bölümü.
 
 ### Sonraki adım
 Kullanıcıya sonucu sun, yürütme onayı iste.
+
+---
+
+## 2026-07-24 (devam) — Plan 1 yürütüldü: 24/24 task TAMAMLANDI
+
+Kullanıcı isteği: "sormadan devam et, hata varsa düzelt, arayüzlü neredeyse çalışan bir app olana kadar
+bu döngüde devam et." `subagent-driven-development` ile worktree `mvp-backend-foundation`'da yürütüldü:
+her task için taze bir implementer subagent + task-reviewer subagent (spec+quality), bulunan sorunlar
+fix subagent'larla düzeltilip yeniden review edildi.
+
+**Bulunup düzeltilen önemli sorunlar (task sırasına göre):**
+- Task 6: `ORDER BY` GIST index'i kullanmıyordu (Seq Scan + Sort, 157ms) → KNN operatörüne geçirildi
+  (Index Scan, 0.34ms — 5000 satırda ~460x hızlanma, gerçek DB'de doğrulandı).
+- Task 9: `NotFoundException`'ın brief'teki hali kendi testini geçemiyordu (Nest `.message` davranışı) —
+  ilk kez bu hata sınıfı bulundu, güvenli pattern (instance'a post-construction `.message`) kuruldu.
+- Task 12: brief'in kendi test/implementasyon uyuşmazlığı (CacheStore) + method-scoped `@UsePipes`
+  hatası (route param'ı body şemasına karşı doğruluyordu) — ikisi de implementer tarafından bulunup
+  düzeltildi.
+- Task 16 (en riskli task): `POST /admin/venues` Prisma seviyesinde tamamen çöküyordu (`location`
+  PostGIS kolonu Prisma'nın `create`'iyle yazılamıyor) + CSV import Fastify'da hiç çalışmıyordu (Express
+  multer kullanılmıştı). İkisi de gerçek DB'ye/gerçek multipart isteğine karşı doğrulanarak düzeltildi
+  (ADR 002'ye uygun repository-katmanı raw SQL + `@fastify/multipart`).
+- Task 19: aynı `.message` hata sınıfı üçüncü kez bulundu (bu sefer yanlış düzeltilmiş — top-level
+  `message` wire response'a sızıyordu), regresyon testiyle kapatıldı.
+- Task 23: `eslint` hiç kurulu değildi (CI lint adımı asla geçemezdi) + `turbo.json` Turbo 2.x'in
+  `pipeline`→`tasks` rename'ine uymuyordu (root-level `pnpm run test/lint/typecheck` Task 0'dan beri
+  sessizce kırıktı, hiçbir task fark etmedi çünkü hepsi `cd apps/api && npx jest` ile doğrudan test
+  çalıştırıyordu).
+- Task 24 (final review): Claude whole-branch review 4 Important cross-task bulgu buldu (2 envelope
+  hatası daha, `districts.service.ts`'te ADR 002 ihlali, `/me/lists`'in kimliksiz istekte 500 vermesi,
+  eksik CORS) — hepsi düzeltildi. Zorunlu Codex cross-model-review 3 High/Critical bulgu daha buldu:
+  JWT doğrulamasında algorithm/issuer/audience kısıtı yoktu, admin onay kuyruğu (`approve`/`reject`)
+  atomik/idempotent değildi (eşzamanlı çağrı çift snapshot üretebilirdi), `revert()` version'ın gerçekten
+  o mekana ait olup olmadığını kontrol etmiyordu (yanlış mekana snapshot uygulanabilirdi). Üçü de
+  düzeltildi ve gerçek testlerle doğrulandı.
+
+**Sonuç:** 77/77 test geçiyor, `tsc --noEmit` temiz, `eslint` 0 hata (74 önceden var olan `any`
+kullanımı uyarı seviyesinde bırakıldı, bilinçli takas — `docs/STATE.md`'de gerekçeli).
+
+**Ertelenen bulgular** (Plan 4 / gerçek Supabase projesi kurulunca ele alınacak): rol senkronizasyonu
+(DB↔JWT claim), rol string case'i, rate-limit `trustProxy`, `VenueVersion` snapshot kapsamı, `isBoutique`
+staleness, REPORT onayının ürün semantiği. Tam liste: `docs/STATE.md`.
+
+### Sonraki adım
+Plan 2 (Web/PWA client) — `writing-plans` ile yazılacak, `plan-red-team`den geçirilecek, aynı
+worktree'de `subagent-driven-development` ile yürütülecek.

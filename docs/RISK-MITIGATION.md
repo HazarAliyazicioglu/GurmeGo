@@ -3,6 +3,12 @@
 **Tarih:** 2026-07-16 · **Kaynak:** Codex (GPT-5.6 Sol, `model_reasoning_effort=high`) round 2 red-team,
 web araması dahil (rakip kontrolü). İlgili: [docs/CHANGELOG.md](CHANGELOG.md) · [prd.md](prd.md)
 
+> **Durum (2026-07-28):** Bu dosyanın kendi sonunda açık bıraktığı karar ("hangi çözümlerin
+> uygulanacağına karar verilmedi") **round 3'te (2026-07-24) kapatıldı** — 8 perspektifli panel +
+> Pilot Karar Sözleşmesi ile KOŞULLU-GO verdiğine ulaşıldı. Detay: `docs/CHANGELOG.md`'nin
+> "2026-07-24 — Round 3" girdisi, `prd.md §1/§5`. Bu dosya artık yalnızca tarihsel kayıt olarak
+> tutuluyor, aktif karar bekleyen bir madde içermiyor.
+
 ---
 
 ## Round 2 verdikti: NO-GO (round 1'e göre gelişme var)
