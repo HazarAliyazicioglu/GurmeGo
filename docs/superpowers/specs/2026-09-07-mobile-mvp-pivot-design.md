@@ -49,9 +49,12 @@ store review riski + $99/yıl Apple + $25 Google) haklı çıkarıp çıkarmadı
 ## 2. Kapsam
 
 ### 2.1 Yeni: `apps/mobile` (Expo + React Native + TypeScript)
-Monorepo'ya yeni bir workspace eklenir. Mevcut `apps/api` **hiç değişmez** — zaten API-first
-tasarlandı (REST + OpenAPI), tüketici istemcisinin web mi native mi olduğu backend'i ilgilendirmez.
-`packages/shared`'daki zod şemaları ve `packages/api-client`'ın ürettiği tipler aynen tüketilir.
+Monorepo'ya yeni bir workspace eklenir. Mevcut `apps/api` **neredeyse hiç değişmez** — zaten
+API-first tasarlandı (REST + OpenAPI), tüketici istemcisinin web mi native mi olduğu backend'i
+ilgilendirmez. Tek istisna: `plan-red-team`'in bulduğu gibi "favoriden çıkarma" ne backend'de ne
+web'de hiç var olmayan bir özellikti; kullanıcı gerçek parite için bunu da eklemeye karar verdi
+(`DELETE /me/lists/:id/venues/:venueId`, implementasyon planı Task 1). `packages/shared`'daki zod
+şemaları aynen tüketilir (bkz. §3 — `packages/api-client` KULLANILMIYOR, aşağıda düzeltildi).
 
 **Özellik kapsamı — `apps/web`'de (Plan 2) zaten yapılmış olan özellik SETİNİN aynısı, yeni özellik
 eklenmiyor. Ama Codex'in haklı olarak işaret ettiği gibi bu bir "kod taşıma" değil, UI'nin sıfırdan
@@ -94,16 +97,22 @@ Admin panel web kalıyor, bu pivot admin tarafını etkilemiyor.
   localStorage/cookie yaklaşımının native karşılığı).
 - **Konum:** `expo-location` (web'in `useGeolocation` hook'unun native karşılığı, gerçek native
   izin akışıyla — PWA'nın "yetersiz hissettirme" endişesinin çözümü tam olarak burada).
-- **Harita:** `react-native-maps` (iOS'ta Apple Maps, Android'de Google Maps — platform varsayılan
-  sağlayıcısı, ekstra API anahtarı/maliyet gerektirmez). Web'in Leaflet'inin native karşılığı;
-  önceki taslakta bu bileşen hiç tanımlanmamıştı (`idea-red-team` bulgusu, kabul edildi).
-- **API istemcisi:** `packages/api-client` HTTP wrapper'ı olarak kullanılır, ama **gerçek response
-  doğrulaması `packages/shared`'daki zod şemalarıyla yapılır** — `idea-red-team`'in bulduğu gibi
-  `api-client`'ın ürettiği response tipleri `never`, "tip güvenli" iddiası önceki taslakta
-  şişirilmişti; düzeltildi. Native tarafı web'in `apps/web/src/lib/api.ts`'deki gibi ince bir
-  fetch+zod-parse katmanı yazacak, `api-client`'a fazladan güvenmeyecek.
+- **Harita:** `react-native-maps` — iOS'ta ek yapılandırma gerektirmeyen Apple Maps varsayılanıyla
+  çalışır; **Android'de gerçek Google Maps API anahtarı/credential gerekir** (`plan-red-team`
+  bulgusu — önceki taslakta "ekstra API anahtarı/maliyet gerektirmez" yanlış yazılmıştı,
+  düzeltildi). Bu credential'ın provisioning'i Plan 4e'nin kapsamına düşüyor (gerçek bir Google
+  Cloud hesabı/API anahtarı gerektirdiği için, para/hesap kararı) — implementasyon planına not
+  olarak düşüldü. Web'in Leaflet'inin native karşılığı.
+- **API istemcisi:** `packages/api-client` **KULLANILMIYOR** — `idea-red-team`'in bulduğu gibi
+  onun ürettiği response tipleri `never`, "tip güvenli" bir transport değil. Native taraf, web'in
+  `apps/web/src/lib/api.ts`'deki gibi doğrudan `fetch` + `packages/shared` zod şemalarıyla
+  doğrulama yapan ince bir katman yazacak — `packages/api-client`'a hiç bağımlı değil.
 - **State/veri çekme:** Web'deki mevcut desenlere paralel (React hooks, ekstra bir state
   kütüphanesi — Redux/Zustand — eklenmiyor, YAGNI; web'de de yoktu).
+- **Şema tekilliği:** `plan-red-team`'in bulduğu gibi, response-şekli şemalarının (liste/harita/
+  rapor projeksiyonları) hem web'de hem mobile'da ayrı ayrı tanımlanması bir drift riskiydi.
+  İmplementasyon planı (Task 2) bunları `packages/shared`'a taşıyor, `apps/web` de oradan import
+  ediyor — artık TEK tanım, iki kopya değil.
 
 ## 4. Test stratejisi
 
@@ -193,5 +202,18 @@ o zaman ortaya çıkıyor." Bulgu bazında karar:
 
 ### Kabul edilmeyen ama izlenecek (Codex'in "fikrimi ne değiştirir" kriteri)
 Codex'in verdiği somut ters-kanıt eşiği (§0) bir izleme kriteri olarak saklanıyor: eğer native
-kurulum/dönüş oranları bu eşiklerin belirgin altında kalırsa (özellikle D7 dönüş <%10), bu MVP
-kararının yanlış olduğunun erken sinyali sayılacak ve web/PWA'ya geri dönüş gündeme gelecek.
+kurulum/dönüş oranları bu eşiklerin belirgin altında kalırsa (özellikle D7 dönüş <%25 — bkz.
+ADR 005'in kendi "erken uyarı sinyalleri" bölümü, `plan-red-team`'in 2. turda düzelttiği tek,
+tutarlı eşik), bu MVP kararının yanlış olduğunun erken sinyali sayılacak ve web/PWA'ya geri dönüş
+gündeme gelecek.
+
+## 9. Plan-red-team (2. tur) — YENİDEN BÖL verdikti, plan v2
+
+`writing-plans` sonrası, `subagent-driven-development` başlamadan önce zorunlu ikinci bir Codex
+denetimi (`plan-red-team`) çalıştırıldı: **YENİDEN BÖL** verdikti — sözleşme sırası hataları
+(Task 1'in paket-adı-önce-install-sonra sırası ters yazılmıştı, plan hiç çalışmadan kırılırdı),
+kategori filtresinin unutulması, favoriler ekranı/tab navigasyonunun hiç olmaması gibi gerçek
+bulgular buldu. Plan `docs/superpowers/plans/2026-09-07-mobile-mvp.md`'de v2 olarak tamamen
+yeniden yazıldı — tüm bulgular ya düzeltmeye işlendi ya da (favoriden çıkarma gibi) kullanıcıya
+sorulup kapsam genişletilerek çözüldü. Kabul/ret detayları o planın kendi sonundaki
+"Plan-red-team bulguları — reddedilenler" bölümünde.

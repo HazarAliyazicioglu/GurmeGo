@@ -32,8 +32,12 @@ reddetti. Tam rapor: `docs/superpowers/specs/2026-09-07-mobile-mvp-pivot-design.
    1'i seçti.
 
 ## Karar
-Seçenek 1 — React Native (Expo), backend (`apps/api`) hiç değişmeden, `packages/shared` zod
-şemaları tekrar kullanılarak.
+Seçenek 1 — React Native (Expo), backend (`apps/api`) neredeyse hiç değişmeden (tek istisna:
+`plan-red-team`'in favoriden-çıkarma bulgusu üzerine kullanıcı kararıyla eklenen
+`DELETE /me/lists/:id/venues/:venueId`, bkz. `docs/superpowers/plans/2026-09-07-mobile-mvp.md`
+Task 1 — web'de de backend'de de hiç var olmayan bir özellikti, gerçek parite için eklendi),
+`packages/shared` zod şemaları tekrar kullanılarak (mobile ile web AYNI şema tanımlarını paylaşır,
+bkz. Task 2 — v1'de bu iki istemcide ayrı ayrı tanımlanacaktı, `plan-red-team` bunu bulup düzeltti).
 
 ## Kabul edilen bedel
 - Tamamlanmış, test edilmiş, 11 review turundan geçmiş web/PWA tüketici deneyimi (Plan 2) aktif
@@ -48,11 +52,16 @@ Seçenek 1 — React Native (Expo), backend (`apps/api`) hiç değişmeden, `pac
 
 ## Erken uyarı sinyalleri
 Bu karar YANLIŞSA şu ölçülebilir eşiklerin altında/üstünde kalırız (Codex'in "fikrimi ne
-değiştirir" kriterinden alındı, design doc §0):
-- 100 kullanıcılık eşzamanlı bir testte native koldaki 50 kişiden **<30'u** kurulumu tamamlarsa.
-- Kurulum yapanların **<%25'i** D7'de geri dönerse.
-- İki mağaza için release candidate'ın gerçek cihazda hazır olması **>10 mühendis-günü** sürerse
-  (20-35 günlük tahminin üstünde).
+değiştirir" kriterinden alındı, design doc §0 — düzeltme: `plan-red-team` (2. tur) bu bölümün
+kendi içinde çelişkili olduğunu buldu; "D7 <%25" ve "D7 <%10" iki AYRI karşılaştırma noktasıydı
+(biri native'in kendi regret eşiği, diğeri hiç koşulmayacak bir PWA-karşılaştırma senaryosu) —
+tek, net bir eşiğe indirgendi aşağıda):
+- 100 kullanıcılık eşzamanlı bir kurulum testinde native koldaki 50 kişiden **<30'u** kurulumu
+  tamamlarsa.
+- Kurulum yapanların **<%25'i** D7'de geri dönerse (pilotun kendi gerçek verisiyle ölçülür, ayrı
+  bir PWA kontrol grubu koşturulmayacak — bu tek başına yeterli bir regret sinyali).
+- Toplam geliştirme + release-candidate hazırlığı, kabul edilen 20-35 mühendis-günlük tahminin
+  **belirgin üstüne** (**>45 mühendis-günü**) çıkarsa.
 - Pilot başlangıcı, kabul edilen 5-9 haftalık pencereyi de aşarsa (örn. 12+ hafta).
 
 Bu sinyallerden herhangi biri gerçekleşirse: web/PWA'ya (Plan 2, zaten merge edilmiş ve çalışır
