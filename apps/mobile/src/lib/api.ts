@@ -3,7 +3,6 @@ import {
   DistrictSchema,
   FavoriteListSchema,
   FavoriteSchema,
-  VenueListItemSchema,
   VenueListResponseSchema,
   ReportResponseSchema,
   type VenueDetail,
@@ -44,7 +43,7 @@ async function fetchValidated<T>(
     },
   });
   if (!res.ok) throw new Error(`API error ${res.status} for ${path}`);
-  const raw = await res.json();
+  const raw: unknown = await res.json();
   const result = schema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(path, result.error.issues);
   return result.data;
@@ -74,7 +73,7 @@ export async function createFavoriteList(token: string, name: string) {
     body: JSON.stringify({ name }),
   });
   if (!res.ok) throw new Error(`API error ${res.status} for /me/lists`);
-  const raw = await res.json();
+  const raw: unknown = await res.json();
   const result = FavoriteListSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError("/me/lists", result.error.issues);
   return result.data;
@@ -87,7 +86,7 @@ export async function addFavoriteVenue(token: string, listId: string, venueId: s
     body: JSON.stringify({ venueId }),
   });
   if (!res.ok) throw new Error(`API error ${res.status} for /me/lists/${listId}/venues`);
-  const raw = await res.json();
+  const raw: unknown = await res.json();
   const result = FavoriteSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(`/me/lists/${listId}/venues`, result.error.issues);
 }
@@ -107,7 +106,7 @@ export async function reportVenue(venueId: string, reason: string) {
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) throw new Error(`Report failed: ${res.status}`);
-  const raw = await res.json();
+  const raw: unknown = await res.json();
   const result = ReportResponseSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(`/venues/${venueId}/report`, result.error.issues);
   return result.data;
