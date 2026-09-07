@@ -6,11 +6,11 @@ import { CACHE_STORE } from "../common/cache-store.interface";
 
 describe("FavoritesController (e2e) — RolesGuard", () => {
   let app: NestFastifyApplication;
-  let service: { listLists: jest.Mock; createList: jest.Mock; addVenue: jest.Mock };
+  let service: { listLists: jest.Mock; createList: jest.Mock; addVenue: jest.Mock; removeVenue: jest.Mock };
   let cacheStore: { increment: jest.Mock };
 
   beforeAll(async () => {
-    service = { listLists: jest.fn(), createList: jest.fn(), addVenue: jest.fn() };
+    service = { listLists: jest.fn(), createList: jest.fn(), addVenue: jest.fn(), removeVenue: jest.fn() };
     cacheStore = { increment: jest.fn().mockResolvedValue(1) };
 
     const moduleRef = await Test.createTestingModule({
@@ -42,6 +42,7 @@ describe("FavoritesController (e2e) — RolesGuard", () => {
     service.listLists.mockReset();
     service.createList.mockReset();
     service.addVenue.mockReset();
+    service.removeVenue.mockReset();
   });
 
   it("allows an authenticated user to list their favorite lists", async () => {
@@ -99,5 +100,31 @@ describe("FavoritesController (e2e) — RolesGuard", () => {
 
     expect(res.statusCode).toBe(400);
     expect(service.addVenue).not.toHaveBeenCalled();
+  });
+
+  it("allows an authenticated user to remove a venue from a list", async () => {
+    const listId = "d290f1ee-6c54-4b01-90e6-d701748f0851";
+    const venueId = "d290f1ee-6c54-4b01-90e6-d701748f0852";
+    service.removeVenue.mockResolvedValue(undefined);
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/me/lists/${listId}/venues/${venueId}`,
+      headers: { "x-test-role": "user" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.removeVenue).toHaveBeenCalledWith("test-user", listId, venueId);
+  });
+
+  it("rejects a non-UUID venueId on the delete route with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/me/lists/d290f1ee-6c54-4b01-90e6-d701748f0851/venues/not-a-uuid",
+      headers: { "x-test-role": "user" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.removeVenue).not.toHaveBeenCalled();
   });
 });

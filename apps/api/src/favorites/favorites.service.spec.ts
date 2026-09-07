@@ -73,4 +73,34 @@ describe("FavoritesService", () => {
       expect(result).toEqual({ listId: "l1", venueId: "v1" });
     });
   });
+
+  it("removeVenue rejects when list does not belong to user", async () => {
+    const prisma = { favoriteList: { findUnique: jest.fn().mockResolvedValue({ id: "l1", userId: "someone-else" }) } } as any;
+    const service = new FavoritesService(prisma);
+
+    await expect(service.removeVenue("user-1", "l1", "v1")).rejects.toThrow("Liste bulunamadı");
+  });
+
+  it("removeVenue deletes the composite-key row when the list belongs to the user", async () => {
+    const prisma = {
+      favoriteList: { findUnique: jest.fn().mockResolvedValue({ id: "l1", userId: "u1" }) },
+      favorite: { findUnique: jest.fn().mockResolvedValue({ id: "f1" }), delete: jest.fn().mockResolvedValue({ id: "f1" }) },
+    } as any;
+    const service = new FavoritesService(prisma);
+
+    await service.removeVenue("u1", "l1", "v1");
+
+    expect(prisma.favorite.delete).toHaveBeenCalledWith({ where: { listId_venueId: { listId: "l1", venueId: "v1" } } });
+  });
+
+  it("removeVenue rejects with VENUE_NOT_FOUND when the venue was never favorited", async () => {
+    const prisma = {
+      favoriteList: { findUnique: jest.fn().mockResolvedValue({ id: "l1", userId: "u1" }) },
+      favorite: { findUnique: jest.fn().mockResolvedValue(null), delete: jest.fn() },
+    } as any;
+    const service = new FavoritesService(prisma);
+
+    await expect(service.removeVenue("u1", "l1", "v1")).rejects.toThrow("Favori bulunamadı");
+    expect(prisma.favorite.delete).not.toHaveBeenCalled();
+  });
 });

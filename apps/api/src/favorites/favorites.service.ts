@@ -58,4 +58,20 @@ export class FavoritesService {
       update: {},
     });
   }
+
+  async removeVenue(userId: string, listId: string, venueId: string) {
+    const list = await this.prisma.favoriteList.findUnique({ where: { id: listId } });
+    if (!list || list.userId !== userId) {
+      const notFound = new NotFoundException({ error: { code: "LIST_NOT_FOUND", message: "Liste bulunamadı" } });
+      notFound.message = "Liste bulunamadı";
+      throw notFound;
+    }
+    const favorite = await this.prisma.favorite.findUnique({ where: { listId_venueId: { listId, venueId } } });
+    if (!favorite) {
+      const notFound = new NotFoundException({ error: { code: "VENUE_NOT_FOUND", message: "Favori bulunamadı" } });
+      notFound.message = "Favori bulunamadı";
+      throw notFound;
+    }
+    await this.prisma.favorite.delete({ where: { listId_venueId: { listId, venueId } } });
+  }
 }
