@@ -5,6 +5,7 @@ import type { RouteProp } from "@react-navigation/native";
 import MapView, { Marker } from "react-native-maps";
 import { getVenueBySlug } from "../lib/api";
 import { directionsUrl } from "../lib/directions";
+import ReportForm from "../components/ReportForm";
 import type { VenueDetail } from "@gurmego/shared";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -59,6 +60,7 @@ export default function VenueDetailScreen() {
       >
         <Text>Paylaş</Text>
       </Pressable>
+      <ReportForm venueId={venue.id} />
     </ScrollView>
   );
 }
