@@ -86,18 +86,27 @@ Add to `apps/api/src/favorites/favorites.service.spec.ts` (inside the existing `
 
   it("removeVenue deletes the composite-key row when the list belongs to the user", async () => {
     prisma.favoriteList.findUnique.mockResolvedValue({ id: "l1", userId: "u1" });
+    prisma.favorite.findUnique.mockResolvedValue({ id: "f1" });
     prisma.favorite.delete.mockResolvedValue({ id: "f1" });
 
     await service.removeVenue("u1", "l1", "v1");
 
     expect(prisma.favorite.delete).toHaveBeenCalledWith({ where: { listId_venueId: { listId: "l1", venueId: "v1" } } });
   });
+
+  it("removeVenue rejects with VENUE_NOT_FOUND when the venue was never favorited", async () => {
+    prisma.favoriteList.findUnique.mockResolvedValue({ id: "l1", userId: "u1" });
+    prisma.favorite.findUnique.mockResolvedValue(null);
+
+    await expect(service.removeVenue("u1", "l1", "v1")).rejects.toThrow("Favori bulunamadı");
+    expect(prisma.favorite.delete).not.toHaveBeenCalled();
+  });
 ```
 
 Check the top of that file for how `prisma` is currently constructed as a mock (it already mocks
-`favoriteList.findUnique` etc. for the existing `addVenue` tests) and add `favorite: { delete:
-jest.fn() }` alongside whatever `favorite` mock already exists there for `upsert`, matching the
-same mock-shape convention already in the file.
+`favoriteList.findUnique` etc. for the existing `addVenue` tests) and add `favorite: { findUnique:
+jest.fn(), delete: jest.fn() }` alongside whatever `favorite` mock already exists there for
+`upsert`, matching the same mock-shape convention already in the file.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -114,6 +123,12 @@ Edit `apps/api/src/favorites/favorites.service.ts` — add after `addVenue`:
     if (!list || list.userId !== userId) {
       const notFound = new NotFoundException({ error: { code: "LIST_NOT_FOUND", message: "Liste bulunamadı" } });
       notFound.message = "Liste bulunamadı";
+      throw notFound;
+    }
+    const favorite = await this.prisma.favorite.findUnique({ where: { listId_venueId: { listId, venueId } } });
+    if (!favorite) {
+      const notFound = new NotFoundException({ error: { code: "VENUE_NOT_FOUND", message: "Favori bulunamadı" } });
+      notFound.message = "Favori bulunamadı";
       throw notFound;
     }
     await this.prisma.favorite.delete({ where: { listId_venueId: { listId, venueId } } });
@@ -341,9 +356,21 @@ Edit `apps/web/src/lib/api.ts` — remove the local `VenueListItemSchema`, `Venu
 `MapVenueSchema`, `MapVenueListSchema` definitions (and their comments, now living in
 `packages/shared`) and the local `ReportResponseSchema` definition; import all of them from
 `@gurmego/shared` instead, alongside the existing `VenueSchema`/`VenueDetailSchema`/etc. import.
-The exported `VenueListItem`/`MapVenue` types keep the same names (now re-exported from
-`@gurmego/shared` rather than defined locally) — no call site elsewhere in `apps/web` needs to
-change, since `import type { VenueListItem } from "./api"` still resolves (it's just re-exported).
+
+`VenueListItem` and `MapVenue` were previously defined as local types in this file (via
+`export type VenueListItem = z.infer<typeof VenueListItemSchema>;` and the equivalent for
+`MapVenue`) — that local `export type` line is being deleted along with the schema it was
+inferred from, so any existing `import type { VenueListItem } from "./api"` call site elsewhere in
+`apps/web` would otherwise start failing. Add an explicit re-export line right after the
+`@gurmego/shared` import to keep those call sites resolving unchanged:
+
+```ts
+export type { VenueListItem, MapVenue } from "@gurmego/shared";
+```
+
+Grep `apps/web/src` for `from "./api"` and `from "../lib/api"` importing `VenueListItem` or
+`MapVenue` as a type before editing, so you know every call site this re-export needs to keep
+satisfied.
 
 - [ ] **Step 8: Run the web test suite to confirm no behavior change**
 
@@ -411,7 +438,12 @@ pnpm --filter @gurmego/mobile add @react-navigation/native @react-navigation/nat
 pnpm --filter @gurmego/mobile add -D jest jest-expo @testing-library/react-native @types/jest
 ```
 
-- [ ] **Step 4: Add the Jest config block**
+- [ ] **Step 4: Add the Jest config block AND create the setup file it references, together**
+
+(`plan-red-team`, 2nd pass, correctly caught that v2's first draft of this task referenced
+`jest.setup.js` here but only created the file in Task 4 — meaning Step 5's test below would fail
+on "Cannot find module" before Task 4 ever ran. Creating both in the same step closes that gap;
+Task 4 does not touch this file again.)
 
 Edit `apps/mobile/package.json`, add:
 ```json
@@ -420,9 +452,14 @@ Edit `apps/mobile/package.json`, add:
   "setupFiles": ["<rootDir>/jest.setup.js"]
 }
 ```
-(`jest.setup.js` doesn't exist yet — Task 4 creates it. Adding the reference now, before it
-exists, is intentional: Task 4 is the very next task and no test runs in between that would need
-this config to already resolve.)
+
+Create `apps/mobile/jest.setup.js` (no env values needed yet — Task 6's API client is the first
+thing that will actually read `EXPO_PUBLIC_*` at import time; this file is created now, empty of
+real values, and Task 4 fills in the three dummy values once `src/lib/env.ts` exists to need them):
+
+```js
+// Filled in by Task 4 with dummy EXPO_PUBLIC_* values once src/lib/env.ts exists to need them.
+```
 
 - [ ] **Step 5: Write the failing test**
 
@@ -518,7 +555,7 @@ git commit -m "feat(mobile): scaffold Expo app with root navigator"
 **Files:**
 - Create: `apps/mobile/.env.local.example`
 - Create: `apps/mobile/src/lib/env.ts`
-- Create: `apps/mobile/jest.setup.js`
+- Modify: `apps/mobile/jest.setup.js` (created empty by Task 3 Step 4; this task fills it in)
 - Test: `apps/mobile/src/lib/env.spec.ts`
 
 **Interfaces:**
@@ -584,10 +621,9 @@ export const SUPABASE_ANON_KEY = requireEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY");
 Run: `pnpm --filter @gurmego/mobile test src/lib/env.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Create the Jest env setup file**
+- [ ] **Step 5: Fill in the Jest env setup file (created empty by Task 3)**
 
-Create `apps/mobile/jest.setup.js` (referenced by Task 3's `package.json` Jest config already —
-this is the file that makes that reference resolve):
+Replace the placeholder content of `apps/mobile/jest.setup.js`:
 
 ```js
 // Dummy values so every test in this package can import anything that transitively reads
@@ -1206,6 +1242,8 @@ git commit -m "feat(mobile): add native location permission hook"
 **Files:**
 - Create: `apps/mobile/src/navigation/TabNavigator.tsx`
 - Create: `apps/mobile/src/screens/FavoritesScreen.tsx` (placeholder — real content in Task 16)
+- Create: `apps/mobile/src/screens/VenueDetailScreen.tsx` (placeholder — real content in Task 10)
+- Create: `apps/mobile/src/screens/AuthScreen.tsx` (placeholder — real content in Task 14)
 - Modify: `apps/mobile/src/navigation/RootNavigator.tsx`
 - Test: `apps/mobile/src/navigation/TabNavigator.spec.tsx`
 
@@ -1299,7 +1337,43 @@ export default function TabNavigator() {
 Run: `pnpm --filter @gurmego/mobile test src/navigation/TabNavigator.spec.tsx`
 Expected: PASS
 
-- [ ] **Step 7: Wire `TabNavigator` into `RootNavigator`, add `VenueDetail`/`Auth` stack screens**
+- [ ] **Step 7: Create placeholder `VenueDetail`/`Auth` screens (real content in Task 10/14)**
+
+`plan-red-team`'s 2nd pass correctly caught that v2's first draft added `VenueDetail`/`Auth` to
+the route TYPE here but registered no actual `<Stack.Screen>` for them until Task 10/14 — meaning
+Task 9's `navigation.navigate("VenueDetail", ...)` would silently go nowhere in a real running app
+for two whole tasks. Fixed the same way Task 3 handled `DiscoveryScreen`: a placeholder now,
+registered immediately, replaced (not re-created) later.
+
+Create `apps/mobile/src/screens/VenueDetailScreen.tsx`:
+
+```tsx
+import { Text, View } from "react-native";
+
+export default function VenueDetailScreen() {
+  return (
+    <View>
+      <Text>Mekan</Text>
+    </View>
+  );
+}
+```
+
+Create `apps/mobile/src/screens/AuthScreen.tsx`:
+
+```tsx
+import { Text, View } from "react-native";
+
+export default function AuthScreen() {
+  return (
+    <View>
+      <Text>Giriş</Text>
+    </View>
+  );
+}
+```
+
+- [ ] **Step 8: Wire `TabNavigator` into `RootNavigator`, register all three stack screens**
 
 Replace `apps/mobile/src/navigation/RootNavigator.tsx`:
 
@@ -1307,6 +1381,8 @@ Replace `apps/mobile/src/navigation/RootNavigator.tsx`:
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import TabNavigator from "./TabNavigator";
+import VenueDetailScreen from "../screens/VenueDetailScreen";
+import AuthScreen from "../screens/AuthScreen";
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -1321,18 +1397,19 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator>
         <Stack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
+        <Stack.Screen name="VenueDetail" component={VenueDetailScreen} options={{ title: "Mekan" }} />
+        <Stack.Screen name="Auth" component={AuthScreen} options={{ title: "Giriş yap" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
 ```
 
-(`VenueDetail` and `Auth` are added to the type now, but their `<Stack.Screen>` entries are added
-by Task 10 and Task 14 respectively, which own those screens — adding an entry for a component
-that doesn't exist yet would break compilation.)
+(Task 10 and Task 14 each MODIFY their own screen file's body in place — the navigator's
+`<Stack.Screen>` entries above never change again, only what `VenueDetailScreen`/`AuthScreen`
+render internally.)
 
-- [ ] **Step 8: Update `App.spec.tsx`'s assertion — the app now boots into the Tabs screen, not a
-  bare stack**
+- [ ] **Step 9: Confirm `App.spec.tsx` still passes — the app now boots into the Tabs screen**
 
 `App.spec.tsx` (from Task 3) already asserts `getByText("Mekanlar")`, which still holds true (the
 Discovery tab's placeholder text is unchanged) — no edit needed here, just re-run it to confirm:
@@ -1340,11 +1417,11 @@ Discovery tab's placeholder text is unchanged) — no edit needed here, just re-
 Run: `pnpm --filter @gurmego/mobile test`
 Expected: PASS, all suites (`App.spec.tsx`, `TabNavigator.spec.tsx`, and everything from Tasks 4-7).
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add apps/mobile/src/navigation/TabNavigator.tsx apps/mobile/src/navigation/RootNavigator.tsx apps/mobile/src/screens/FavoritesScreen.tsx apps/mobile/src/navigation/TabNavigator.spec.tsx
-git commit -m "feat(mobile): add bottom-tab navigation shell (Discovery / Favoriler)"
+git add apps/mobile/src/navigation/TabNavigator.tsx apps/mobile/src/navigation/RootNavigator.tsx apps/mobile/src/screens/FavoritesScreen.tsx apps/mobile/src/screens/VenueDetailScreen.tsx apps/mobile/src/screens/AuthScreen.tsx apps/mobile/src/navigation/TabNavigator.spec.tsx
+git commit -m "feat(mobile): add bottom-tab navigation shell with placeholder VenueDetail/Auth screens"
 ```
 
 ---
@@ -1353,15 +1430,14 @@ git commit -m "feat(mobile): add bottom-tab navigation shell (Discovery / Favori
 
 **Files:**
 - Modify: `apps/mobile/src/screens/DiscoveryScreen.tsx`
-- Modify: `apps/mobile/src/navigation/RootNavigator.tsx` (add the `VenueDetail` route's TYPE now,
-  pointed at a temporary stand-in — Task 10 supplies the real component)
 - Test: `apps/mobile/src/screens/DiscoveryScreen.spec.tsx`
 
 **Interfaces:**
 - Consumes: `getVenues`, `getDistricts`, `VenueListItem` from Task 6's `src/lib/api.ts`;
-  `useLocation` from Task 7's `src/lib/use-location.ts`; `RootStackParamList` from Task 8.
-- Produces: nothing new for later tasks (Task 10 implements the `VenueDetail` screen this one
-  navigates to).
+  `useLocation` from Task 7's `src/lib/use-location.ts`; `RootStackParamList` from Task 8 (which
+  already registers a placeholder `VenueDetail` screen — no navigator edit needed here).
+- Produces: nothing new for later tasks (Task 10 replaces the placeholder `VenueDetail` screen
+  this one navigates to).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1561,42 +1637,25 @@ export default function DiscoveryScreen() {
 }
 ```
 
-- [ ] **Step 4: Add the `VenueDetail` route type (component supplied by Task 10)**
+- [ ] **Step 4: Run test to verify it passes**
 
-Edit `apps/mobile/src/navigation/RootNavigator.tsx` — this task only updates the TYPE and imports;
-it does NOT add a `<Stack.Screen name="VenueDetail">` entry yet (that would reference a component
-that doesn't exist until Task 10). Update just the type:
-
-```tsx
-export type RootStackParamList = {
-  Tabs: undefined;
-  VenueDetail: { slug: string };
-  Auth: undefined;
-};
-```
-
-(This is already the type from Task 8 Step 7 — no change needed here if Task 8 already wrote it
-this way. This step exists as an explicit checkpoint: confirm the type includes `VenueDetail`
-before writing code in Step 3 above that calls `navigation.navigate("VenueDetail", ...)`, which
-needs that type to compile.)
-
-- [ ] **Step 5: Run test to verify it passes**
+No `RootNavigator.tsx` edit is needed in this task: Task 8 already registered `VenueDetail` (as a
+placeholder screen) and its route type, so `navigation.navigate("VenueDetail", ...)` in Step 3
+above already compiles and, in a real running app, already navigates somewhere (Task 10 later
+replaces the placeholder's content, not the registration itself).
 
 Run: `pnpm --filter @gurmego/mobile test src/screens/DiscoveryScreen.spec.tsx`
 Expected: PASS
 
-- [ ] **Step 6: Run the full test suite to confirm no regression**
+- [ ] **Step 5: Run the full test suite to confirm no regression**
 
 Run: `pnpm --filter @gurmego/mobile test`
-Expected: PASS, all suites. Note: navigating to `VenueDetail` from this screen will not yet work
-in a real running app (no screen registered for that route until Task 10) — this is expected and
-fine for a mid-plan checkpoint; the test suite only exercises `navigation.navigate` as a mock call,
-not real routing.
+Expected: PASS, all suites.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add apps/mobile/src/screens/DiscoveryScreen.tsx apps/mobile/src/screens/DiscoveryScreen.spec.tsx apps/mobile/src/navigation/RootNavigator.tsx
+git add apps/mobile/src/screens/DiscoveryScreen.tsx apps/mobile/src/screens/DiscoveryScreen.spec.tsx
 git commit -m "feat(mobile): discovery screen with district/category/price filters and location sort"
 ```
 
@@ -1605,12 +1664,12 @@ git commit -m "feat(mobile): discovery screen with district/category/price filte
 ### Task 10: Venue detail screen + map
 
 **Files:**
-- Create: `apps/mobile/src/screens/VenueDetailScreen.tsx`
-- Modify: `apps/mobile/src/navigation/RootNavigator.tsx` (register the real `VenueDetail` screen)
+- Modify: `apps/mobile/src/screens/VenueDetailScreen.tsx` (placeholder created by Task 8)
 - Test: `apps/mobile/src/screens/VenueDetailScreen.spec.tsx`
 
 **Interfaces:**
-- Consumes: `getVenueBySlug` from Task 6's `src/lib/api.ts`; `RootStackParamList` from Task 8/9.
+- Consumes: `getVenueBySlug` from Task 6's `src/lib/api.ts`; `RootStackParamList` from Task 8
+  (already registers this screen — no navigator edit needed here).
 - Produces: nothing new for later tasks (Tasks 11-13, 15 add buttons INTO this screen, see their
   own Files/Interfaces sections).
 
@@ -1697,7 +1756,7 @@ Expected: FAIL — `./VenueDetailScreen` module does not exist yet.
 
 - [ ] **Step 4: Write the implementation**
 
-Create `apps/mobile/src/screens/VenueDetailScreen.tsx`:
+Replace `apps/mobile/src/screens/VenueDetailScreen.tsx`'s placeholder body (created by Task 8):
 
 ```tsx
 import { useEffect, useState } from "react";
@@ -1753,29 +1812,20 @@ export default function VenueDetailScreen() {
 }
 ```
 
-- [ ] **Step 5: Register the real `VenueDetail` screen**
+- [ ] **Step 5: Run test to verify it passes**
 
-Edit `apps/mobile/src/navigation/RootNavigator.tsx`:
-
-```tsx
-import VenueDetailScreen from "../screens/VenueDetailScreen";
-```
-Add inside `<Stack.Navigator>`, after the `Tabs` screen:
-```tsx
-<Stack.Screen name="VenueDetail" component={VenueDetailScreen} options={{ title: "Mekan" }} />
-```
-
-- [ ] **Step 6: Run test to verify it passes**
+No `RootNavigator.tsx` edit is needed: Task 8 already registered the `VenueDetail` screen pointing
+at this same file, so replacing its body here is all that's needed.
 
 Run: `pnpm --filter @gurmego/mobile test src/screens/VenueDetailScreen.spec.tsx`
 Expected: PASS
 
-- [ ] **Step 7: Run the full test suite to confirm no regression**
+- [ ] **Step 6: Run the full test suite to confirm no regression**
 
 Run: `pnpm --filter @gurmego/mobile test`
 Expected: PASS
 
-- [ ] **Step 8: Manual verification (Expo Go / simulator)**
+- [ ] **Step 7: Manual verification (Expo Go / simulator)**
 
 Run: `pnpm --filter @gurmego/mobile start`. Navigate Discovery → tap a venue → confirm the detail
 screen shows the map with a marker, the photo (if the venue has one), and all text fields. If the
@@ -1783,10 +1833,10 @@ map doesn't render in Expo Go, run `npx expo run:ios` / `npx expo run:android` i
 `react-native-maps` versions need a native rebuild) — note this in the task's commit description
 if it applies.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/mobile/src/screens/VenueDetailScreen.tsx apps/mobile/src/screens/VenueDetailScreen.spec.tsx apps/mobile/src/navigation/RootNavigator.tsx apps/mobile/package.json pnpm-lock.yaml
+git add apps/mobile/src/screens/VenueDetailScreen.tsx apps/mobile/src/screens/VenueDetailScreen.spec.tsx apps/mobile/package.json pnpm-lock.yaml
 git commit -m "feat(mobile): venue detail screen with full fields and react-native-maps"
 ```
 
@@ -2086,14 +2136,13 @@ git commit -m "feat(mobile): add report-wrong-info form to venue detail screen"
 ### Task 14: Login / register screen
 
 **Files:**
-- Create: `apps/mobile/src/screens/AuthScreen.tsx`
-- Modify: `apps/mobile/src/navigation/RootNavigator.tsx`
+- Modify: `apps/mobile/src/screens/AuthScreen.tsx` (placeholder created by Task 8)
 - Test: `apps/mobile/src/screens/AuthScreen.spec.tsx`
 
 **Interfaces:**
 - Consumes: `useAuth()` (`signIn`, `signUp`) from Task 5's `src/lib/auth-context.tsx`.
-- Produces: the `Auth` route (already typed since Task 8; this task registers its component) —
-  consumed by Task 15's favorite-button "sign in first" redirect.
+- Produces: nothing new (the `Auth` route was already registered by Task 8, pointing at this same
+  file) — consumed by Task 15's favorite-button "sign in first" redirect.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2152,11 +2201,11 @@ describe("AuthScreen", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @gurmego/mobile test src/screens/AuthScreen.spec.tsx`
-Expected: FAIL — `./AuthScreen` module does not exist yet.
+Expected: FAIL — the placeholder screen (Task 8) has none of this.
 
 - [ ] **Step 3: Write the implementation**
 
-Create `apps/mobile/src/screens/AuthScreen.tsx`:
+Replace `apps/mobile/src/screens/AuthScreen.tsx`'s placeholder body:
 
 ```tsx
 import { useState } from "react";
@@ -2194,30 +2243,21 @@ export default function AuthScreen() {
 
 - [ ] **Step 4: Run test to verify it passes**
 
+No `RootNavigator.tsx` edit is needed: Task 8 already registered the `Auth` screen pointing at
+this same file, so replacing its body here is all that's needed.
+
 Run: `pnpm --filter @gurmego/mobile test src/screens/AuthScreen.spec.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Register the `Auth` screen**
-
-Edit `apps/mobile/src/navigation/RootNavigator.tsx`:
-
-```tsx
-import AuthScreen from "../screens/AuthScreen";
-```
-Add inside `<Stack.Navigator>`, after the `VenueDetail` screen:
-```tsx
-<Stack.Screen name="Auth" component={AuthScreen} options={{ title: "Giriş yap" }} />
-```
-
-- [ ] **Step 6: Run the full test suite to confirm no regression**
+- [ ] **Step 5: Run the full test suite to confirm no regression**
 
 Run: `pnpm --filter @gurmego/mobile test`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add apps/mobile/src/screens/AuthScreen.tsx apps/mobile/src/screens/AuthScreen.spec.tsx apps/mobile/src/navigation/RootNavigator.tsx
+git add apps/mobile/src/screens/AuthScreen.tsx apps/mobile/src/screens/AuthScreen.spec.tsx
 git commit -m "feat(mobile): add sign-in/register screen"
 ```
 
@@ -2426,6 +2466,7 @@ Create `apps/mobile/src/screens/FavoritesScreen.spec.tsx`:
 
 ```tsx
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { NavigationContainer } from "@react-navigation/native";
 import FavoritesScreen from "./FavoritesScreen";
 import { useAuth } from "../lib/auth-context";
 import { getFavoriteLists, removeFavoriteVenue } from "../lib/api";
@@ -2437,10 +2478,20 @@ jest.mock("../lib/api", () => ({
 }));
 const mockNavigate = jest.fn();
 jest.mock("@react-navigation/native", () => ({
+  // Spreading the real module (not re-declaring useFocusEffect) keeps its actual implementation --
+  // FavoritesScreen calls the real hook, which needs a real NavigationContainer ancestor at render
+  // time (see renderScreen() below), not a mock.
   ...jest.requireActual("@react-navigation/native"),
   useNavigation: () => ({ navigate: mockNavigate }),
-  useFocusEffect: (jest.requireActual("@react-navigation/native") as any).useFocusEffect,
 }));
+
+function renderScreen() {
+  return render(
+    <NavigationContainer>
+      <FavoritesScreen />
+    </NavigationContainer>,
+  );
+}
 
 const ONE_LIST = [
   {
@@ -2671,6 +2722,38 @@ BLOCKER/MAJOR findings and re-review until TEMİZ, exactly as Task 26/27 did for
   gerektiriyor (para/hesap açma kararı). Bu plan `react-native-maps`'i Expo'nun varsayılan
   sağlayıcısıyla (iOS: Apple Maps, ek config yok) kurar; Android'in Google Maps API anahtarı
   ihtiyacı Plan 4e'ye not olarak düşülmeli.
+
+### 2. tur (kategori B — kullanıcı kararıyla belgelenip yürütüme geçildi, plana eklenmedi)
+
+Kullanıcı kararı: "A'yı düzelt, B'yi belgeleyip yürütümeye geç." Kategori A (somut/blocker
+bulgular — Jest setup sıralaması, route-registration zamanlaması, Task 16'nın `any`/
+`NavigationContainer` sorunu, Task 1'in `VENUE_NOT_FOUND` boşluğu, Task 2'nin re-export eksikliği)
+yukarıdaki ilgili task'larda düzeltildi. Aşağıdakiler gerçek ama kapsam-genişletici öneriler —
+bilinen sınırlama olarak kaydedilip plana eklenmedi:
+
+- **Tam liste bazlı gezinme yok:** `FavoritesScreen` (Task 16) kullanıcının TÜM listelerindeki
+  favorileri tek düz görünümde gösterir, `apps/web`'in de yaptığı gibi — ayrı liste seçme/gezinme
+  UI'si yok. Bu v1'den beri (web tarafında) kabul edilmiş bir sınırlama, mobile'da yeni bir kayıp
+  değil.
+- **Pagination (`next_cursor`/`has_more`) mobile'da tüketilmiyor:** Discovery/Favorites ekranları
+  ilk sayfayı gösterir, "daha fazla yükle" yok. `apps/web`'in MVP kapsamı da aynı — pilot ölçeği
+  (30-45 mekan) için gerekli değil.
+- **Filtre-sıfırlama UX'i tanımlı değil:** Discovery'nin filtre kombinasyonunu tek dokunuşla
+  temizleyen bir "sıfırla" butonu bu planda yok; her filtre kendi başına kapatılabilir durumda
+  kalır. Küçük bir cilalama, pilot için engelleyici değil.
+- **Auth token-refresh / AppState lifecycle test kapsamı sığ:** Task 5/6'nın testleri happy-path
+  token yenilemeyi kapsar ama uygulamanın arka plana atılıp geri gelmesi (`AppState` değişimi)
+  senaryosu manuel-test notuna bırakıldı (Task 17 Step 3), otomatik test edilmiyor — web'in kendi
+  11 review turluk session-race deneyimi burada tekrarlanma riski taşıyor ama Detox olmadan native
+  ortamda güvenilir şekilde otomatikleştirilemez (yukarıdaki e2e ret gerekçesiyle aynı sınır).
+- **Production share-domain sahipliği:** Task 12'nin paylaşım linki, `apps/web`'in halihazırda
+  kullandığı domain'i varsayar; mobile'a özel bir deep-link/universal-link domain kurulumu bu
+  planın kapsamında değil, Plan 4e'nin dağıtım/provisioning işi.
+- **Task 15'in varsayılan-liste-seçim mantığı istemcide:** `FavoriteButton`'ın "kullanıcının hangi
+  listeye eklenmesi gerektiğine" istemci tarafında karar vermesi ilk bakışta "iş mantığı
+  istemcide olmaz" kısıtına aykırı görünebilir — ama bu aynı desen zaten `apps/web/src/components/
+  favorite-button.tsx`'de değişmeden var ve daha önce shipped/review edilmiş durumda; mobile bu
+  davranışı birebir kopyalıyor, yeni bir ihlal değil, mevcut bir emsalin tekrarı.
 - **Supabase email confirmation deep-link akışı:** reddedilmedi ama ertelendi — yerel Supabase
   varsayılan olarak email confirmation'ı kapalı tutar (bu proje boyunca hep böyleydi); gerçek prod
   Supabase projesinde bu açılırsa (Plan 4e kararı), deep-link/callback akışı ayrı bir task olarak
