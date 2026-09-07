@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import { VenueSchema, VenueListQuerySchema, OptionalTrueFlag, VenueDetailSchema, BboxQuerySchema, UserLocationHeaderSchema } from "./venue.schema";
+import { VenueListItemSchema, VenueListResponseSchema, MapVenueSchema } from "./venue.schema";
 
 describe("VenueSchema", () => {
   it("accepts a valid venue payload", () => {
@@ -104,4 +105,44 @@ describe("BboxQuerySchema", () => {
   it("rejects only 3 parts", () => expect(BboxQuerySchema.safeParse({ bbox: "29.0,40.9,29.1" }).success).toBe(false));
   it("rejects an empty leading part instead of treating it as 0 (Number('')===0 footgun)", () => expect(BboxQuerySchema.safeParse({ bbox: ",40.9,29.1,41" }).success).toBe(false));
   it("accepts a well-formed bbox", () => expect(BboxQuerySchema.parse({ bbox: "29.0,40.9,29.1,41.0" }).bbox).toEqual([29.0, 40.9, 29.1, 41.0]));
+});
+
+describe("VenueListItemSchema", () => {
+  it("accepts the narrower GET /venues list projection, including nullable editorial fields", () => {
+    const result = VenueListItemSchema.safeParse({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Test Cafe",
+      slug: "test-cafe",
+      category: "cafe",
+      priceRange: "MODERATE",
+      isBoutique: true,
+      editorialNote: null,
+      googleRating: null,
+      googleRatingCount: null,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("VenueListResponseSchema", () => {
+  it("accepts a paginated envelope with data + meta", () => {
+    const result = VenueListResponseSchema.safeParse({
+      data: [],
+      meta: { next_cursor: null, has_more: false },
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("MapVenueSchema", () => {
+  it("accepts the GET /venues/map projection", () => {
+    const result = MapVenueSchema.safeParse({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Test Cafe",
+      category: "cafe",
+      lat: 40.99,
+      lng: 29.02,
+    });
+    expect(result.success).toBe(true);
+  });
 });

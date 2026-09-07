@@ -128,3 +128,40 @@ export const BboxQuerySchema = z.object({
   }),
 });
 export type BboxQuery = z.infer<typeof BboxQuerySchema>;
+
+// `GET /venues` (apps/api's `VenuesRepository.searchPublished`) SELECTs only
+// `id, name, slug, category, priceRange, isBoutique, editorialNote, googleRating, googleRatingCount`
+// (+ `distance_m` when lat/lng given, not surfaced to clients) — a narrower projection than
+// `VenueSchema`, not merely "all fields optional". `id`/`name`/`slug`/`category`/`priceRange`/`isBoutique`
+// are always present; `editorialNote`/`googleRating`/`googleRatingCount` are genuinely
+// DB-nullable columns (raw SQL returns `null`, not `undefined`), so those stay `.nullable()` here.
+export const VenueListItemSchema = z.object({
+  id: VenueSchema.shape.id,
+  name: VenueSchema.shape.name,
+  slug: VenueSchema.shape.slug,
+  category: VenueSchema.shape.category,
+  priceRange: VenueSchema.shape.priceRange,
+  isBoutique: VenueSchema.shape.isBoutique,
+  editorialNote: z.string().max(1000).nullable(),
+  googleRating: z.number().min(0).max(5).nullable(),
+  googleRatingCount: z.number().int().min(0).nullable(),
+});
+export type VenueListItem = z.infer<typeof VenueListItemSchema>;
+
+export const VenueListResponseSchema = z.object({
+  data: z.array(VenueListItemSchema),
+  meta: z.object({ next_cursor: z.string().nullable(), has_more: z.boolean() }),
+});
+
+// `GET /venues/map` (apps/api's `VenuesController.mapView` -> `VenuesRepository.findInBbox`)
+// returns a plain array (no `data`/`meta` envelope) of `{ id, name, category, lat, lng }`.
+export const MapVenueSchema = z.object({
+  id: VenueSchema.shape.id,
+  name: VenueSchema.shape.name,
+  category: VenueSchema.shape.category,
+  lat: z.number(),
+  lng: z.number(),
+});
+export type MapVenue = z.infer<typeof MapVenueSchema>;
+
+export const MapVenueListSchema = z.array(MapVenueSchema);

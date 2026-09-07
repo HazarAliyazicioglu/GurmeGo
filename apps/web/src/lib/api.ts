@@ -1,5 +1,16 @@
 import { createApiClient } from "@gurmego/api-client";
-import { VenueSchema, VenueDetailSchema, DistrictSchema, FavoriteListSchema, FavoriteSchema, type VenueDetail, type District } from "@gurmego/shared";
+import {
+  VenueDetailSchema,
+  DistrictSchema,
+  FavoriteListSchema,
+  FavoriteSchema,
+  VenueListResponseSchema,
+  MapVenueListSchema,
+  ReportResponseSchema,
+  type VenueDetail,
+  type District,
+} from "@gurmego/shared";
+export type { VenueListItem, MapVenue } from "@gurmego/shared";
 import { z } from "zod";
 import type { Coords } from "./use-geolocation";
 
@@ -30,56 +41,10 @@ async function fetchValidated<T>(
   return result.data;
 }
 
-// `GET /venues` (apps/api's `VenuesRepository.searchPublished`) SELECTs only
-// `id, name, slug, category, priceRange, isBoutique, editorialNote, googleRating, googleRatingCount`
-// (+ `distance_m` when lat/lng given, not surfaced to clients) — a narrower projection than
-// `VenueSchema`, not merely "all fields optional". `id`/`name`/`slug`/`category`/`priceRange`/`isBoutique`
-// are always present; `editorialNote`/`googleRating`/`googleRatingCount` are genuinely
-// DB-nullable columns (raw SQL returns `null`, not `undefined`), so those stay `.nullable()` here,
-// matching the pattern used by `VenueDetailSchema` above.
-const VenueListItemSchema = z.object({
-  id: VenueSchema.shape.id,
-  name: VenueSchema.shape.name,
-  slug: VenueSchema.shape.slug,
-  category: VenueSchema.shape.category,
-  priceRange: VenueSchema.shape.priceRange,
-  isBoutique: VenueSchema.shape.isBoutique,
-  editorialNote: z.string().max(1000).nullable(),
-  googleRating: z.number().min(0).max(5).nullable(),
-  googleRatingCount: z.number().int().min(0).nullable(),
-});
-
-// Real shape returned by `GET /venues` — narrower than `Venue` (see note above) and with
-// `editorialNote`/`googleRating`/`googleRatingCount` as `T | null` rather than `T | undefined`
-// (raw SQL nulls, not omitted keys). Components rendering venue list items should type against
-// this, not `Partial<Venue>`, or `tsc` will (correctly) flag the null/undefined mismatch.
-export type VenueListItem = z.infer<typeof VenueListItemSchema>;
-
-const VenueListResponseSchema = z.object({
-  data: z.array(VenueListItemSchema),
-  meta: z.object({ next_cursor: z.string().nullable(), has_more: z.boolean() }),
-});
-
 export function getVenues(query: Record<string, string>, coords?: Coords | null) {
   const qs = new URLSearchParams(query).toString();
   return fetchValidated(`/venues?${qs}`, VenueListResponseSchema, undefined, locationHeaders(coords));
 }
-
-// `GET /venues/map` (apps/api's `VenuesController.mapView` -> `VenuesRepository.findInBbox`)
-// returns a plain array (no `data`/`meta` envelope) of `{ id, name, category, lat, lng }` — a raw
-// SQL projection distinct from both `VenueListItemSchema` (no lat/lng) and `VenueSchema` (no
-// lat/lng at all), so it gets its own schema rather than reusing either.
-const MapVenueSchema = z.object({
-  id: VenueSchema.shape.id,
-  name: VenueSchema.shape.name,
-  category: VenueSchema.shape.category,
-  lat: z.number(),
-  lng: z.number(),
-});
-
-export type MapVenue = z.infer<typeof MapVenueSchema>;
-
-const MapVenueListSchema = z.array(MapVenueSchema);
 
 export function getVenuesInBbox(bbox: [number, number, number, number]) {
   return fetchValidated(`/venues/map?bbox=${bbox.join(",")}`, MapVenueListSchema);
@@ -119,8 +84,6 @@ export async function addFavoriteVenue(token: string, listId: string, venueId: s
   const result = FavoriteSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(`/me/lists/${listId}/venues`, result.error.issues);
 }
-
-const ReportResponseSchema = z.object({ urgent: z.boolean() });
 
 export async function reportVenue(venueId: string, reason: string) {
   const res = await fetch(`${API_BASE}/venues/${venueId}/report`, {
