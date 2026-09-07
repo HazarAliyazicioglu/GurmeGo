@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Image, ScrollView, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import MapView, { Marker } from "react-native-maps";
 import { getVenueBySlug } from "../lib/api";
+import { directionsUrl } from "../lib/directions";
 import type { VenueDetail } from "@gurmego/shared";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -46,6 +47,9 @@ export default function VenueDetailScreen() {
           <Marker coordinate={{ latitude: venue.lat, longitude: venue.lng }} title={venue.name} />
         </MapView>
       </View>
+      <Pressable onPress={() => Linking.openURL(directionsUrl(venue.name, venue.district.name))}>
+        <Text>Buraya nasıl giderim</Text>
+      </Pressable>
     </ScrollView>
   );
 }
