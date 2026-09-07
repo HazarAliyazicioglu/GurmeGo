@@ -251,7 +251,7 @@ describe("VenueListItemSchema", () => {
       name: "Test Cafe",
       slug: "test-cafe",
       category: "cafe",
-      priceRange: "MID",
+      priceRange: "MODERATE",
       isBoutique: true,
       editorialNote: null,
       googleRating: null,
@@ -934,7 +934,7 @@ describe("getVenues", () => {
             name: "Test Cafe",
             slug: "test-cafe",
             category: "cafe",
-            priceRange: "MID",
+            priceRange: "MODERATE",
             isBoutique: true,
             editorialNote: null,
             googleRating: null,
@@ -1479,7 +1479,7 @@ describe("DiscoveryScreen", () => {
   it("lists venues returned by getVenues and navigates to detail on press", async () => {
     (getVenues as jest.Mock).mockResolvedValue({
       data: [
-        { id: "v1", name: "Test Cafe", slug: "test-cafe", category: "cafe", priceRange: "MID", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null },
+        { id: "v1", name: "Test Cafe", slug: "test-cafe", category: "cafe", priceRange: "MODERATE", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null },
       ],
       meta: { next_cursor: null, has_more: false },
     });
@@ -1509,8 +1509,8 @@ describe("DiscoveryScreen", () => {
 
     render(<DiscoveryScreen />);
 
-    await waitFor(() => expect(screen.getByText("Kafe")).toBeTruthy());
-    fireEvent.press(screen.getByText("Kafe"));
+    await waitFor(() => expect(screen.getByText("Kahve")).toBeTruthy());
+    fireEvent.press(screen.getByText("Kahve"));
 
     await waitFor(() =>
       expect(getVenues).toHaveBeenLastCalledWith(expect.objectContaining({ category: "cafe" }), null),
@@ -1526,7 +1526,7 @@ describe("DiscoveryScreen", () => {
     fireEvent.press(screen.getByText("₺₺"));
 
     await waitFor(() =>
-      expect(getVenues).toHaveBeenLastCalledWith(expect.objectContaining({ priceRange: "MID" }), null),
+      expect(getVenues).toHaveBeenLastCalledWith(expect.objectContaining({ priceRange: "MODERATE" }), null),
     );
   });
 
@@ -1564,16 +1564,26 @@ import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+// Matches apps/web's venue-filters.tsx category options exactly (`category` is a free-form
+// string in @gurmego/shared's schemas, not a strict enum -- these four values are the ones real
+// venue rows actually carry). An earlier draft of this plan had "Bar"/"bar" here, which is not a
+// real category value and would silently return zero results; fixed mid-execution, see the SDD
+// ledger's Task 2 fix-round note.
 const CATEGORIES: { label: string; value: string }[] = [
-  { label: "Kafe", value: "cafe" },
+  { label: "Kahve", value: "cafe" },
   { label: "Restoran", value: "restaurant" },
-  { label: "Bar", value: "bar" },
+  { label: "Fırın & tatlı", value: "bakery" },
+  { label: "Sokak lezzeti", value: "street-food" },
 ];
 
+// Values match @gurmego/shared's PRICE_RANGE_VALUES (packages/shared/src/enums/price-range.ts) --
+// same 4 tiers apps/web's venue-filters.tsx already uses, not the LOW/MID/HIGH placeholder an
+// earlier draft of this plan used (caught mid-execution: SDD ledger, Task 2's fix-round note).
 const PRICE_RANGES: { label: string; value: string }[] = [
-  { label: "₺", value: "LOW" },
-  { label: "₺₺", value: "MID" },
-  { label: "₺₺₺", value: "HIGH" },
+  { label: "₺", value: "BUDGET" },
+  { label: "₺₺", value: "MODERATE" },
+  { label: "₺₺₺", value: "EXPENSIVE" },
+  { label: "₺₺₺₺", value: "PREMIUM" },
 ];
 
 export default function DiscoveryScreen() {
@@ -1706,7 +1716,7 @@ jest.mock("react-native-maps", () => {
 
 const FULL_VENUE = {
   id: "v1", slug: "test-cafe", name: "Test Cafe", category: "cafe", cuisineType: "İtalyan",
-  priceRange: "MID", signatureItems: ["Flat white", "Cheesecake"], transportNote: "Metro Kadıköy'e 5 dk",
+  priceRange: "MODERATE", signatureItems: ["Flat white", "Cheesecake"], transportNote: "Metro Kadıköy'e 5 dk",
   openingHours: { mon: "09:00-22:00" }, editorialNote: "Sakin bir köşe.", isBoutique: true,
   verifiedAt: "2026-01-01T00:00:00.000Z", source: "MANUAL", googleRating: 4.5, googleRatingCount: 120,
   googlePlaceId: null, district: { name: "Kadıköy", slug: "kadikoy" }, lat: 40.99, lng: 29.02,
@@ -2503,7 +2513,7 @@ const ONE_LIST = [
   {
     id: "list1", userId: "u1", name: "Favorilerim", createdAt: "2026-01-01T00:00:00.000Z",
     favorites: [
-      { id: "f1", venueId: "v1", venue: { id: "v1", name: "Test Cafe", slug: "test-cafe", category: "cafe", priceRange: "MID", isBoutique: true } },
+      { id: "f1", venueId: "v1", venue: { id: "v1", name: "Test Cafe", slug: "test-cafe", category: "cafe", priceRange: "MODERATE", isBoutique: true } },
     ],
   },
 ];
