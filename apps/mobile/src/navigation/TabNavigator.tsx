@@ -17,14 +17,7 @@ export default function TabNavigator() {
     // "Found multiple elements" once tabs were introduced). VenueDetail/Auth get their headers
     // from the parent Stack.Navigator instead.
     <Tab.Navigator screenOptions={{ headerShown: false }}>
-      {/* tabBarLabel intentionally differs from DiscoveryScreen's own "Mekanlar" content text —
-          keeping them identical made every render assert against two matching nodes instead of
-          one. "title" is kept for a11y/consistency even though the header itself is hidden. */}
-      <Tab.Screen
-        name="Discovery"
-        component={DiscoveryScreen}
-        options={{ title: "Mekanlar", tabBarLabel: "Keşfet" }}
-      />
+      <Tab.Screen name="Discovery" component={DiscoveryScreen} options={{ title: "Mekanlar" }} />
       <Tab.Screen name="Favoriler" component={FavoritesScreen} options={{ title: "Favoriler" }} />
     </Tab.Navigator>
   );

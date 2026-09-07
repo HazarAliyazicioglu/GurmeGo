@@ -9,6 +9,6 @@ describe("TabNavigator", () => {
         <TabNavigator />
       </NavigationContainer>,
     );
-    expect(screen.getByText("Mekanlar")).toBeTruthy();
+    expect(screen.getAllByText("Mekanlar").length).toBeGreaterThan(0);
   });
 });
