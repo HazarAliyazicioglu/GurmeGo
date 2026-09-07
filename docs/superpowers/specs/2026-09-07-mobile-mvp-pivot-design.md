@@ -1,12 +1,32 @@
 # MVP Pivot — React Native (Expo) Native App — Design
 
-**Tarih:** 2026-09-07 · **Durum:** Taslak — `idea-red-team` (Codex) henüz çalıştırılmadı.
+**Tarih:** 2026-09-07 · **Durum:** `idea-red-team` (Codex) çalıştırıldı → **NO-GO**, yüksek güven.
+Kullanıcı verdikti bilerek reddetti ("gözler açık ilerle") — bkz. §8. writing-plans'a geçiliyor.
 
 İlgili: [product-overview.md](../../product-overview.md) (mobil "ana deneyim" — orijinal hedef) ·
 [architecture.md](../../architecture.md) §3 (monorepo iskeleti, `apps/mobile` zaten planlanmıştı) ·
 `docs/CHANGELOG.md` "2026-07-16 — Red-team pivotu" (React Native'in MVP'den Faz 2'ye ertelendiği
 karar) · [2026-07-29-plan4d-kvkk-analytics-design.md](2026-07-29-plan4d-kvkk-analytics-design.md) ·
 [2026-07-29-plan4e-provisioning-runbook-design.md](2026-07-29-plan4e-provisioning-runbook-design.md)
+
+## 0. Red-team verdikti (Codex, `idea-red-team`, 2026-09-07) — KAYIT, KARAR DEĞİL
+
+**VERDİKT: NO-GO** — "doğrulanmamış mağaza-güven varsayımı uğruna tamamlanmış doğrulama yüzeyini
+(web/PWA) yeniden yazıp pilotu başlamadan bloke ediyor."
+
+**CONFIDENCE:**
+- GÜVEN: yüksek
+- VARSAYIMLAR: küçük/tek ekip; kanıtlanmış store yayın hattı yok; Expo prod tecrübesi yok; 150
+  kullanıcı hedefi korunuyor; PWA'nın reddedildiğini gösteren saha verisi yok.
+- FİKRİMİ NE DEĞİŞTİRİR: 100 kullanıcıyla eşzamanlı testte native koldaki 50 kişiden ≥30'unun
+  kurulumu tamamlaması + kuranların ≥%25'inin D7'de dönmesi + PWA kolunun D7 dönüşünün %10'un
+  altında kalması + iki mağaza için release candidate'ın ≤10 mühendis-gününde gerçek cihazda hazır
+  olduğunun gösterilmesi.
+- BİLİNMEYENLER: Apple/Google hesap türü/yaşı, kurucunun gerçek RN/Expo tecrübesi, PWA'nın gerçek
+  cihaz performansı, native isteyen kullanıcı görüşme sayısı.
+
+**Kullanıcının kararı:** Verdikti bilerek reddetti — "app olması şart, işlevselliği o zaman ortaya
+çıkıyor." Kabul edilen/reddedilen bulgular için §8'e bakın.
 
 ## 1. Bağlam ve karar
 
@@ -33,13 +53,18 @@ Monorepo'ya yeni bir workspace eklenir. Mevcut `apps/api` **hiç değişmez** �
 tasarlandı (REST + OpenAPI), tüketici istemcisinin web mi native mi olduğu backend'i ilgilendirmez.
 `packages/shared`'daki zod şemaları ve `packages/api-client`'ın ürettiği tipler aynen tüketilir.
 
-**Özellik kapsamı — `apps/web`'de (Plan 2) zaten yapılmış olanın birebir taşınması, yeni özellik
-eklenmiyor:**
+**Özellik kapsamı — `apps/web`'de (Plan 2) zaten yapılmış olan özellik SETİNİN aynısı, yeni özellik
+eklenmiyor. Ama Codex'in haklı olarak işaret ettiği gibi bu bir "kod taşıma" değil, UI'nin sıfırdan
+native'de yeniden inşası (31 dosya/~2.200 satır web koduna karşılık native tarafı sıfırdan
+yazılacak) — bu maliyeti küçük göstermemek için burada açıkça yazılıyor:**
 - Mekan keşfi/liste: ilçe + kategori + fiyat filtreleri (Kadıköy, Beşiktaş, Beyoğlu).
-- Mekan detay sayfası.
-- Favoriler: liste oluşturma, mekan ekleme (Supabase Auth ile giriş gerektirir, AK-02).
+- Mekan detay sayfası, **native harita** (aşağıya bkz., web'in Leaflet'inin native karşılığı —
+  önceki taslakta eksikti, `idea-red-team` bulgusu).
+- Favoriler: liste oluşturma, mekan ekleme/çıkarma (Supabase Auth ile giriş gerektirir, AK-02).
 - "Buraya nasıl giderim" → Maps deep-link.
-- Paylaş (native share sheet — `expo-sharing`, web'deki WhatsApp/platform share'in native karşılığı).
+- Paylaş — React Native'in kendi `Share.share()` API'si (**`expo-sharing` DEĞİL** — o, yerel dosya
+  paylaşımı için; metin/URL paylaşımı `react-native`'in `Share` modülüyle yapılır. `idea-red-team`
+  bulgusu, önceki taslaktaki hata düzeltildi).
 - "Bilgi yanlış" raporlama.
 - Giriş/kayıt (Supabase Auth).
 - Plan 4d'nin KVKK rıza checkbox'ı + hesap silme ekranı (mobile de birinci sınıf istemci sayılıyor).
@@ -69,8 +94,14 @@ Admin panel web kalıyor, bu pivot admin tarafını etkilemiyor.
   localStorage/cookie yaklaşımının native karşılığı).
 - **Konum:** `expo-location` (web'in `useGeolocation` hook'unun native karşılığı, gerçek native
   izin akışıyla — PWA'nın "yetersiz hissettirme" endişesinin çözümü tam olarak burada).
-- **API istemcisi:** `packages/api-client` aynen kullanılır (React Native, Node.js `fetch`
-  polyfill'iyle uyumlu, ekstra bir adaptasyon beklenmiyor — `idea-red-team` bunu doğrulamalı).
+- **Harita:** `react-native-maps` (iOS'ta Apple Maps, Android'de Google Maps — platform varsayılan
+  sağlayıcısı, ekstra API anahtarı/maliyet gerektirmez). Web'in Leaflet'inin native karşılığı;
+  önceki taslakta bu bileşen hiç tanımlanmamıştı (`idea-red-team` bulgusu, kabul edildi).
+- **API istemcisi:** `packages/api-client` HTTP wrapper'ı olarak kullanılır, ama **gerçek response
+  doğrulaması `packages/shared`'daki zod şemalarıyla yapılır** — `idea-red-team`'in bulduğu gibi
+  `api-client`'ın ürettiği response tipleri `never`, "tip güvenli" iddiası önceki taslakta
+  şişirilmişti; düzeltildi. Native tarafı web'in `apps/web/src/lib/api.ts`'deki gibi ince bir
+  fetch+zod-parse katmanı yazacak, `api-client`'a fazladan güvenmeyecek.
 - **State/veri çekme:** Web'deki mevcut desenlere paralel (React hooks, ekstra bir state
   kütüphanesi — Redux/Zustand — eklenmiyor, YAGNI; web'de de yoktu).
 
@@ -88,8 +119,26 @@ Admin panel web kalıyor, bu pivot admin tarafını etkilemiyor.
 - EAS Submit → TestFlight (iOS) + Play internal testing (Android) → prod store listing.
 - Apple Developer Program ($99/yıl) + Google Play Console ($25 tek seferlik) — Plan 4e'nin
   "DURAKLAMA NOKTASI" (para harcayan adım, kullanıcı onayı) kuralı burada da geçerli.
-- Store review süresi pilot başlangıcını geciktirebilir — kullanıcı bunu kabul etti (§bkz. karar
-  geçmişi), sabit bir tarih yok.
+- **Google Play'in yeni geliştirici hesaplarında prod erişimi için 12 test kullanıcısıyla 14 gün
+  kesintisiz closed test şartı var** (`idea-red-team` bulgusu, kabul edildi) — bu, geliştirmeyle
+  paralel başlatılmalı (build hazır olur olmaz closed test başlatılır), zaman çizelgesine dahil.
+- **Apple, hesap açan uygulamalarda uygulama-içi hesap silmeyi zorunlu tutuyor** — Plan 4d'nin
+  "Supabase Auth kaydı da silinsin mi" açık sorusu bu yüzden native app için ARTIK açık soru değil,
+  **zorunluluk**: Supabase Auth kaydı da silinmeli (Plan 4d §4 madde 1'in cevabı zaten bu yöndeydi,
+  bu bulgu o kararı güçlendiriyor).
+- Store review süresi pilot başlangıcını geciktirebilir — kullanıcı bunu kabul etti, sabit bir
+  tarih yok.
+
+## 5.1 Gerçekçi zaman/maliyet tahmini (`idea-red-team` bulgusu, kabul edildi)
+
+- **Geliştirme:** 20-35 mühendis-günü (auth/session/lifecycle karmaşıklığı dahil — web'in favori
+  ekranındaki oturum yarışları 11 review turu gerektirmişti, native lifecycle'da aynı sınıf
+  hataların tekrar çıkması bekleniyor).
+- **Play closed test:** +14 takvim günü (geliştirmeyle paralel yürütülebilir, yukarıya bkz.).
+- **Apple review:** değişken (genelde 1-3 gün), red riski var.
+- **Toplam gerçekçi gecikme, pilot başlangıcına kadar: 5-9 hafta.** Pilotun kendisi 6 hafta —
+  yani pivot, "öğrenme süresini geliştirme süresine çeviriyor" (Codex'in ifadesi). Kullanıcı bu
+  maliyeti bilerek kabul etti (§0, §8).
 
 ## 6. Plan 4d/4e ile ilişki
 
@@ -112,4 +161,37 @@ Eski sıralama (Plan 4d → Plan 4e) yerine önerilen yeni sıra:
 2. **Plan 4d (güncellenmiş)** — KVKK+event-capture+hesap silme, artık hem web hem mobile kapsıyor.
 3. **Plan 4e (güncellenmiş)** — provisioning + EAS Build/Submit + store hesapları dahil.
 
-`idea-red-team` bu sıralamayı da sorgulamalı (paralel yürütülebilir mi, yoksa sıralı mı olmalı).
+## 8. Red-team bulguları — kabul/ret kaydı
+
+`idea-red-team` NO-GO verdi (§0). Kullanıcı verdikti bilerek reddetti: "app olması şart, işlevselliği
+o zaman ortaya çıkıyor." Bulgu bazında karar:
+
+### Kabul edilenler (plana işlendi)
+- **Mağaza-güven varsayımı kanıtsız** — kabul edildi, gerçek bir varsayım olarak kayda geçti (§0),
+  çürütülmedi ama kullanıcı bilerek üstleniyor.
+- **`packages/api-client`'ın "tip güvenli" iddiası şişirilmiş** (response tipleri `never`) —
+  düzeltildi, §3.
+- **`expo-sharing` yanlış API seçimi** — düzeltildi (`react-native`'in `Share` modülü), §2.1.
+- **Native harita çözümü tanımsızdı** — `react-native-maps` eklendi, §3.
+- **Google Play 14-gün closed test şartı** — eklendi, §5.
+- **Apple'ın hesap-içi silme zorunluluğu** — Plan 4d'nin açık sorusunu (Supabase Auth kaydı
+  silinsin mi) zorunluluğa çevirdi, §5.
+- **Gerçekçi efor tahmini (20-35 mühendis-günü + 14 gün Play test + Apple review)** — eklendi, §5.1.
+- **İki istemci (web+mobile) bakım yükünün küçümsenmesi** — kabul edildi, §6'da zaten iki istemcili
+  event-capture/KVKK olarak işaretlenmişti, bu bulgu o kararın maliyetini teyit etti.
+
+### Reddedilenler
+- **"Gereksiz kılan çözüm: Google Maps zaten var"** — reddedildi. Gerekçe: bu argüman native app
+  kararına değil, GurmeGo'nun VAR OLMA gerekçesine karşı — aynı eleştiri web/PWA'ya da, projenin
+  kendisine de uygulanabilir, ve `product-overview.md`'de zaten ele alınmış (Maps'te kürasyon yok,
+  zincir/butik ayrımı yok, fiyat aralığı eksik). Bu yanlışsa ne olur: GurmeGo'nun temel tezi
+  (Maps'in üstüne kürasyon katmanı) çürük demektir — ama bu, native-spesifik bir risk değil,
+  projenin baştan beri taşıdığı bir risk, zaten bir kez red-team'den geçmiş.
+- **"MAPS_CLICK yanıltıcı metrik olabilir" ölüm senaryosu** — native kararına özgü bir risk olarak
+  reddedildi (bu web/PWA'da da aynı derecede geçerli bir sorun), ama Plan 4d'ye not olarak eklendi:
+  event-capture tasarımı "karar eylemi" ile "terk etme sinyali" ayrımını netleştirmeli.
+
+### Kabul edilmeyen ama izlenecek (Codex'in "fikrimi ne değiştirir" kriteri)
+Codex'in verdiği somut ters-kanıt eşiği (§0) bir izleme kriteri olarak saklanıyor: eğer native
+kurulum/dönüş oranları bu eşiklerin belirgin altında kalırsa (özellikle D7 dönüş <%10), bu MVP
+kararının yanlış olduğunun erken sinyali sayılacak ve web/PWA'ya geri dönüş gündeme gelecek.
