@@ -1,11 +1,14 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react-native";
 import VenueDetailScreen from "./VenueDetailScreen";
 import { getVenueBySlug } from "../lib/api";
+import { useAuth } from "../lib/auth-context";
 
 jest.mock("../lib/api", () => ({ getVenueBySlug: jest.fn() }));
+jest.mock("../lib/auth-context", () => ({ useAuth: jest.fn() }));
 jest.mock("@react-navigation/native", () => ({
   ...jest.requireActual("@react-navigation/native"),
   useRoute: () => ({ params: { slug: "test-cafe" } }),
+  useNavigation: () => ({ navigate: jest.fn() }),
 }));
 jest.mock("react-native-maps", () => {
   const { View } = require("react-native");
@@ -22,6 +25,10 @@ const FULL_VENUE = {
 };
 
 describe("VenueDetailScreen", () => {
+  beforeEach(() => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null, session: null });
+  });
+
   it("fetches and shows the venue's name, price range, and editorial note", async () => {
     (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
 

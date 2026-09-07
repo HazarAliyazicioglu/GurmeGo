@@ -6,6 +6,7 @@ import MapView, { Marker } from "react-native-maps";
 import { getVenueBySlug } from "../lib/api";
 import { directionsUrl } from "../lib/directions";
 import ReportForm from "../components/ReportForm";
+import FavoriteButton from "../components/FavoriteButton";
 import type { VenueDetail } from "@gurmego/shared";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -51,6 +52,7 @@ export default function VenueDetailScreen() {
       <Pressable onPress={() => Linking.openURL(directionsUrl(venue.name, venue.district.name))}>
         <Text>Buraya nasıl giderim</Text>
       </Pressable>
+      <FavoriteButton venueId={venue.id} />
       <Pressable
         onPress={() =>
           Share.share({
