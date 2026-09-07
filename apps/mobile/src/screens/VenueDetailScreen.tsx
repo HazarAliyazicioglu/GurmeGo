@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import MapView, { Marker } from "react-native-maps";
@@ -49,6 +49,15 @@ export default function VenueDetailScreen() {
       </View>
       <Pressable onPress={() => Linking.openURL(directionsUrl(venue.name, venue.district.name))}>
         <Text>Buraya nasıl giderim</Text>
+      </Pressable>
+      <Pressable
+        onPress={() =>
+          Share.share({
+            message: `${venue.name} — GurmeGo'da keşfet: https://gurmego.com/mekan/${venue.slug}`,
+          })
+        }
+      >
+        <Text>Paylaş</Text>
       </Pressable>
     </ScrollView>
   );

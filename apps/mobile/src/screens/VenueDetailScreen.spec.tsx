@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react-native";
 import VenueDetailScreen from "./VenueDetailScreen";
 import { getVenueBySlug } from "../lib/api";
 
@@ -62,5 +62,18 @@ describe("VenueDetailScreen", () => {
     render(<VenueDetailScreen />);
 
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
+  });
+
+  it("calls the native Share sheet with the venue name when the share button is pressed", async () => {
+    (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
+    const { Share } = require("react-native");
+    const shareSpy = jest.spyOn(Share, "share").mockResolvedValue({ action: Share.sharedAction });
+
+    render(<VenueDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy());
+    fireEvent.press(screen.getByText("Paylaş"));
+
+    expect(shareSpy).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Test Cafe") }));
   });
 });
