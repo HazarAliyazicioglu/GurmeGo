@@ -226,9 +226,15 @@ git commit -m "feat(api): add DELETE /me/lists/:id/venues/:venueId to remove a f
 **Interfaces:**
 - Consumes: nothing new.
 - Produces: `VenueListItemSchema`, `VenueListResponseSchema`, `MapVenueSchema`,
-  `MapVenueListSchema` (exported from `@gurmego/shared`, alongside the existing `VenueSchema` etc.)
-  and `ReportResponseSchema` — consumed by Task 6's mobile API client AND by `apps/web/src/lib/api.ts`
-  (updated in this same task, so there is exactly one definition of each, not two that can drift).
+  `MapVenueListSchema` and `ReportResponseSchema` (exported from `@gurmego/shared`, alongside the
+  existing `VenueSchema` etc.) — consumed by `apps/web/src/lib/api.ts` (updated in this same task,
+  so there is exactly one definition of each, not two that can drift). `MapVenueSchema`/
+  `MapVenueListSchema` are NOT consumed by Task 6's mobile API client — see the SDD pre-flight
+  ruling below (mobile's Discovery screen ships list+filters only, no bbox multi-venue map view;
+  Task 10's single-venue map on the detail screen uses `VenueDetail`'s own `lat`/`lng`, not this
+  schema). They are promoted here anyway because `apps/web`'s own definitions are being deleted
+  from `apps/web/src/lib/api.ts` in this same task, and `apps/web`'s `venue-map-leaflet.tsx` still
+  needs them from somewhere.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2758,3 +2764,17 @@ bilinen sınırlama olarak kaydedilip plana eklenmedi:
   varsayılan olarak email confirmation'ı kapalı tutar (bu proje boyunca hep böyleydi); gerçek prod
   Supabase projesinde bu açılırsa (Plan 4e kararı), deep-link/callback akışı ayrı bir task olarak
   o zaman eklenir. Şimdiden spekülatif bir akış kurmak YAGNI.
+
+### SDD pre-flight scan (yürütmeden hemen önce, kullanıcı onayı olmadan verilen tek karar)
+
+- **Discovery'nin bbox çoklu-mekan haritası mobile'a taşınmadı:** `apps/web`'in Discovery
+  sayfasında `venue-map.tsx`/`venue-map-leaflet.tsx` üzerinden görünür harita alanına göre canlı
+  yeniden sorgulanan (Leaflet `moveend`), birden çok mekanı aynı anda gösteren interaktif bir
+  harita var. Task 9 (mobile Discovery) bunu kapsamıyor — sadece liste + filtreler. Task 10 zaten
+  mekan detayında TEK mekanlı native haritayı (react-native-maps) veriyor, pivotun asıl gerekçesi
+  (native harita PWA'dan iyi) bunun tek başına karşıladığı bir ihtiyaç. Bbox harita ayrı, büyükçe
+  bir özellik (kendi yükleme-durumu state machine'i, pan-ile-yeniden-sorgulama mantığı) — pilot
+  öncesi bu plana 18. bir task olarak eklenmedi, gerekirse pilot geri bildirimine göre ayrı bir
+  fast-follow plan olarak eklenir. `Task 2`'nin `MapVenueSchema`/`MapVenueListSchema` promosyonu
+  bu yüzden mobile'da hiç kullanılmıyor — sadece `apps/web`'in kendi ihtiyacı için taşındı. Tam
+  gerekçe: SDD ledger'ı (`.superpowers/sdd/2026-09-07-mobile-mvp/progress.md`, Ruling 1).
