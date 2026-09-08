@@ -14,6 +14,11 @@ import { DAY_LABELS, PRICE_LABELS } from "../lib/labels";
 
 type VenueDetailRoute = RouteProp<RootStackParamList, "VenueDetail">;
 
+function renderStars(rating: number): string {
+  const filled = Math.max(0, Math.min(5, Math.round(rating)));
+  return "★".repeat(filled) + "☆".repeat(5 - filled);
+}
+
 export default function VenueDetailScreen() {
   const route = useRoute<VenueDetailRoute>();
   const [venue, setVenue] = useState<VenueDetail | null>(null);
@@ -46,7 +51,7 @@ export default function VenueDetailScreen() {
 
         {venue.googleRating != null && venue.googleRatingCount != null && (
           <View style={styles.ratingRow}>
-            <Text style={styles.ratingStars}>★★★★★</Text>
+            <Text style={styles.ratingStars}>{renderStars(venue.googleRating)}</Text>
             <Text style={styles.ratingText}>
               {`${venue.googleRating} (${venue.googleRatingCount} Google yorumu)`}
             </Text>

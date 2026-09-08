@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import MapView, { Marker, type Region } from "react-native-maps";
-import { getVenues, getVenuesInBbox, type VenueListItem, type MapVenue } from "../lib/api";
+import { getAllVenues, getVenuesInBbox, type VenueListItem, type MapVenue } from "../lib/api";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { colors } from "../theme";
 
@@ -26,14 +26,16 @@ export default function MapScreen() {
   const navigation = useNavigation<Nav>();
   const [mapVenues, setMapVenues] = useState<MapVenue[]>([]);
   // MapVenueSchema has no `slug` (it's a minimal id/name/category/lat/lng projection) -- recover
-  // it by cross-referencing against an unfiltered venues list fetched once on mount, same
+  // it by cross-referencing against the full venues list fetched once on mount, same
   // cross-reference apps/web's own map component does (there, against the currently-filtered
   // Discovery list; here, Map is its own tab with no filters of its own, so an unfiltered fetch).
+  // getAllVenues (not getVenues({})) pages through every result -- a single-page fetch silently
+  // drops venues past the API's default limit=20, leaving their markers un-tappable.
   const [venues, setVenues] = useState<VenueListItem[]>([]);
   const latestMapRequest = useRef(0);
 
   useEffect(() => {
-    getVenues({}).then((res) => setVenues(res.data)).catch(() => setVenues([]));
+    getAllVenues().then(setVenues).catch(() => setVenues([]));
   }, []);
 
   function loadMapVenues(region: Region) {

@@ -84,6 +84,16 @@ describe("VenueDetailScreen", () => {
     expect(screen.getByText(/Son doğrulama/)).toBeTruthy();
   });
 
+  it("renders a star count proportional to the actual googleRating, not always five", async () => {
+    (getVenueBySlug as jest.Mock).mockResolvedValue({ ...FULL_VENUE, googleRating: 3, googleRatingCount: 10 });
+
+    render(<VenueDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
+    expect(screen.getByText("★★★☆☆")).toBeTruthy();
+    expect(screen.queryByText("★★★★★")).toBeFalsy();
+  });
+
   it("omits Google rating when googleRating/googleRatingCount are null, and omits opening hours section when empty", async () => {
     (getVenueBySlug as jest.Mock).mockResolvedValue({
       ...FULL_VENUE, googleRating: null, googleRatingCount: null, openingHours: {},

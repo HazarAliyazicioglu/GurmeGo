@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../lib/auth-context";
 import { colors, radius, spacing, typography } from "../theme";
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();
+  const navigation = useNavigation();
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -13,7 +15,14 @@ export default function AuthScreen() {
   async function handleSubmit() {
     setError(null);
     const result = mode === "signIn" ? await signIn(email, password) : await signUp(email, password);
-    if (result.error) setError(result.error);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      // Auth is pushed onto the root stack from wherever the user tapped "Giriş yap" -- going
+      // back returns them to that screen, which re-renders from the now-signed-in auth context
+      // instead of leaving them stranded on the login form they just submitted.
+      navigation.goBack();
+    }
   }
 
   return (

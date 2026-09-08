@@ -27,6 +27,7 @@ export default function FavoritesScreen() {
   const { user, session, signOut } = useAuth();
   const navigation = useNavigation<Nav>();
   const [favorites, setFavorites] = useState<FlatFavorite[]>([]);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   // Guards against a stale request resolving after a newer one and clobbering the screen with
   // another user's data -- e.g. user A's slow getFavoriteLists() call resolving AFTER user B has
   // signed in on the same device while A's request was still in flight. Bumped unconditionally at
@@ -93,11 +94,16 @@ export default function FavoritesScreen() {
         </Text>
         <Pressable
           style={({ pressed }) => [styles.signOutBtn, pressed && styles.pressedFade]}
-          onPress={() => signOut()}
+          onPress={async () => {
+            setSignOutError(null);
+            const result = await signOut();
+            if (result.error) setSignOutError(result.error);
+          }}
         >
           <Text style={styles.signOutBtnText}>Çıkış yap</Text>
         </Pressable>
       </View>
+      {signOutError && <Text style={styles.signOutErrorText}>{signOutError}</Text>}
       <FlatList
         style={styles.list}
         data={favorites}
@@ -158,6 +164,7 @@ const styles = StyleSheet.create({
   profileEmail: { flex: 1, fontSize: 13, fontWeight: "700", color: colors.inkSoft },
   signOutBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   signOutBtnText: { fontSize: 12, fontWeight: "700", color: colors.danger },
+  signOutErrorText: { fontSize: 12, fontWeight: "600", color: colors.danger, marginHorizontal: spacing.lg, marginTop: spacing.xs },
   list: { flex: 1, marginTop: spacing.sm },
   row: {
     flexDirection: "row",

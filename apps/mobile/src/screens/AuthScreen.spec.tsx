@@ -4,6 +4,12 @@ import { useAuth } from "../lib/auth-context";
 
 jest.mock("../lib/auth-context", () => ({ useAuth: jest.fn() }));
 
+const mockGoBack = jest.fn();
+jest.mock("@react-navigation/native", () => ({
+  ...jest.requireActual("@react-navigation/native"),
+  useNavigation: () => ({ goBack: mockGoBack }),
+}));
+
 // NOTE: this installed @testing-library/react-native version (14.0.1) made `render` and
 // `fireEvent.*` async (they return Promises resolved via internal `act()` calls), unlike the
 // synchronous API the brief's test snippet was written against. Every render/fireEvent call
@@ -12,6 +18,10 @@ jest.mock("../lib/auth-context", () => ({ useAuth: jest.fn() }));
 // environment quirk, just triggered here by unawaited calls instead of unwrapped ones.
 
 describe("AuthScreen", () => {
+  beforeEach(() => {
+    mockGoBack.mockReset();
+  });
+
   it("calls signIn with the typed email and password", async () => {
     const signIn = jest.fn().mockResolvedValue({ error: null });
     (useAuth as jest.Mock).mockReturnValue({ signIn, signUp: jest.fn() });
@@ -23,6 +33,33 @@ describe("AuthScreen", () => {
     await fireEvent.press(screen.getByText("Giriş yap"));
 
     await waitFor(() => expect(signIn).toHaveBeenCalledWith("test@example.com", "sifre123"));
+  });
+
+  it("navigates back after a successful sign-in", async () => {
+    const signIn = jest.fn().mockResolvedValue({ error: null });
+    (useAuth as jest.Mock).mockReturnValue({ signIn, signUp: jest.fn() });
+
+    await render(<AuthScreen />);
+
+    await fireEvent.changeText(screen.getByPlaceholderText("E-posta"), "test@example.com");
+    await fireEvent.changeText(screen.getByPlaceholderText("Şifre"), "sifre123");
+    await fireEvent.press(screen.getByText("Giriş yap"));
+
+    await waitFor(() => expect(mockGoBack).toHaveBeenCalled());
+  });
+
+  it("does not navigate back when sign-in fails", async () => {
+    const signIn = jest.fn().mockResolvedValue({ error: "Invalid credentials" });
+    (useAuth as jest.Mock).mockReturnValue({ signIn, signUp: jest.fn() });
+
+    await render(<AuthScreen />);
+
+    await fireEvent.changeText(screen.getByPlaceholderText("E-posta"), "test@example.com");
+    await fireEvent.changeText(screen.getByPlaceholderText("Şifre"), "wrong");
+    await fireEvent.press(screen.getByText("Giriş yap"));
+
+    await waitFor(() => expect(screen.getByText("Invalid credentials")).toBeTruthy());
+    expect(mockGoBack).not.toHaveBeenCalled();
   });
 
   it("shows the error message returned by signIn on failure", async () => {
@@ -50,5 +87,6 @@ describe("AuthScreen", () => {
     await fireEvent.press(screen.getByText("Kayıt ol"));
 
     await waitFor(() => expect(signUp).toHaveBeenCalledWith("new@example.com", "yenisifre123"));
+    await waitFor(() => expect(mockGoBack).toHaveBeenCalled());
   });
 });

@@ -1,4 +1,4 @@
-import { getVenues, getVenuesInBbox, ApiValidationError } from "./api";
+import { getVenues, getVenuesInBbox, getAllVenues, ApiValidationError } from "./api";
 
 const originalFetch = globalThis.fetch;
 
@@ -55,6 +55,48 @@ describe("getVenues", () => {
     }) as jest.Mock;
 
     await expect(getVenues({})).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("getAllVenues", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function venue(id: string, name: string) {
+    return {
+      id, name, slug: name.toLowerCase(), category: "cafe", priceRange: "MODERATE",
+      isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null,
+    };
+  }
+
+  it("pages through cursor-paginated results and returns every venue in one flat list", async () => {
+    const ID1 = "550e8400-e29b-41d4-a716-446655440001";
+    const ID2 = "550e8400-e29b-41d4-a716-446655440002";
+    const page1 = { data: [venue(ID1, "Cafe1")], meta: { next_cursor: "c1", has_more: true } };
+    const page2 = { data: [venue(ID2, "Cafe2")], meta: { next_cursor: null, has_more: false } };
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => page1 })
+      .mockResolvedValueOnce({ ok: true, json: async () => page2 }) as jest.Mock;
+
+    const result = await getAllVenues();
+
+    expect(result.map((v) => v.id)).toEqual([ID1, ID2]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    const secondCallUrl = (globalThis.fetch as jest.Mock).mock.calls[1][0] as string;
+    expect(secondCallUrl).toContain("cursor=c1");
+  });
+
+  it("returns an empty list without throwing when the first page is empty", async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [], meta: { next_cursor: null, has_more: false } }),
+    }) as jest.Mock;
+
+    const result = await getAllVenues();
+
+    expect(result).toEqual([]);
   });
 });
 

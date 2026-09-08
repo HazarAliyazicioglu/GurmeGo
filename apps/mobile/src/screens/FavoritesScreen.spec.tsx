@@ -78,6 +78,23 @@ describe("FavoritesScreen", () => {
     expect(mockSignOut).toHaveBeenCalled();
   });
 
+  it("shows an error message when sign-out fails", async () => {
+    mockSignOut.mockResolvedValue({ error: "Network error" });
+    (useAuth as jest.Mock).mockReturnValue({
+      user: { id: "u1", email: "gurme@example.com" },
+      session: { access_token: "tok" },
+      signOut: mockSignOut,
+    });
+    (getFavoriteLists as jest.Mock).mockResolvedValue([]);
+
+    await renderScreen();
+
+    await waitFor(() => expect(screen.getByText("gurme@example.com")).toBeTruthy());
+    await fireEvent.press(screen.getByText("Çıkış yap"));
+
+    await waitFor(() => expect(screen.getByText("Network error")).toBeTruthy());
+  });
+
   it("lists the signed-in user's favorited venues and navigates to detail on press", async () => {
     (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" }, signOut: mockSignOut });
     (getFavoriteLists as jest.Mock).mockResolvedValue(ONE_LIST);

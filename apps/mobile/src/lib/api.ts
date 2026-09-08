@@ -56,6 +56,25 @@ export function getVenues(query: Record<string, string>, coords?: Coords | null)
   return fetchValidated(`/venues?${qs}`, VenueListResponseSchema, undefined, locationHeaders(coords));
 }
 
+// Pages through every venue via cursor pagination (server caps a single page at 50 -- see
+// VenueListQuerySchema in packages/shared) and flattens the result into one list. Used where a
+// caller needs the FULL venue set for a client-side id-to-slug lookup (MapScreen) rather than one
+// page of it -- a single unpaginated getVenues({}) call silently drops venues past the first page
+// once there are more than the default limit.
+export async function getAllVenues(): Promise<VenueListItem[]> {
+  const all: VenueListItem[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const query: Record<string, string> = { limit: "50" };
+    if (cursor) query.cursor = cursor;
+    const res = await getVenues(query);
+    all.push(...res.data);
+    if (!res.meta.has_more || !res.meta.next_cursor) break;
+    cursor = res.meta.next_cursor;
+  }
+  return all;
+}
+
 export function getVenueBySlug(slug: string): Promise<VenueDetail> {
   return fetchValidated(`/venues/${slug}`, VenueDetailSchema);
 }
