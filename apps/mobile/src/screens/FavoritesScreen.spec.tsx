@@ -35,15 +35,18 @@ const ONE_LIST = [
   },
 ];
 
+const mockSignOut = jest.fn();
+
 describe("FavoritesScreen", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
+    mockSignOut.mockReset().mockResolvedValue({ error: null });
     (getFavoriteLists as jest.Mock).mockReset();
     (removeFavoriteVenue as jest.Mock).mockReset();
   });
 
   it("prompts sign-in when the user is signed out, without calling the API", async () => {
-    (useAuth as jest.Mock).mockReturnValue({ user: null, session: null });
+    (useAuth as jest.Mock).mockReturnValue({ user: null, session: null, signOut: mockSignOut });
 
     await renderScreen();
 
@@ -51,8 +54,32 @@ describe("FavoritesScreen", () => {
     expect(getFavoriteLists).not.toHaveBeenCalled();
   });
 
+  it("navigates to Auth when the sign-in button is pressed while signed out", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null, session: null, signOut: mockSignOut });
+
+    await renderScreen();
+    await fireEvent.press(screen.getByText("Giriş yap"));
+
+    expect(mockNavigate).toHaveBeenCalledWith("Auth");
+  });
+
+  it("shows the signed-in user's email and a sign-out button above the favorites list", async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      user: { id: "u1", email: "gurme@example.com" },
+      session: { access_token: "tok" },
+      signOut: mockSignOut,
+    });
+    (getFavoriteLists as jest.Mock).mockResolvedValue([]);
+
+    await renderScreen();
+
+    await waitFor(() => expect(screen.getByText("gurme@example.com")).toBeTruthy());
+    await fireEvent.press(screen.getByText("Çıkış yap"));
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+
   it("lists the signed-in user's favorited venues and navigates to detail on press", async () => {
-    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" } });
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" }, signOut: mockSignOut });
     (getFavoriteLists as jest.Mock).mockResolvedValue(ONE_LIST);
 
     await renderScreen();

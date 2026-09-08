@@ -24,7 +24,7 @@ function flattenFavorites(lists: FavoriteList[]): FlatFavorite[] {
 }
 
 export default function FavoritesScreen() {
-  const { user, session } = useAuth();
+  const { user, session, signOut } = useAuth();
   const navigation = useNavigation<Nav>();
   const [favorites, setFavorites] = useState<FlatFavorite[]>([]);
   // Guards against a stale request resolving after a newer one and clobbering the screen with
@@ -62,6 +62,12 @@ export default function FavoritesScreen() {
     return (
       <View style={styles.emptyScreen}>
         <Text style={styles.emptyText}>Favorilerini görmek için giriş yap</Text>
+        <Pressable
+          style={({ pressed }) => [styles.signInBtn, pressed && styles.pressedFade]}
+          onPress={() => navigation.navigate("Auth")}
+        >
+          <Text style={styles.signInBtnText}>Giriş yap</Text>
+        </Pressable>
       </View>
     );
   }
@@ -80,6 +86,17 @@ export default function FavoritesScreen() {
       <View style={styles.topbar}>
         <Text style={styles.eyebrow}>Kaydedilenler</Text>
         <Text style={styles.title}>Favorilerim</Text>
+      </View>
+      <View style={styles.profileCard}>
+        <Text style={styles.profileEmail} numberOfLines={1}>
+          {user.email}
+        </Text>
+        <Pressable
+          style={({ pressed }) => [styles.signOutBtn, pressed && styles.pressedFade]}
+          onPress={() => signOut()}
+        >
+          <Text style={styles.signOutBtnText}>Çıkış yap</Text>
+        </Pressable>
       </View>
       <FlatList
         style={styles.list}
@@ -122,6 +139,25 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   title: { fontFamily: typography.serif, fontSize: 28, fontWeight: "600", color: colors.ink },
+  signInBtn: { marginTop: spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.chipBg },
+  signInBtnText: { fontSize: 13, fontWeight: "700", color: colors.chipText },
+  profileCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.paperCard,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  profileEmail: { flex: 1, fontSize: 13, fontWeight: "700", color: colors.inkSoft },
+  signOutBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  signOutBtnText: { fontSize: 12, fontWeight: "700", color: colors.danger },
   list: { flex: 1, marginTop: spacing.sm },
   row: {
     flexDirection: "row",
