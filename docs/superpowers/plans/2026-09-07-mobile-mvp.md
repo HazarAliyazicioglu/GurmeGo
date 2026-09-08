@@ -2528,7 +2528,7 @@ describe("FavoritesScreen", () => {
   it("prompts sign-in when the user is signed out, without calling the API", () => {
     (useAuth as jest.Mock).mockReturnValue({ user: null, session: null });
 
-    render(<FavoritesScreen />);
+    renderScreen();
 
     expect(screen.getByText("Favorilerini görmek için giriş yap")).toBeTruthy();
     expect(getFavoriteLists).not.toHaveBeenCalled();
@@ -2538,7 +2538,7 @@ describe("FavoritesScreen", () => {
     (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" } });
     (getFavoriteLists as jest.Mock).mockResolvedValue(ONE_LIST);
 
-    render(<FavoritesScreen />);
+    renderScreen();
 
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy());
     fireEvent.press(screen.getByText("Test Cafe"));
@@ -2552,7 +2552,7 @@ describe("FavoritesScreen", () => {
       .mockResolvedValueOnce([{ ...ONE_LIST[0], favorites: [] }]); // refetch after removal
     (removeFavoriteVenue as jest.Mock).mockResolvedValue(undefined);
 
-    render(<FavoritesScreen />);
+    renderScreen();
 
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy());
     fireEvent.press(screen.getByText("Kaldır"));
