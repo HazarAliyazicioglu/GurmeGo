@@ -36,7 +36,13 @@ export default function TabNavigator() {
       }}
     >
       <Tab.Screen name="Discovery" component={DiscoveryScreen} options={{ title: "Mekanlar" }} />
-      <Tab.Screen name="Harita" component={MapScreen} options={{ title: "Harita" }} />
+      {/* MapView captures its own pan gesture, so while Harita is the focused screen a finger
+          drag pans the map instead of driving the tab swipe (real-device feedback: swipe worked
+          between Mekanlar/Favoriler but not over the map). swipeEnabled: false here only disables
+          swiping AWAY from an already-focused Harita -- swiping INTO it from a neighboring tab
+          still works, since that swipe is driven by the neighboring (swipe-enabled) screen. Users
+          leave Harita via the tab bar instead of a swipe. */}
+      <Tab.Screen name="Harita" component={MapScreen} options={{ title: "Harita", swipeEnabled: false }} />
       <Tab.Screen name="Favoriler" component={FavoritesScreen} options={{ title: "Favoriler" }} />
     </Tab.Navigator>
   );
