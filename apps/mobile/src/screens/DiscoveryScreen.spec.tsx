@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react-native";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react-native";
 import DiscoveryScreen from "./DiscoveryScreen";
 import { getVenues, getDistricts } from "../lib/api";
 import { useLocation } from "../lib/use-location";
@@ -18,6 +18,7 @@ jest.mock("@react-navigation/native", () => ({
 describe("DiscoveryScreen", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
+    (getVenues as jest.Mock).mockReset();
     (useLocation as jest.Mock).mockReturnValue(null);
     (getDistricts as jest.Mock).mockResolvedValue([
       { id: "d1", cityId: "c1", name: "Kadıköy", slug: "kadikoy" },
@@ -92,6 +93,65 @@ describe("DiscoveryScreen", () => {
 
     await waitFor(() =>
       expect(getVenues).toHaveBeenLastCalledWith(expect.any(Object), { lat: 40.99, lng: 29.02 }),
+    );
+  });
+
+  it("does not let a slower, older request's response clobber a newer request's results", async () => {
+    let resolveOld: (v: unknown) => void;
+    const pendingOld = new Promise((resolve) => {
+      resolveOld = resolve;
+    });
+    const NEW_VENUE = {
+      id: "v-new", name: "New Result Cafe", slug: "new-result-cafe", category: "cafe",
+      priceRange: "MODERATE", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null,
+    };
+    const OLD_VENUE = {
+      id: "v-old", name: "Old Stale Cafe", slug: "old-stale-cafe", category: "cafe",
+      priceRange: "MODERATE", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null,
+    };
+
+    (getVenues as jest.Mock)
+      .mockReturnValueOnce(pendingOld) // initial request (coords=null), stays pending
+      .mockResolvedValueOnce({ data: [NEW_VENUE], meta: { next_cursor: null, has_more: false } }); // newer request once coords resolve
+
+    (useLocation as jest.Mock).mockReturnValue(null);
+
+    const { rerender } = await render(<DiscoveryScreen />);
+
+    // Simulate location permission resolving after mount -- coords changes, firing a newer request.
+    (useLocation as jest.Mock).mockReturnValue({ lat: 40.99, lng: 29.02 });
+    await rerender(<DiscoveryScreen />);
+
+    await waitFor(() => expect(screen.getByText("New Result Cafe")).toBeTruthy());
+    await waitFor(() => expect(getVenues).toHaveBeenCalledTimes(2));
+
+    // Now resolve the old, slower request -- it must NOT overwrite the newer results.
+    await act(async () => {
+      resolveOld({ data: [OLD_VENUE], meta: { next_cursor: null, has_more: false } });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("Old Stale Cafe")).toBeFalsy();
+    expect(screen.getByText("New Result Cafe")).toBeTruthy();
+  });
+
+  it("clears the category filter when its already-selected chip is pressed again", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+
+    await render(<DiscoveryScreen />);
+
+    await waitFor(() => expect(screen.getByText("Kahve")).toBeTruthy());
+    fireEvent.press(screen.getByText("Kahve"));
+
+    await waitFor(() =>
+      expect(getVenues).toHaveBeenLastCalledWith(expect.objectContaining({ category: "cafe" }), null),
+    );
+
+    fireEvent.press(screen.getByText("Kahve"));
+
+    await waitFor(() =>
+      expect(getVenues).toHaveBeenLastCalledWith(expect.not.objectContaining({ category: expect.anything() }), null),
     );
   });
 });

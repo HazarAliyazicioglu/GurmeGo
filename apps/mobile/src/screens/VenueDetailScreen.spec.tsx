@@ -71,6 +71,31 @@ describe("VenueDetailScreen", () => {
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
   });
 
+  it("shows boutique badge, Google rating, opening hours, and last-verified date", async () => {
+    (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
+
+    render(<VenueDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
+    expect(screen.getByText(/butik/i)).toBeTruthy();
+    expect(screen.getByText(/4\.5/)).toBeTruthy();
+    expect(screen.getByText(/120/)).toBeTruthy();
+    expect(screen.getByText(/09:00-22:00/)).toBeTruthy();
+    expect(screen.getByText(/Son doğrulama/)).toBeTruthy();
+  });
+
+  it("omits Google rating when googleRating/googleRatingCount are null, and omits opening hours section when empty", async () => {
+    (getVenueBySlug as jest.Mock).mockResolvedValue({
+      ...FULL_VENUE, googleRating: null, googleRatingCount: null, openingHours: {},
+    });
+
+    render(<VenueDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
+    expect(screen.queryByText(/Google/)).toBeFalsy();
+    expect(screen.queryByText(/09:00-22:00/)).toBeFalsy();
+  });
+
   it("calls the native Share sheet with the venue name when the share button is pressed", async () => {
     (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
     const { Share } = require("react-native");

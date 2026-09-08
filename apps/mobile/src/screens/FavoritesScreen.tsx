@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -26,10 +26,26 @@ export default function FavoritesScreen() {
   const { user, session } = useAuth();
   const navigation = useNavigation<Nav>();
   const [favorites, setFavorites] = useState<FlatFavorite[]>([]);
+  // Guards against a stale request resolving after a newer one and clobbering the screen with
+  // another user's data -- e.g. user A's slow getFavoriteLists() call resolving AFTER user B has
+  // signed in on the same device while A's request was still in flight. Bumped unconditionally at
+  // the start of every refetch() call (including the one useFocusEffect below fires whenever
+  // session?.access_token changes, since that changes refetch's own identity and therefore its
+  // wrapped useFocusEffect callback's identity, causing the effect to re-run); a response is only
+  // applied if its own requestId still matches by the time it resolves. Same pattern as
+  // FavoriteButton.tsx's latestClickRequest/latestPendingRequest.
+  const latestRefetchRequest = useRef(0);
 
   const refetch = useCallback(() => {
+    const requestId = ++latestRefetchRequest.current;
     if (!session?.access_token) return;
-    getFavoriteLists(session.access_token).then((lists) => setFavorites(flattenFavorites(lists))).catch(() => setFavorites([]));
+    getFavoriteLists(session.access_token)
+      .then((lists) => {
+        if (requestId === latestRefetchRequest.current) setFavorites(flattenFavorites(lists));
+      })
+      .catch(() => {
+        if (requestId === latestRefetchRequest.current) setFavorites([]);
+      });
   }, [session?.access_token]);
 
   // Re-fetch every time this tab gains focus (e.g. after adding a favorite from VenueDetailScreen

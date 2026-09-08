@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import FavoritesScreen from "./FavoritesScreen";
 import { useAuth } from "../lib/auth-context";
@@ -76,5 +76,56 @@ describe("FavoritesScreen", () => {
 
     await waitFor(() => expect(removeFavoriteVenue).toHaveBeenCalledWith("tok", "list1", "v1"));
     await waitFor(() => expect(screen.queryByText("Test Cafe")).toBeFalsy());
+  });
+
+  it("does not apply a stale user's favorites after a session/user switch happens before the slow request resolves", async () => {
+    let resolveA: (v: unknown) => void;
+    const pendingA = new Promise((resolve) => {
+      resolveA = resolve;
+    });
+    const listB = [
+      {
+        id: "list2", userId: "u2", name: "Favorilerim", createdAt: "2026-01-01T00:00:00.000Z",
+        favorites: [
+          { id: "f2", venueId: "v2", venue: { id: "v2", name: "User B Cafe", slug: "user-b-cafe", category: "cafe", priceRange: "MODERATE", isBoutique: true } },
+        ],
+      },
+    ];
+
+    (getFavoriteLists as jest.Mock)
+      .mockReturnValueOnce(pendingA) // user A's slow initial fetch
+      .mockResolvedValueOnce(listB); // user B's fetch after switch
+
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok-a" } });
+
+    const { rerender } = await render(
+      <NavigationContainer>
+        <FavoritesScreen />
+      </NavigationContainer>,
+    );
+
+    // Simulate a fast account switch: session changes to user B's token before A's request resolves.
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u2" }, session: { access_token: "tok-b" } });
+    await rerender(
+      <NavigationContainer>
+        <FavoritesScreen />
+      </NavigationContainer>,
+    );
+
+    await waitFor(() => expect(screen.getByText("User B Cafe")).toBeTruthy());
+    await waitFor(() => expect(getFavoriteLists).toHaveBeenCalledTimes(2));
+
+    // Now resolve the stale user A request -- it must NOT clobber the screen with A's data.
+    // Wrapped in act + awaited so the (buggy) setFavorites call, if it happens, is fully flushed
+    // into the rendered tree before we assert -- otherwise a false negative is possible if the
+    // assertion runs before the promise's .then() has had a chance to run.
+    await act(async () => {
+      resolveA(ONE_LIST);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("Test Cafe")).toBeFalsy();
+    expect(screen.getByText("User B Cafe")).toBeTruthy();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -39,17 +39,31 @@ export default function DiscoveryScreen() {
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | undefined>(undefined);
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(undefined);
   const [selectedPriceRange, setSelectedPriceRange] = useState<string | undefined>(undefined);
+  // Guards against a slower, older venues request resolving AFTER a newer one and clobbering the
+  // screen with stale results -- e.g. the initial coords=null request resolving after a
+  // coords={lat,lng} request that started later once location permission resolved. Bumped
+  // unconditionally at the start of every effect run; a response is only applied if its own
+  // requestId still matches by the time it resolves. Same pattern as FavoriteButton.tsx's
+  // latestClickRequest and FavoritesScreen.tsx's latestRefetchRequest.
+  const latestVenuesRequest = useRef(0);
 
   useEffect(() => {
     getDistricts().then(setDistricts).catch(() => setDistricts([]));
   }, []);
 
   useEffect(() => {
+    const requestId = ++latestVenuesRequest.current;
     const query: Record<string, string> = {};
     if (selectedDistrictId) query.districtId = selectedDistrictId;
     if (selectedCategory) query.category = selectedCategory;
     if (selectedPriceRange) query.priceRange = selectedPriceRange;
-    getVenues(query, coords).then((res) => setVenues(res.data)).catch(() => setVenues([]));
+    getVenues(query, coords)
+      .then((res) => {
+        if (requestId === latestVenuesRequest.current) setVenues(res.data);
+      })
+      .catch(() => {
+        if (requestId === latestVenuesRequest.current) setVenues([]);
+      });
   }, [selectedDistrictId, selectedCategory, selectedPriceRange, coords]);
 
   return (
@@ -59,7 +73,7 @@ export default function DiscoveryScreen() {
         data={districts}
         keyExtractor={(d) => d.id}
         renderItem={({ item }) => (
-          <Pressable onPress={() => setSelectedDistrictId(item.id)}>
+          <Pressable onPress={() => setSelectedDistrictId(selectedDistrictId === item.id ? undefined : item.id)}>
             <Text>{item.name}</Text>
           </Pressable>
         )}
@@ -69,7 +83,7 @@ export default function DiscoveryScreen() {
         data={CATEGORIES}
         keyExtractor={(c) => c.value}
         renderItem={({ item }) => (
-          <Pressable onPress={() => setSelectedCategory(item.value)}>
+          <Pressable onPress={() => setSelectedCategory(selectedCategory === item.value ? undefined : item.value)}>
             <Text>{item.label}</Text>
           </Pressable>
         )}
@@ -79,7 +93,9 @@ export default function DiscoveryScreen() {
         data={PRICE_RANGES}
         keyExtractor={(p) => p.value}
         renderItem={({ item }) => (
-          <Pressable onPress={() => setSelectedPriceRange(item.value)}>
+          <Pressable
+            onPress={() => setSelectedPriceRange(selectedPriceRange === item.value ? undefined : item.value)}
+          >
             <Text>{item.label}</Text>
           </Pressable>
         )}

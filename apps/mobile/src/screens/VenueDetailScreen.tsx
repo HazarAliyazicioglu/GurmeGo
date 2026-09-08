@@ -30,10 +30,22 @@ export default function VenueDetailScreen() {
       <Text>{venue.name}</Text>
       <Text>{venue.district.name}</Text>
       <Text>{venue.priceRange}</Text>
+      {venue.isBoutique && <Text>Butik mekan</Text>}
+      {venue.googleRating != null && venue.googleRatingCount != null && (
+        <Text>{`${venue.googleRating} (${venue.googleRatingCount} Google yorumu)`}</Text>
+      )}
       {venue.cuisineType && <Text>{venue.cuisineType}</Text>}
       {venue.editorialNote && <Text>{venue.editorialNote}</Text>}
       {venue.transportNote && <Text>{venue.transportNote}</Text>}
       {venue.address && <Text>{venue.address}</Text>}
+      {Object.keys(venue.openingHours).length > 0 && (
+        <View>
+          {Object.entries(venue.openingHours).map(([day, hours]) => (
+            <Text key={day}>{`${day}: ${hours}`}</Text>
+          ))}
+        </View>
+      )}
+      <Text>{`Son doğrulama: ${new Date(venue.verifiedAt).toLocaleDateString()}`}</Text>
       {venue.signatureItems.length > 0 && (
         <View>
           {venue.signatureItems.map((item) => (
