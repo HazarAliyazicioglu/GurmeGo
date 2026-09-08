@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getVenues, getDistricts, type VenueListItem } from "../lib/api";
 import { useLocation } from "../lib/use-location";
 import type { District } from "@gurmego/shared";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, radius, spacing, typography } from "../theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -30,6 +31,8 @@ const PRICE_RANGES: { label: string; value: string }[] = [
   { label: "₺₺₺", value: "EXPENSIVE" },
   { label: "₺₺₺₺", value: "PREMIUM" },
 ];
+
+const PRICE_LABEL_BY_VALUE = Object.fromEntries(PRICE_RANGES.map((p) => [p.value, p.label]));
 
 export default function DiscoveryScreen() {
   const navigation = useNavigation<Nav>();
@@ -67,48 +70,132 @@ export default function DiscoveryScreen() {
   }, [selectedDistrictId, selectedCategory, selectedPriceRange, coords]);
 
   return (
-    <View>
+    <View style={styles.screen}>
+      <View style={styles.topbar}>
+        <Text style={styles.eyebrow}>Kadıköy · Beşiktaş · Beyoğlu</Text>
+        <Text style={styles.title}>Mekanlar</Text>
+      </View>
       <FlatList
         horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipRow}
+        contentContainerStyle={styles.chipRowContent}
         data={districts}
         keyExtractor={(d) => d.id}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => setSelectedDistrictId(selectedDistrictId === item.id ? undefined : item.id)}>
-            <Text>{item.name}</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const on = selectedDistrictId === item.id;
+          return (
+            <Pressable
+              style={[styles.chip, on && styles.chipOn]}
+              onPress={() => setSelectedDistrictId(on ? undefined : item.id)}
+            >
+              <Text style={[styles.chipText, on && styles.chipTextOn]}>{item.name}</Text>
+            </Pressable>
+          );
+        }}
       />
       <FlatList
         horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipRow}
+        contentContainerStyle={styles.chipRowContent}
         data={CATEGORIES}
         keyExtractor={(c) => c.value}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => setSelectedCategory(selectedCategory === item.value ? undefined : item.value)}>
-            <Text>{item.label}</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const on = selectedCategory === item.value;
+          return (
+            <Pressable
+              style={[styles.chip, on && styles.chipOn]}
+              onPress={() => setSelectedCategory(on ? undefined : item.value)}
+            >
+              <Text style={[styles.chipText, on && styles.chipTextOn]}>{item.label}</Text>
+            </Pressable>
+          );
+        }}
       />
       <FlatList
         horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipRow}
+        contentContainerStyle={styles.chipRowContent}
         data={PRICE_RANGES}
         keyExtractor={(p) => p.value}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => setSelectedPriceRange(selectedPriceRange === item.value ? undefined : item.value)}
-          >
-            <Text>{item.label}</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const on = selectedPriceRange === item.value;
+          return (
+            <Pressable
+              style={[styles.chip, on && styles.chipOn]}
+              onPress={() => setSelectedPriceRange(on ? undefined : item.value)}
+            >
+              <Text style={[styles.chipText, on && styles.chipTextOn]}>{item.label}</Text>
+            </Pressable>
+          );
+        }}
       />
       <FlatList
+        style={styles.list}
         data={venues}
         keyExtractor={(v) => v.id}
+        ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
         renderItem={({ item }) => (
-          <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
-            <Text>{item.name}</Text>
+          <Pressable
+            style={styles.row}
+            onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}
+          >
+            <View style={styles.rowThumb} />
+            <View style={styles.rowBody}>
+              <Text style={styles.rowName}>{item.name}</Text>
+              <Text style={styles.rowMeta}>{PRICE_LABEL_BY_VALUE[item.priceRange] ?? item.priceRange}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
           </Pressable>
         )}
       />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.paper },
+  topbar: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    color: colors.accentDeep,
+    marginBottom: spacing.xs,
+  },
+  title: { fontFamily: typography.serif, fontSize: 28, fontWeight: "600", color: colors.ink },
+  chipRow: { flexGrow: 0, marginBottom: spacing.xs },
+  chipRowContent: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  chip: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.chipBg,
+  },
+  chipOn: { backgroundColor: colors.ink },
+  chipText: { fontSize: 13, fontWeight: "700", color: colors.chipText },
+  chipTextOn: { color: colors.paper },
+  list: { flex: 1, marginTop: spacing.sm },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.paperCard,
+  },
+  rowDivider: { height: 1, backgroundColor: colors.line, marginHorizontal: spacing.lg },
+  rowThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.accentSoft,
+  },
+  rowBody: { flex: 1, gap: 2 },
+  rowName: { fontFamily: typography.serif, fontSize: 16, fontWeight: "600", color: colors.ink },
+  rowMeta: { fontSize: 12, fontWeight: "700", color: colors.accentDeep },
+  chevron: { fontSize: 18, color: colors.inkFaint },
+});

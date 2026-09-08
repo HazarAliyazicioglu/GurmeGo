@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../lib/auth-context";
 import { getFavoriteLists, removeFavoriteVenue } from "../lib/api";
 import type { FavoriteList } from "@gurmego/shared";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, radius, spacing, typography } from "../theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -59,8 +60,8 @@ export default function FavoritesScreen() {
 
   if (!user) {
     return (
-      <View>
-        <Text>Favorilerini görmek için giriş yap</Text>
+      <View style={styles.emptyScreen}>
+        <Text style={styles.emptyText}>Favorilerini görmek için giriş yap</Text>
       </View>
     );
   }
@@ -75,19 +76,68 @@ export default function FavoritesScreen() {
   }
 
   return (
-    <FlatList
-      data={favorites}
-      keyExtractor={(item) => item.venueId}
-      renderItem={({ item }) => (
-        <View>
-          <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
-            <Text>{item.name}</Text>
-          </Pressable>
-          <Pressable onPress={() => handleRemove(item.listId, item.venueId)}>
-            <Text>Kaldır</Text>
-          </Pressable>
-        </View>
-      )}
-    />
+    <View style={styles.screen}>
+      <View style={styles.topbar}>
+        <Text style={styles.eyebrow}>Kaydedilenler</Text>
+        <Text style={styles.title}>Favorilerim</Text>
+      </View>
+      <FlatList
+        style={styles.list}
+        data={favorites}
+        keyExtractor={(item) => item.venueId}
+        ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
+        renderItem={({ item }) => (
+          <View style={styles.row}>
+            <Pressable
+              style={styles.rowMain}
+              onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}
+            >
+              <View style={styles.rowThumb} />
+              <Text style={styles.rowName}>{item.name}</Text>
+            </Pressable>
+            <Pressable style={styles.removeBtn} onPress={() => handleRemove(item.listId, item.venueId)}>
+              <Text style={styles.removeBtnText}>Kaldır</Text>
+            </Pressable>
+          </View>
+        )}
+      />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.paper },
+  emptyScreen: { flex: 1, backgroundColor: colors.paper, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  emptyText: { fontSize: 15, fontWeight: "700", color: colors.inkSoft, textAlign: "center" },
+  topbar: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    color: colors.accentDeep,
+    marginBottom: spacing.xs,
+  },
+  title: { fontFamily: typography.serif, fontSize: 28, fontWeight: "600", color: colors.ink },
+  list: { flex: 1, marginTop: spacing.sm },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.paperCard,
+  },
+  rowDivider: { height: 1, backgroundColor: colors.line, marginHorizontal: spacing.lg },
+  rowMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },
+  rowThumb: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.accentSoft },
+  rowName: { fontFamily: typography.serif, fontSize: 16, fontWeight: "600", color: colors.ink, flexShrink: 1 },
+  removeBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.danger,
+  },
+  removeBtnText: { fontSize: 12, fontWeight: "700", color: colors.danger },
+});

@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import DiscoveryScreen from "../screens/DiscoveryScreen";
 import FavoritesScreen from "../screens/FavoritesScreen";
+import { colors } from "../theme";
 
 export type TabParamList = {
   Discovery: undefined;
@@ -16,7 +17,14 @@ export default function TabNavigator() {
     // TabNavigator.spec.tsx / App.spec.tsx tests below going from single-match to
     // "Found multiple elements" once tabs were introduced). VenueDetail/Auth get their headers
     // from the parent Stack.Navigator instead.
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.accentDeep,
+        tabBarInactiveTintColor: colors.inkFaint,
+        tabBarStyle: { backgroundColor: colors.paperCard, borderTopColor: colors.line },
+      }}
+    >
       <Tab.Screen name="Discovery" component={DiscoveryScreen} options={{ title: "Mekanlar" }} />
       <Tab.Screen name="Favoriler" component={FavoritesScreen} options={{ title: "Favoriler" }} />
     </Tab.Navigator>

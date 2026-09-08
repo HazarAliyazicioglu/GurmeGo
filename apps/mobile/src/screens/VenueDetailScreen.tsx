@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import MapView, { Marker } from "react-native-maps";
@@ -9,6 +9,7 @@ import ReportForm from "../components/ReportForm";
 import FavoriteButton from "../components/FavoriteButton";
 import type { VenueDetail } from "@gurmego/shared";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, radius, spacing, typography } from "../theme";
 
 type VenueDetailRoute = RouteProp<RootStackParamList, "VenueDetail">;
 
@@ -23,58 +24,193 @@ export default function VenueDetailScreen() {
   if (!venue) return null;
 
   return (
-    <ScrollView>
-      {venue.photos.length > 0 && (
-        <Image source={{ uri: venue.photos[0] }} style={{ width: "100%", height: 200 }} />
-      )}
-      <Text>{venue.name}</Text>
-      <Text>{venue.district.name}</Text>
-      <Text>{venue.priceRange}</Text>
-      {venue.isBoutique && <Text>Butik mekan</Text>}
-      {venue.googleRating != null && venue.googleRatingCount != null && (
-        <Text>{`${venue.googleRating} (${venue.googleRatingCount} Google yorumu)`}</Text>
-      )}
-      {venue.cuisineType && <Text>{venue.cuisineType}</Text>}
-      {venue.editorialNote && <Text>{venue.editorialNote}</Text>}
-      {venue.transportNote && <Text>{venue.transportNote}</Text>}
-      {venue.address && <Text>{venue.address}</Text>}
-      {Object.keys(venue.openingHours).length > 0 && (
-        <View>
-          {Object.entries(venue.openingHours).map(([day, hours]) => (
-            <Text key={day}>{`${day}: ${hours}`}</Text>
-          ))}
-        </View>
-      )}
-      <Text>{`Son doğrulama: ${new Date(venue.verifiedAt).toLocaleDateString()}`}</Text>
-      {venue.signatureItems.length > 0 && (
-        <View>
-          {venue.signatureItems.map((item) => (
-            <Text key={item}>{item}</Text>
-          ))}
-        </View>
-      )}
-      <View style={{ height: 200 }}>
-        <MapView
-          style={{ flex: 1 }}
-          initialRegion={{ latitude: venue.lat, longitude: venue.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
-        >
-          <Marker coordinate={{ latitude: venue.lat, longitude: venue.lng }} title={venue.name} />
-        </MapView>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={styles.hero}>
+        {venue.photos.length > 0 && (
+          <Image source={{ uri: venue.photos[0] }} style={styles.heroImage} />
+        )}
+        {venue.isBoutique && (
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>Butik mekan</Text>
+          </View>
+        )}
       </View>
-      <Pressable onPress={() => Linking.openURL(directionsUrl(venue.name, venue.district.name))}>
-        <Text>Buraya nasıl giderim</Text>
-      </Pressable>
-      <FavoriteButton venueId={venue.id} />
-      <Pressable
-        onPress={() =>
-          Share.share({
-            message: `${venue.name} — GurmeGo'da keşfet: https://gurmego.com/mekan/${venue.slug}`,
-          })
-        }
-      >
-        <Text>Paylaş</Text>
-      </Pressable>
-      <ReportForm venueId={venue.id} />
+
+      <View style={styles.body}>
+        <Text style={styles.name}>{venue.name}</Text>
+        <Text style={styles.subline}>
+          {venue.district.name} · <Text style={styles.subPrice}>{venue.priceRange}</Text>
+        </Text>
+        {venue.cuisineType && <Text style={styles.cuisine}>{venue.cuisineType}</Text>}
+
+        {venue.googleRating != null && venue.googleRatingCount != null && (
+          <View style={styles.ratingRow}>
+            <Text style={styles.ratingStars}>★★★★★</Text>
+            <Text style={styles.ratingText}>
+              {`${venue.googleRating} (${venue.googleRatingCount} Google yorumu)`}
+            </Text>
+          </View>
+        )}
+
+        {venue.editorialNote && (
+          <View style={styles.quoteBlock}>
+            <Text style={styles.quoteEyebrow}>Neden burada?</Text>
+            <Text style={styles.quoteText}>{venue.editorialNote}</Text>
+          </View>
+        )}
+
+        {(venue.transportNote || venue.address) && (
+          <View style={styles.infoGrid}>
+            {venue.transportNote && (
+              <View style={styles.infoCell}>
+                <Text style={styles.infoLabel}>Ulaşım</Text>
+                <Text style={styles.infoValue}>{venue.transportNote}</Text>
+              </View>
+            )}
+            {venue.address && (
+              <View style={styles.infoCell}>
+                <Text style={styles.infoLabel}>Adres</Text>
+                <Text style={styles.infoValue}>{venue.address}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {Object.keys(venue.openingHours).length > 0 && (
+          <View style={styles.hoursSection}>
+            <Text style={styles.sectionEyebrow}>Çalışma saatleri</Text>
+            {Object.entries(venue.openingHours).map(([day, hours]) => (
+              <Text key={day} style={styles.hoursLine}>{`${day}: ${hours}`}</Text>
+            ))}
+          </View>
+        )}
+
+        <Text style={styles.verified}>{`✓ Son doğrulama: ${new Date(venue.verifiedAt).toLocaleDateString()}`}</Text>
+
+        {venue.signatureItems.length > 0 && (
+          <View style={styles.sigSection}>
+            <Text style={styles.sectionEyebrow}>İmza lezzetler</Text>
+            <View style={styles.sigRow}>
+              {venue.signatureItems.map((item) => (
+                <View key={item} style={styles.sigChip}>
+                  <Text style={styles.sigChipText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={styles.mapBlock}>
+          <MapView
+            style={StyleSheet.absoluteFill}
+            initialRegion={{ latitude: venue.lat, longitude: venue.lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
+          >
+            <Marker coordinate={{ latitude: venue.lat, longitude: venue.lng }} title={venue.name} />
+          </MapView>
+        </View>
+
+        <View style={styles.btnRow}>
+          <Pressable
+            style={styles.btnPrimary}
+            onPress={() => Linking.openURL(directionsUrl(venue.name, venue.district.name))}
+          >
+            <Text style={styles.btnPrimaryText}>Buraya nasıl giderim</Text>
+          </Pressable>
+          <Pressable
+            style={styles.btnGhost}
+            onPress={() =>
+              Share.share({
+                message: `${venue.name} — GurmeGo'da keşfet: https://gurmego.com/mekan/${venue.slug}`,
+              })
+            }
+          >
+            <Text style={styles.btnGhostText}>Paylaş</Text>
+          </Pressable>
+        </View>
+
+        <FavoriteButton venueId={venue.id} />
+        <ReportForm venueId={venue.id} />
+      </View>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.paper },
+  content: { paddingBottom: spacing.xxl },
+  hero: {
+    height: 220,
+    backgroundColor: colors.accentSoft,
+    justifyContent: "flex-end",
+  },
+  heroImage: { ...StyleSheet.absoluteFill, resizeMode: "cover" },
+  heroBadge: {
+    alignSelf: "flex-start",
+    margin: spacing.lg,
+    backgroundColor: colors.ink,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+  },
+  heroBadgeText: { color: colors.paper, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 },
+  body: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  name: { fontFamily: typography.serif, fontSize: 30, fontWeight: "600", color: colors.ink },
+  subline: { marginTop: spacing.xs, fontSize: 14, fontWeight: "700", color: colors.inkSoft },
+  subPrice: { color: colors.accentDeep, fontWeight: "800" },
+  cuisine: { marginTop: 2, fontSize: 13, fontWeight: "600", color: colors.inkSoft },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
+  ratingStars: { color: colors.accent, fontSize: 14 },
+  ratingText: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  quoteBlock: { marginTop: spacing.lg, backgroundColor: colors.ink, borderRadius: radius.lg, padding: spacing.lg },
+  quoteEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, textTransform: "uppercase", color: colors.accentSoft },
+  quoteText: {
+    fontFamily: typography.serif,
+    fontStyle: "italic",
+    fontSize: 18,
+    lineHeight: 24,
+    color: colors.paper,
+    marginTop: spacing.sm,
+  },
+  infoGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg, marginTop: spacing.lg },
+  infoCell: { flexBasis: "45%", flexGrow: 1, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: spacing.sm },
+  infoLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: colors.inkFaint },
+  infoValue: { fontSize: 14, fontWeight: "600", color: colors.ink, marginTop: spacing.xs },
+  hoursSection: { marginTop: spacing.lg },
+  sectionEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, textTransform: "uppercase", color: colors.accentDeep, marginBottom: spacing.xs },
+  hoursLine: { fontSize: 13, color: colors.inkSoft, lineHeight: 20 },
+  verified: { marginTop: spacing.lg, fontSize: 12, fontWeight: "700", color: colors.accentDeep },
+  sigSection: { marginTop: spacing.lg },
+  sigRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  sigChip: {
+    backgroundColor: colors.chipBg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+  },
+  sigChipText: { fontSize: 13, fontWeight: "700", color: colors.chipText },
+  mapBlock: {
+    height: 140,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    marginTop: spacing.lg,
+    backgroundColor: colors.chipBg,
+  },
+  btnRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
+  btnPrimary: {
+    flex: 1,
+    backgroundColor: colors.ink,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    alignItems: "center",
+  },
+  btnPrimaryText: { color: colors.paper, fontSize: 13, fontWeight: "700" },
+  btnGhost: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    alignItems: "center",
+  },
+  btnGhostText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
+});

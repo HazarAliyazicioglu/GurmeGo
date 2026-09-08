@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable, StyleSheet, Text } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../lib/auth-context";
 import { getFavoriteLists, createFavoriteList, addFavoriteVenue } from "../lib/api";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, radius, spacing } from "../theme";
 
 const DEFAULT_LIST_NAME = "Favorilerim";
 
@@ -73,8 +74,28 @@ export default function FavoriteButton({ venueId }: { venueId: string }) {
   }
 
   return (
-    <Pressable onPress={handleClick} disabled={pending}>
-      <Text>{added ? "Favorilerde" : "Favorilere ekle"}</Text>
+    <Pressable
+      style={[styles.btn, added && styles.btnAdded, pending && styles.btnPending]}
+      onPress={handleClick}
+      disabled={pending}
+    >
+      <Text style={[styles.btnText, added && styles.btnTextAdded]}>
+        {added ? "Favorilerde" : "Favorilere ekle"}
+      </Text>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  btn: {
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  btnAdded: { backgroundColor: colors.chipBg },
+  btnPending: { opacity: 0.6 },
+  btnText: { color: colors.paper, fontSize: 13, fontWeight: "700" },
+  btnTextAdded: { color: colors.chipText },
+});
