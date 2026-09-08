@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react-native";
 import DiscoveryScreen from "./DiscoveryScreen";
-import { getVenues, getVenuesInBbox, getDistricts } from "../lib/api";
+import { getVenues, getDistricts } from "../lib/api";
 import { useLocation } from "../lib/use-location";
 import { useAuth } from "../lib/auth-context";
 
@@ -18,11 +18,15 @@ jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
+async function openFilters() {
+  await waitFor(() => expect(screen.getByText("Filtrele")).toBeTruthy());
+  fireEvent.press(screen.getByText("Filtrele"));
+}
+
 describe("DiscoveryScreen", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
     (getVenues as jest.Mock).mockReset();
-    (getVenuesInBbox as jest.Mock).mockReset().mockResolvedValue([]);
     (useLocation as jest.Mock).mockReturnValue(null);
     (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" } });
     (getDistricts as jest.Mock).mockResolvedValue([
@@ -51,10 +55,11 @@ describe("DiscoveryScreen", () => {
     expect(mockNavigate).toHaveBeenCalledWith("VenueDetail", { slug: "test-cafe" });
   });
 
-  it("filters by district when a district chip is pressed", async () => {
+  it("filters by district when a district chip is pressed inside the filter sheet", async () => {
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
 
-    render(<DiscoveryScreen />);
+    await render(<DiscoveryScreen />);
+    await openFilters();
 
     await waitFor(() => expect(screen.getByText("Kadıköy")).toBeTruthy());
     fireEvent.press(screen.getByText("Kadıköy"));
@@ -64,10 +69,11 @@ describe("DiscoveryScreen", () => {
     );
   });
 
-  it("filters by category when a category chip is pressed", async () => {
+  it("filters by category when a category chip is pressed inside the filter sheet", async () => {
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
 
-    render(<DiscoveryScreen />);
+    await render(<DiscoveryScreen />);
+    await openFilters();
 
     await waitFor(() => expect(screen.getByText("Kahve")).toBeTruthy());
     fireEvent.press(screen.getByText("Kahve"));
@@ -77,10 +83,11 @@ describe("DiscoveryScreen", () => {
     );
   });
 
-  it("filters by price range when a price chip is pressed", async () => {
+  it("filters by price range when a price chip is pressed inside the filter sheet", async () => {
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
 
-    render(<DiscoveryScreen />);
+    await render(<DiscoveryScreen />);
+    await openFilters();
 
     await waitFor(() => expect(screen.getByText("₺₺")).toBeTruthy());
     fireEvent.press(screen.getByText("₺₺"));
@@ -88,6 +95,18 @@ describe("DiscoveryScreen", () => {
     await waitFor(() =>
       expect(getVenues).toHaveBeenLastCalledWith(expect.objectContaining({ priceRange: "MODERATE" }), null),
     );
+  });
+
+  it("shows the active filter count on the Filtrele button", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+
+    await render(<DiscoveryScreen />);
+    await openFilters();
+
+    await waitFor(() => expect(screen.getByText("Kahve")).toBeTruthy());
+    fireEvent.press(screen.getByText("Kahve"));
+
+    await waitFor(() => expect(screen.getByText("Filtrele (1)")).toBeTruthy());
   });
 
   it("passes the current coords from useLocation to getVenues", async () => {
@@ -145,6 +164,7 @@ describe("DiscoveryScreen", () => {
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
 
     await render(<DiscoveryScreen />);
+    await openFilters();
 
     await waitFor(() => expect(screen.getByText("Kahve")).toBeTruthy());
     fireEvent.press(screen.getByText("Kahve"));
@@ -160,30 +180,6 @@ describe("DiscoveryScreen", () => {
     );
   });
 
-  it("shows the list view by default and does not call getVenuesInBbox", async () => {
-    (getVenues as jest.Mock).mockResolvedValue({
-      data: [{ id: "v1", name: "Test Cafe", slug: "test-cafe", category: "cafe", priceRange: "MODERATE", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null }],
-      meta: { next_cursor: null, has_more: false },
-    });
-
-    await render(<DiscoveryScreen />);
-
-    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
-    expect(getVenuesInBbox).not.toHaveBeenCalled();
-  });
-
-  it("switches to map view and fetches venues in the current viewport", async () => {
-    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
-
-    await render(<DiscoveryScreen />);
-
-    await waitFor(() => expect(screen.getByText("Harita")).toBeTruthy());
-    fireEvent.press(screen.getByText("Harita"));
-
-    await waitFor(() => expect(getVenuesInBbox).toHaveBeenCalledTimes(1));
-    expect(screen.queryByText("Test Cafe")).toBeFalsy();
-  });
-
   it("shows a sign-in link when the user is signed out, and hides it when signed in", async () => {
     (useAuth as jest.Mock).mockReturnValue({ user: null });
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
@@ -193,5 +189,14 @@ describe("DiscoveryScreen", () => {
     await waitFor(() => expect(screen.getByText("Giriş yap")).toBeTruthy());
     fireEvent.press(screen.getByText("Giriş yap"));
     expect(mockNavigate).toHaveBeenCalledWith("Auth");
+  });
+
+  it("does not show the sign-in link when the user is signed in", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+
+    await render(<DiscoveryScreen />);
+
+    await waitFor(() => expect(screen.getByText("Filtrele")).toBeTruthy());
+    expect(screen.queryByText("Giriş yap")).toBeFalsy();
   });
 });
