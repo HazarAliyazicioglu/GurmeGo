@@ -4,15 +4,17 @@ import {
   FavoriteListSchema,
   FavoriteSchema,
   VenueListResponseSchema,
+  MapVenueListSchema,
   ReportResponseSchema,
   type VenueDetail,
   type District,
   type VenueListItem,
+  type MapVenue,
 } from "@gurmego/shared";
 import { z } from "zod";
 import { API_BASE_URL } from "./env";
 
-export type { VenueListItem };
+export type { VenueListItem, MapVenue };
 
 export class ApiValidationError extends Error {
   constructor(public path: string, public issues: unknown) {
@@ -60,6 +62,14 @@ export function getVenueBySlug(slug: string): Promise<VenueDetail> {
 
 export function getDistricts(): Promise<District[]> {
   return fetchValidated(`/districts?city=istanbul`, z.array(DistrictSchema));
+}
+
+// `GET /venues/map` -- same bbox-scoped multi-venue endpoint apps/web's discovery map uses
+// (getVenuesInBbox in apps/web/src/lib/api.ts). Returns a minimal projection (id/name/category/
+// lat/lng, no slug) -- callers cross-reference by `id` against an already-fetched `VenueListItem[]`
+// to recover the slug needed for navigation, same as apps/web's venue-map-leaflet.tsx does.
+export function getVenuesInBbox(bbox: [number, number, number, number]): Promise<MapVenue[]> {
+  return fetchValidated(`/venues/map?bbox=${bbox.join(",")}`, MapVenueListSchema);
 }
 
 export function getFavoriteLists(token: string) {

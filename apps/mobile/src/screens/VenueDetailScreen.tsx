@@ -10,6 +10,7 @@ import FavoriteButton from "../components/FavoriteButton";
 import type { VenueDetail } from "@gurmego/shared";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { colors, radius, spacing, typography } from "../theme";
+import { DAY_LABELS, PRICE_LABELS } from "../lib/labels";
 
 type VenueDetailRoute = RouteProp<RootStackParamList, "VenueDetail">;
 
@@ -39,7 +40,7 @@ export default function VenueDetailScreen() {
       <View style={styles.body}>
         <Text style={styles.name}>{venue.name}</Text>
         <Text style={styles.subline}>
-          {venue.district.name} · <Text style={styles.subPrice}>{venue.priceRange}</Text>
+          {venue.district.name} · <Text style={styles.subPrice}>{PRICE_LABELS[venue.priceRange] ?? venue.priceRange}</Text>
         </Text>
         {venue.cuisineType && <Text style={styles.cuisine}>{venue.cuisineType}</Text>}
 
@@ -80,7 +81,10 @@ export default function VenueDetailScreen() {
           <View style={styles.hoursSection}>
             <Text style={styles.sectionEyebrow}>Çalışma saatleri</Text>
             {Object.entries(venue.openingHours).map(([day, hours]) => (
-              <Text key={day} style={styles.hoursLine}>{`${day}: ${hours}`}</Text>
+              <View key={day} style={styles.hoursRow}>
+                <Text style={styles.hoursDay}>{DAY_LABELS[day.toLowerCase()] ?? day}</Text>
+                <Text style={styles.hoursValue}>{hours}</Text>
+              </View>
             ))}
           </View>
         )}
@@ -111,13 +115,13 @@ export default function VenueDetailScreen() {
 
         <View style={styles.btnRow}>
           <Pressable
-            style={styles.btnPrimary}
+            style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPressed]}
             onPress={() => Linking.openURL(directionsUrl(venue.name, venue.district.name))}
           >
             <Text style={styles.btnPrimaryText}>Buraya nasıl giderim</Text>
           </Pressable>
           <Pressable
-            style={styles.btnGhost}
+            style={({ pressed }) => [styles.btnGhost, pressed && styles.btnPressed]}
             onPress={() =>
               Share.share({
                 message: `${venue.name} — GurmeGo'da keşfet: https://gurmego.com/mekan/${venue.slug}`,
@@ -128,7 +132,9 @@ export default function VenueDetailScreen() {
           </Pressable>
         </View>
 
-        <FavoriteButton venueId={venue.id} />
+        <View style={styles.actionSpacer}>
+          <FavoriteButton venueId={venue.id} />
+        </View>
         <ReportForm venueId={venue.id} />
       </View>
     </ScrollView>
@@ -177,7 +183,15 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 14, fontWeight: "600", color: colors.ink, marginTop: spacing.xs },
   hoursSection: { marginTop: spacing.lg },
   sectionEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, textTransform: "uppercase", color: colors.accentDeep, marginBottom: spacing.xs },
-  hoursLine: { fontSize: 13, color: colors.inkSoft, lineHeight: 20 },
+  hoursRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  hoursDay: { fontSize: 13, fontWeight: "700", color: colors.inkFaint },
+  hoursValue: { fontSize: 13, fontWeight: "600", color: colors.ink },
   verified: { marginTop: spacing.lg, fontSize: 12, fontWeight: "700", color: colors.accentDeep },
   sigSection: { marginTop: spacing.lg },
   sigRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
@@ -213,4 +227,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   btnGhostText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
+  btnPressed: { opacity: 0.7 },
+  actionSpacer: { marginTop: spacing.md },
 });

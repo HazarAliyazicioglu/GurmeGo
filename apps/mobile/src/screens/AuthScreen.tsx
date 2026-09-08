@@ -39,10 +39,16 @@ export default function AuthScreen() {
       />
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <Pressable style={styles.primaryBtn} onPress={handleSubmit}>
+      <Pressable
+        style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+        onPress={handleSubmit}
+      >
         <Text style={styles.primaryBtnText}>{mode === "signIn" ? "Giriş yap" : "Kayıt ol"}</Text>
       </Pressable>
-      <Pressable onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}>
+      <Pressable
+        style={({ pressed }) => pressed && styles.pressedFade}
+        onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}
+      >
         <Text style={styles.switchText}>
           {mode === "signIn" ? "Hesabın yok mu? Kayıt ol" : "Zaten hesabın var mı? Giriş yap"}
         </Text>
@@ -83,5 +89,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   primaryBtnText: { color: colors.paper, fontSize: 15, fontWeight: "700" },
+  primaryBtnPressed: { opacity: 0.75 },
+  pressedFade: { opacity: 0.6 },
   switchText: { color: colors.accentDeep, fontSize: 13, fontWeight: "700", textAlign: "center" },
 });

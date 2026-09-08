@@ -1,8 +1,15 @@
 import { render, screen } from "@testing-library/react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import TabNavigator from "./TabNavigator";
+import { useAuth } from "../lib/auth-context";
+
+jest.mock("../lib/auth-context", () => ({ useAuth: jest.fn() }));
 
 describe("TabNavigator", () => {
+  beforeEach(() => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null });
+  });
+
   it("shows the Discovery tab's content by default", async () => {
     await render(
       <NavigationContainer>

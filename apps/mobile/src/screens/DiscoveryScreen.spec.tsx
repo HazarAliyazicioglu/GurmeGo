@@ -1,13 +1,16 @@
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react-native";
 import DiscoveryScreen from "./DiscoveryScreen";
-import { getVenues, getDistricts } from "../lib/api";
+import { getVenues, getVenuesInBbox, getDistricts } from "../lib/api";
 import { useLocation } from "../lib/use-location";
+import { useAuth } from "../lib/auth-context";
 
 jest.mock("../lib/api", () => ({
   getVenues: jest.fn(),
+  getVenuesInBbox: jest.fn(),
   getDistricts: jest.fn(),
 }));
 jest.mock("../lib/use-location", () => ({ useLocation: jest.fn() }));
+jest.mock("../lib/auth-context", () => ({ useAuth: jest.fn() }));
 
 const mockNavigate = jest.fn();
 jest.mock("@react-navigation/native", () => ({
@@ -19,7 +22,9 @@ describe("DiscoveryScreen", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
     (getVenues as jest.Mock).mockReset();
+    (getVenuesInBbox as jest.Mock).mockReset().mockResolvedValue([]);
     (useLocation as jest.Mock).mockReturnValue(null);
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" } });
     (getDistricts as jest.Mock).mockResolvedValue([
       { id: "d1", cityId: "c1", name: "Kadıköy", slug: "kadikoy" },
     ]);
@@ -153,5 +158,40 @@ describe("DiscoveryScreen", () => {
     await waitFor(() =>
       expect(getVenues).toHaveBeenLastCalledWith(expect.not.objectContaining({ category: expect.anything() }), null),
     );
+  });
+
+  it("shows the list view by default and does not call getVenuesInBbox", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({
+      data: [{ id: "v1", name: "Test Cafe", slug: "test-cafe", category: "cafe", priceRange: "MODERATE", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null }],
+      meta: { next_cursor: null, has_more: false },
+    });
+
+    await render(<DiscoveryScreen />);
+
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
+    expect(getVenuesInBbox).not.toHaveBeenCalled();
+  });
+
+  it("switches to map view and fetches venues in the current viewport", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+
+    await render(<DiscoveryScreen />);
+
+    await waitFor(() => expect(screen.getByText("Harita")).toBeTruthy());
+    fireEvent.press(screen.getByText("Harita"));
+
+    await waitFor(() => expect(getVenuesInBbox).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Test Cafe")).toBeFalsy();
+  });
+
+  it("shows a sign-in link when the user is signed out, and hides it when signed in", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null });
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+
+    await render(<DiscoveryScreen />);
+
+    await waitFor(() => expect(screen.getByText("Giriş yap")).toBeTruthy());
+    fireEvent.press(screen.getByText("Giriş yap"));
+    expect(mockNavigate).toHaveBeenCalledWith("Auth");
   });
 });

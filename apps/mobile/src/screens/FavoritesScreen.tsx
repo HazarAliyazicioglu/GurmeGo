@@ -89,13 +89,16 @@ export default function FavoritesScreen() {
         renderItem={({ item }) => (
           <View style={styles.row}>
             <Pressable
-              style={styles.rowMain}
+              style={({ pressed }) => [styles.rowMain, pressed && styles.pressedFade]}
               onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}
             >
               <View style={styles.rowThumb} />
               <Text style={styles.rowName}>{item.name}</Text>
             </Pressable>
-            <Pressable style={styles.removeBtn} onPress={() => handleRemove(item.listId, item.venueId)}>
+            <Pressable
+              style={({ pressed }) => [styles.removeBtn, pressed && styles.removeBtnPressed]}
+              onPress={() => handleRemove(item.listId, item.venueId)}
+            >
               <Text style={styles.removeBtnText}>Kaldır</Text>
             </Pressable>
           </View>
@@ -140,4 +143,6 @@ const styles = StyleSheet.create({
     borderColor: colors.danger,
   },
   removeBtnText: { fontSize: 12, fontWeight: "700", color: colors.danger },
+  removeBtnPressed: { opacity: 0.6 },
+  pressedFade: { opacity: 0.6 },
 });

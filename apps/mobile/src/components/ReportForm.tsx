@@ -43,7 +43,11 @@ export default function ReportForm({ venueId }: { venueId: string }) {
         multiline
       />
       {error && <Text style={styles.error}>{error}</Text>}
-      <Pressable style={[styles.submitBtn, submitting && styles.submitBtnPending]} onPress={handleSubmit} disabled={submitting}>
+      <Pressable
+        style={({ pressed }) => [styles.submitBtn, submitting && styles.submitBtnPending, pressed && styles.submitBtnPending]}
+        onPress={handleSubmit}
+        disabled={submitting}
+      >
         <Text style={styles.submitBtnText}>{submitting ? "Gönderiliyor…" : "Gönder"}</Text>
       </Pressable>
     </View>

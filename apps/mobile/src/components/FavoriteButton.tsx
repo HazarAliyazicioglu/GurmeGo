@@ -75,7 +75,12 @@ export default function FavoriteButton({ venueId }: { venueId: string }) {
 
   return (
     <Pressable
-      style={[styles.btn, added && styles.btnAdded, pending && styles.btnPending]}
+      style={({ pressed }) => [
+        styles.btn,
+        added && styles.btnAdded,
+        pending && styles.btnPending,
+        pressed && styles.btnPressed,
+      ]}
       onPress={handleClick}
       disabled={pending}
     >
@@ -96,6 +101,7 @@ const styles = StyleSheet.create({
   },
   btnAdded: { backgroundColor: colors.chipBg },
   btnPending: { opacity: 0.6 },
+  btnPressed: { opacity: 0.75 },
   btnText: { color: colors.paper, fontSize: 13, fontWeight: "700" },
   btnTextAdded: { color: colors.chipText },
 });

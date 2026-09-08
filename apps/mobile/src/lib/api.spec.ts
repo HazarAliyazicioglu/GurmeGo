@@ -1,4 +1,4 @@
-import { getVenues, ApiValidationError } from "./api";
+import { getVenues, getVenuesInBbox, ApiValidationError } from "./api";
 
 const originalFetch = globalThis.fetch;
 
@@ -55,5 +55,38 @@ describe("getVenues", () => {
     }) as jest.Mock;
 
     await expect(getVenues({})).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("getVenuesInBbox", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("requests /venues/map with the bbox joined as a query param and returns the parsed list", async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { id: "550e8400-e29b-41d4-a716-446655440000", name: "Test Cafe", category: "cafe", lat: 40.99, lng: 29.02 },
+      ],
+    }) as jest.Mock;
+
+    const result = await getVenuesInBbox([29.0, 40.9, 29.1, 41.0]);
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/venues/map?bbox=29,40.9,29.1,41"),
+      expect.any(Object),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Test Cafe");
+  });
+
+  it("throws ApiValidationError when the response does not match the schema", async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: "not-a-uuid" }],
+    }) as jest.Mock;
+
+    await expect(getVenuesInBbox([29.0, 40.9, 29.1, 41.0])).rejects.toThrow(ApiValidationError);
   });
 });
