@@ -103,7 +103,7 @@ describe("VenueDetailScreen", () => {
 
     render(<VenueDetailScreen />);
 
-    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     fireEvent.press(screen.getByText("Paylaş"));
 
     expect(shareSpy).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Test Cafe") }));

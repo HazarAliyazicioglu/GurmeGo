@@ -15,6 +15,17 @@ jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
+// Every test here mounts a tree containing two real VirtualizedLists whose data arrives
+// asynchronously (districts, from the mocked getDistricts() promise via useEffect+setDistricts;
+// venues, from getVenues() the same way) -- on a slow/shared CI runner, VirtualizedList's own
+// internal setTimeout-based initial-cell-render deferral (a fixed 1240ms was observed for the
+// venues list) can eat into a test's whole budget even for assertions that don't themselves touch
+// either list (e.g. asserting on static CATEGORIES/PRICE_RANGES text, or on a mock's call args).
+// apps/mobile/package.json's package-level `jest.testTimeout: 15000` (vs. Jest's 5000ms default)
+// covers the overall per-test budget; the three `waitFor` calls below whose OWN target text lives
+// inside one of those two async-fed lists (the first venue-list test, the district-filter test,
+// and the stale-request race test) additionally need their own `{ timeout: 5000 }` bump, since
+// waitFor's default internal timeout (1000ms) is shorter than the observed render delay.
 describe("DiscoveryScreen", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
@@ -35,12 +46,6 @@ describe("DiscoveryScreen", () => {
 
     render(<DiscoveryScreen />);
 
-    // Default waitFor timeout (1000ms) is occasionally too short for VirtualizedList's real
-    // (non-fake-timer) internal setTimeout-based initial cell render on this environment -- a
-    // fixed 1240ms was observed for the venues FlatList's first item to appear even though the
-    // underlying getVenues() promise itself resolves within a microtask. Bumped explicitly for
-    // this assertion only (the other assertions in this file don't render into a FlatList with
-    // real items, so they don't hit this).
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     fireEvent.press(screen.getByText("Test Cafe"));
     expect(mockNavigate).toHaveBeenCalledWith("VenueDetail", { slug: "test-cafe" });
@@ -51,7 +56,7 @@ describe("DiscoveryScreen", () => {
 
     render(<DiscoveryScreen />);
 
-    await waitFor(() => expect(screen.getByText("Kadıköy")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Kadıköy")).toBeTruthy(), { timeout: 5000 });
     fireEvent.press(screen.getByText("Kadıköy"));
 
     await waitFor(() =>
@@ -122,7 +127,7 @@ describe("DiscoveryScreen", () => {
     (useLocation as jest.Mock).mockReturnValue({ lat: 40.99, lng: 29.02 });
     await rerender(<DiscoveryScreen />);
 
-    await waitFor(() => expect(screen.getByText("New Result Cafe")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("New Result Cafe")).toBeTruthy(), { timeout: 5000 });
     await waitFor(() => expect(getVenues).toHaveBeenCalledTimes(2));
 
     // Now resolve the old, slower request -- it must NOT overwrite the newer results.

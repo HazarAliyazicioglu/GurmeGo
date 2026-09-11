@@ -35,6 +35,12 @@ const ONE_LIST = [
   },
 ];
 
+// The waitFor calls below asserting on a real venue name bump their timeout to 5000ms: venue rows
+// render into a real VirtualizedList fed by the mocked getFavoriteLists() promise, and
+// VirtualizedList's own internal setTimeout-based initial-cell-render deferral has been observed
+// to exceed waitFor's default 1000ms on a slow/shared CI runner (same root cause diagnosed in
+// DiscoveryScreen.spec.tsx; apps/mobile/package.json's package-level `jest.testTimeout: 15000`
+// covers the overall per-test budget this races against).
 describe("FavoritesScreen", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
@@ -57,7 +63,7 @@ describe("FavoritesScreen", () => {
 
     await renderScreen();
 
-    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     await fireEvent.press(screen.getByText("Test Cafe"));
     expect(mockNavigate).toHaveBeenCalledWith("VenueDetail", { slug: "test-cafe" });
   });
@@ -71,7 +77,7 @@ describe("FavoritesScreen", () => {
 
     await renderScreen();
 
-    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     await fireEvent.press(screen.getByText("Kaldır"));
 
     await waitFor(() => expect(removeFavoriteVenue).toHaveBeenCalledWith("tok", "list1", "v1"));
@@ -112,7 +118,7 @@ describe("FavoritesScreen", () => {
       </NavigationContainer>,
     );
 
-    await waitFor(() => expect(screen.getByText("User B Cafe")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("User B Cafe")).toBeTruthy(), { timeout: 5000 });
     await waitFor(() => expect(getFavoriteLists).toHaveBeenCalledTimes(2));
 
     // Now resolve the stale user A request -- it must NOT clobber the screen with A's data.
