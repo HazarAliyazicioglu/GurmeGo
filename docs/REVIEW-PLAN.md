@@ -1,0 +1,755 @@
+# GurmeGo — Mevcut Ürün Review & İyileştirme Kararları
+
+**Amaç:** Yeni özellik eklemek değil, mevcut backend/web/admin/mobile'ı sırayla gözden geçirip
+her başlıkta "burada değişiklik gerekiyor mu, neden, ne zaman" kararını kaydetmek — hem
+unutmamak hem de sonra hızlıca aksiyona geçebilmek için.
+
+**Sıra kuralı:** 1 → 1.1 → 1.2 → ... → 1.6 → 2 → 2.1 → ... → 5. Bir alt başlık yoksa bir üst
+seviyeye atlanır (örn. 1.6'dan sonra 2'ye). Kaynak envanter: bu konuşmada 2026-09-09'da 4 paralel
+fork ile çıkarılan A-Z döküm (backend/web/admin/mobile).
+
+**Standart pratik (2026-09-09'dan itibaren):** her başlıkta içerik sunulduktan sonra otomatik
+olarak optimizasyon + güvenlik açığı taraması yapılır (kod okunarak, varsayımla değil) — kullanıcı
+ayrıca istemese de. Bulgu varsa buraya kaydedilir, yoksa "doğrulandı, sorun yok" notu düşülür.
+
+**Kapsam politikası:** Plana hem **şu an çözülmesi gereken** sorunlar hem de **ileride sorun
+çıkarma ihtimali olan** (henüz aktif olmayan ama riskli) bulgular yazılır — küçük/büyük fark
+etmez. Bilinçli kabul edilmiş trade-off'lar (kod içinde zaten "bilinçli karar" diye belgelenmiş
+olanlar) "sorun" olarak değil, "ertelendi/kabul edildi — hangi koşulda yeniden bakılır" etiketiyle
+kaydedilir; onlar da unutulmasın diye buradadır.
+
+**Ürün vizyonu (2026-09-09'dan itibaren, tüm bölümlere uygulanır):** Bu proje büyük ölçekli bir
+şirket ürünü olma hedefiyle geliştiriliyor/iyileştiriliyor. Bu yüzden özellikle **2 (Web), 3
+(Admin), 4 (Mobile)** bölümlerinde salt bug/optimizasyon taraması yetmez — her başlıkta ayrıca
+"bu, kullanıcı için en kullanışlı/akılda kalıcı hali mi" sorusu da soruluyor ve gerekirse öneri
+eklenir. Bu öneriler "sorun" değil, "büyüme/marka hedefine göre iyileştirme fırsatı" olarak ayrı
+etiketlenir — karıştırılmasın diye teknik bulgulardan ayrı bir alt başlıkta tutulur.
+
+### Ürün vizyonu — netleştirilen kararlar (2026-09-09)
+
+- **Hedef kitle:** Yerli gurme/foodie kullanıcılar + turistler + genç/sosyal medya kitlesi + **"bir
+  semte gittiğinde istediği tarzda mekan arayan herkes"** (bu sonuncusu en geniş ve en sık kullanım
+  senaryosu olabilir — konum+mod bazlı keşif niyeti, sadece "butik mekan kürasyonu" değil).
+- **Marka kimliği:** Mevcut web'in sıcak/editöryel-dergi kimliği (kiremit aksan, serif başlık, krem
+  zemin) **korunacak ve güçlendirilecek** — zincirlerden ayrışmanın kaynağı bu, büyük ölçekte de
+  değerli. Tasarım tokenı/tema sistemi eksikliği (2.3'te not edilecek) bu güçlendirmenin önündeki
+  teknik engel.
+- **Referans ürünler:** Tek bir modele kopyalanmıyor — Michelin/The Infatuation'ın editöryel
+  kürasyon tonu + Yelp/TripAdvisor'ın geniş kullanıcı katkısı hacmi + Resy/Beli'nin butik/seçkin
+  his'i harmanlanıyor, ama **kendi kimliği** öncelikli. Pratik sonuç: bugünkü MVP'nin editöryel not
+  ağırlıklı yaklaşımı doğru yönde, ama "geniş kullanıcı katkısı" (Faz 2'de zaten planlı — Gurme
+  Puanı, daha fazla kullanıcı review'u) markanın uzun vadeli kimliğinin bir parçası, sadece
+  "sonra eklenecek özellik" değil.
+- **Ölçek ufku: sadece İstanbul, derinlik odaklı.** Türkiye geneli/uluslararası genişleme
+  planlanmıyor. **Mimari sonucu:** çok dilli/çoklu para birimi/bölgesel veri modeli gibi
+  soyutlamalara YATIRIM YAPILMAYACAK — mevcut tek-şehir, tek-dil, TL-sabit tasarım doğru karar,
+  değiştirilmeyecek. Bu conservatif kalmalı: "belki büyürüz" diye erken genişletme yapılmayacak.
+
+## İlerleme çizelgesi
+
+- [x] **1** — Backend (`apps/api`) genel bakış + optimizasyon analizi
+- [x] 1.1 — Modül haritası
+- [x] 1.2 — Uçlar (API endpoint envanteri)
+- [x] 1.3 — Veri modeli (Prisma schema)
+- [x] 1.4 — Rule engine (butik/re-verify/moderasyon)
+- [x] 1.5 — Auth/yetki, cache/rate-limit, kürasyon akışı
+- [x] 1.6 — Backend eksik/zayıf yönler
+- [ ] 2 — Web/PWA (`apps/web`) genel bakış
+- [x] 2.1 — Route haritası
+- [x] 2.2 — Özellikler
+- [x] 2.3 — Görünüş/tasarım dili
+- [x] 2.4 — State ve race-guard'lar
+- [x] 2.5 — PWA/SEO
+- [x] 2.6 — Web eksik/zayıf yönler
+- [ ] 3 — Admin panel (`apps/admin`) genel bakış
+- [x] 3.1 — Route ve özellikler
+- [x] 3.2 — Görünüş
+- [x] 3.3 — Admin eksik/zayıf yönler
+- [ ] 4 — Mobile app (`apps/mobile`) genel bakış
+- [x] 4.1 — Navigasyon ve ekranlar
+- [x] 4.2 — Görünüş/UI
+- [x] 4.3 — Native özellikler ve config
+- [x] 4.4 — Build/dağıtım durumu
+- [x] 4.5 — Mobile eksik/zayıf yönler
+- [x] 5 — Ortak gözlemler (tüm katmanlar)
+
+---
+
+## Kararlar (kronolojik, başlık başlık)
+
+### 1 — Backend genel bakış + optimizasyon analizi
+**Genel değerlendirme:** Kod kalitesi beklenenin üzerinde — GiST spatial index zaten kurulu,
+keyset pagination'daki float-jitter sorunu bilinçli çözülmüş, `FOR UPDATE` ile race condition'lar
+kilitlenmiş, `TRUST_PROXY_HOPS` ile rate-limit IP sahteciliği önlenmiş, CORS credentialed doğru,
+Swagger prod'da kapalı. **Acil performans sorunu yok.**
+
+**Belirlenen 6 ihtiyaç — henüz UYGULANMADI:**
+1. Observability/logging yok (pino/winston, sadece console). Prod'a çıkmadan önce şart. *(orta öncelik)*
+2. `@fastify/compress` kayıtlı değil — JSON yanıtları sıkıştırılmıyor. Ucuz, hızlı eklenir. *(orta öncelik)*
+3. `@fastify/helmet` kayıtlı değil — güvenlik header'ları (CSP, X-Content-Type-Options vs.) yok. Ucuz, hızlı eklenir. *(orta öncelik)*
+4. DB connection pooling kararı yok (Supabase pgbouncer/transaction pooler mı, direct connection
+   mı) — Plan 4e/infra ile birlikte netleşecek, kod değişikliği değil config kararı. *(orta öncelik)*
+5. Hot-path cache yok — mevcut `CacheStore` soyutlaması şu an sadece rate-limit sayaçlarında
+   kullanılıyor, `GET /venues` gibi sık okunan uçlarda cache yok. *(ertelendi — trafik büyümeden erken optimizasyon olur)*
+6. `openNow` filtresi her satırda regex/`split_part` ile parse yapıyor (`venues.repository.ts:217-241`) —
+   yazma-zamanında normalize sütunlara taşınabilir. *(ertelendi — MVP ölçeğinde önemsiz)*
+
+**Bilinen ama bu bölümün kapsamı dışı (envanterden geldi, ilerleyen bölümlerde — muhtemelen 1.6'da —
+tekrar ele alınacak, burada tekrar üretilmedi):** Gurme Puanı hesaplaması hiç yok, pgvector/semantic
+search hiç kurulmamış, backend e2e testleri bu makinede DB olmadığı için hiç doğrulanamadı.
+
+### 1.1 — Modül haritası
+**9 modül** (`auth`, `venues`, `districts`, `favorites`, `reports`, `admin/{queue,reports,users,venues}`,
+`rule-engine`, `common`, `prisma`) — bağımlılık yönü net, `rule-engine`'in hiç controller'ı yok
+(sadece servis olarak inject ediliyor).
+
+**Güvenlik bulgusu — UYGULANMADI:**
+- `favorites/favorites.controller.ts`: sadece `GET /me/lists` `RateLimitGuard` ile korunuyor.
+  `POST /me/lists` (yeni liste), `POST /me/lists/:id/venues` (favori ekle), `DELETE
+  /me/lists/:id/venues/:venueId` (favori sil) — üç yazma ucu da rate-limitsiz. Auth zorunlu olduğu
+  için anonim değil ama kayıtlı/ele geçirilmiş bir hesap sınırsız liste/favori yazabilir. Diğer tüm
+  yazma uçları (`reports`, `admin/*`) bu konuda tutarlı — sadece burada eksik.
+
+**Go-live checklist'e not (kod değil, config/süreç):**
+- `SUPABASE_JWT_ISSUER`/`SUPABASE_JWT_AUDIENCE` şu an bilinçli atlanıyor (gerçek Supabase projesi
+  yok, Plan 4e'yi bekliyor). Şu an risk değil ama prod'a çıkmadan önce ikisi de set edilmeli.
+
+**Doğrulanan, sorun yok:** tüm `admin/*` controller'ları tutarlı `RolesGuard`+`@Roles`; `JwtAuthGuard`
+tasarımı sağlam (header yoksa anonim geçiş, geçersiz token'da 401 — bypass edilemiyor); `RolesGuard`
+user yoksa 401/rol uyuşmazsa 403 doğru ayrılmış.
+
+### 1.2 — Uçlar (endpoint envanteri)
+Tam liste sohbet geçmişinde. Genel input validasyonu sıkı: `reason` max 500, mekan alanları
+sınırlı (`name` max 200, `editorialNote` max 1000, `signatureItems` max 10), `limit` max 50,
+`radiusM` max 20000, `X-User-Location` header zod ile fail-open doğrulanıyor. CSV import bilinçli
+olarak stream tabanlı parse ediyor (event loop'u kilitlememek için).
+
+**Bulgu — düşük öncelik, UYGULANMADI:**
+- Admin yazma uçlarında (`admin/queue/approve|reject`, `admin/venues` CRUD, **özellikle
+  `admin/import`**) rate-limit yok. Curator/admin-only olduğu için genel risk düşük, ama
+  `admin/import` en ağır uç (dosya parse + N satır insert) — ele geçirilmiş bir curator hesabı
+  veya scriptli tekrar yükleme DB'yi zorlayabilir.
+
+**Küçük tutarlılık notu, gerçek açık değil:** `admin/users/:id/roles`'ta `@Body("role")` zod
+pipe'ından geçmiyor ama `MVP_ASSIGNABLE_ROLES = ["curator"]` inline allowlist'i güvenli kılıyor
+(admin rolü bu uçtan atanamıyor).
+
+**Doğrulanan, sorun yok:** IDOR kontrolü (favorites'te liste sahipliği her yazmadan önce
+kontrol ediliyor), admin uçları rol bazlı kapalı.
+
+### 1.3 — Veri modeli (Prisma schema)
+Modeller: `City`, `District`, `Venue` (PostGIS `geography`, GiST index), `VenueVersion`,
+`ContributionQueue`, `User`, `FavoriteList`, `Favorite`, `RateLimitCounter`. pgvector extension'ı
+ve `gourmet_score` alanı şemada yok (bilinen, Faz 2 / Gurme Puanı kapsamı).
+
+**🔴 KRİTİK bulgu — UYGULANMADI:**
+`FavoriteList.userId` → `User.id` zorunlu FK (`ON DELETE RESTRICT`) var, ama `apps/api/src`
+içinde **hiçbir yerde** `prisma.user.create`/`upsert` çağrısı yok — Supabase Auth ile uygulamanın
+kendi `User` tablosu arasında senkronizasyon mekanizması (trigger/webhook/lazy-upsert) eksik.
+`prisma/seed.ts` da `User` seed'lemiyor. Sonuç: gerçek bir kullanıcı favori listesi oluşturmaya
+çalıştığında Postgres FK ihlali → temiz hata değil, 500. **Favoriler özelliği prod'da şu haliyle
+gerçek kullanıcılar için çalışmaz.** Testlerde yakalanmamış çünkü `favorites.service.spec.ts`
+tamamen mock'lu Prisma kullanıyor, gerçek FK hiç egzersiz edilmiyor.
+→ **Aksiyon gerekiyor:** JWT doğrulandığında (JwtAuthGuard içinde ya da ayrı bir interceptor'da)
+`User` satırını lazy-upsert eden bir mekanizma eklenmeli, ya da Supabase tarafında bir
+auth-hook/trigger ile senkron tutulmalı.
+
+**Daha küçük bulgular:**
+- Tüm FK'ler `ON DELETE RESTRICT` (ContributionQueue.venueId hariç, o `SET NULL`) — hesap silme
+  (KVKK, Plan 4d) önce `FavoriteList`/`Favorite` satırlarının elle temizlenmesini gerektirecek,
+  şu an böyle bir kod yok (zaten Plan 4d'nin kapsamında bekleniyordu, burada teyit edildi).
+- `User.email` normalizasyonu (lowercase zorlanıyor mu) User provisioning eklenmeden test edilemez,
+  o işle birlikte ele alınmalı.
+
+### 1.4 — Rule engine (butik / re-verify / moderasyon)
+İki servis: `boutique.service.ts` (saf fonksiyon, DB'siz), `re-verify.service.ts` (cron, her gece
+03:00). Moderasyon eşiği (`RULES_MOD_AUTO_HIDE_REPORTS`) aslında `reports`/`admin-queue`
+servislerinde uygulanıyor, bu modülde değil.
+
+**Optimizasyon/güvenlik taraması — sorun bulunmadı, doğrulandı:**
+- `re-verify.service.ts`'in idempotency'si sağlam: `findFirst` fast-path (dokümante edilmiş şekilde
+  atomic değil, sadece optimizasyon) + partial unique index + P2002 yakalama = çoklu API instance'ı
+  aynı cron'u aynı anda çalıştırsa bile duplicate kayıt oluşmuyor.
+- `rule-engine`'in hiçbir route'u yok, dışarıdan tetiklenemiyor — saldırı yüzeyi sıfır.
+- Eşikler (`RULES_*`) boot-time'da zorunlu, hardcode yok, `rule-config.ts` tek kaynak.
+
+**Küçük ölçek notu, düşük öncelik:** `enqueueStale()` stale mekanları tek tek sırayla işliyor
+(`findFirst` + `create`, batch değil). MVP ölçeğinde (birkaç yüz mekan) sorun değil; katalog
+büyürse (binlerce mekan aynı anda stale olursa) cron'un çalışma süresi uzayabilir — batch/bulk
+insert'e geçmek trafik büyümeden erken optimizasyon olur, şimdi yapılmayacak.
+
+### 1.5 — Auth/yetki, cache/rate-limit, kürasyon akışı
+Supabase JWKS ile RS256/ES256 doğrulama, `RolesGuard` route bazlı. Redis yok: Postgres tabanlı
+`CacheStore`/`RateLimitCountersRepository`, saatlik cleanup cron'u. Kürasyon: rapor/CSV/manuel →
+`ContributionQueue` → öncelik sıralı liste → approve/reject.
+
+**Bulgu — düşük öncelik, ileride sorun çıkarma ihtimali (aktif değil, kod kokusu):**
+`rate-limit.guard.ts`: `req.ip ?? req.headers["x-forwarded-for"] ?? "unknown"` — Fastify'de
+`req.ip` pratikte hiç boş dönmez, yani XFF fallback'i şu an ölü kod. Ama tetiklenirse
+`main.ts`'in `TRUST_PROXY_HOPS` sanitizasyonunu atlayıp istemci tarafından tamamen sahtelenebilir
+bir header'ı doğrudan rate-limit anahtarı yapar — saldırgan kendi bucket'ını seçebilir hale gelir.
+→ **Aksiyon:** fallback kaldırılmalı, sadece `req.ip` kullanılmalı.
+
+**Doğrulanan, sorun yok:** `increment()` atomik tek-statement pencere yönetimi; cleanup cron zaten
+önceki bir "unbounded table growth" bulgusunun düzeltmesi; `AdminQueueService.approve/reject`
+`updateMany({status:"PENDING"})` ile gerçek DB-seviyeli race guard; `list()`'teki sınırsız sorgu
+görünümü bilinçli kabul edilmiş trade-off (pilot ölçeği 30-45 mekan, dokümante edilmiş).
+
+### 1.6 — Backend eksik/zayıf yönler (Bölüm 1 özeti/sentez)
+
+**Kritik:**
+- `User` tablosu hiç doldurulmuyor (§1.3) — favoriler prod'da gerçek kullanıcılar için 500 verir.
+
+**Orta öncelik — 6 ihtiyaç (§1):**
+- Observability/logging yok, `@fastify/compress` yok, `@fastify/helmet` yok, DB connection
+  pooling kararı yok (Plan 4e/infra ile birlikte).
+
+**Düşük öncelik:**
+- Favorites yazma uçlarında rate-limit yok (§1.1), admin yazma uçlarında rate-limit yok (§1.2),
+  `rate-limit.guard.ts`'de ölü ama riskli XFF fallback'i (§1.5).
+
+**Ertelenmiş/kabul edilmiş trade-off'lar (sorun değil, ama izlenmeli):**
+- Hot-path cache yok (§1), `openNow` regex parsing (§1), re-verify cron batch değil (§1.4),
+  kürasyon `list()` sınırsız sorgu (§1.5, dokümante edilmiş bilinçli karar).
+
+**Bilinen özellik eksikleri (kod değil, kapsam):**
+- Gurme Puanı hesaplaması hiç yok, pgvector/semantic search hiç kurulmamış, backend e2e testleri
+  bu ortamda hiç doğrulanamadı (DB yok).
+
+**Go-live checklist notu:** `SUPABASE_JWT_ISSUER`/`AUDIENCE` set edilmeli (Plan 4e).
+
+**Vizyon ışığında geri dönüş notu (2026-09-09, vizyon netleştikten sonra eklendi):**
+- Gurme Puanı eksikliği artık sadece "Faz 2 kapsam dışı" değil — vizyon kararı "geniş kullanıcı
+  katkısı"nı markanın uzun vadeli kimliğinin parçası ilan etti. Önceliği yeniden değerlendirilmeli.
+- `User` tablosu boşluğu (KRİTİK, §1.3) daha da acil: favoriler VE gelecekteki her türlü kullanıcı
+  katkısı (review, oy, rozet) bu temel altyapıya bağımlı. Review'ın geri kalanını beklemeden ele
+  alınıp alınmayacağı kullanıcının önceliklendirme kararına bağlı.
+- "Sadece İstanbul, derinlik odaklı" kararı, Bölüm 1'deki tüm ertelenmiş optimizasyon kararlarını
+  (hot-path cache, batch cron, vs.) geriye dönük doğruluyor — değişiklik gerekmiyor.
+- Yeni büyüme fırsatı (teknik bulgu değil, işaretlendi, 2/4'te tekrar gündeme gelecek): mevcut
+  filtreler (kategori/fiyat/butik/şimdi açık/mesafe) "mod/durum" bazlı bir boyuttan yoksun (örn.
+  "hızlı atıştırmalık", "romantik akşam yemeği") — "bir semte gidince ne yesem" personasına hizmet
+  edecek bir potansiyel geliştirme.
+
+**BÖLÜM 1 (Backend) KAPANDI.**
+
+---
+
+## Bölüm 2 — Web/PWA (`apps/web`)
+
+### 2.1 — Route haritası
+5 route: `/` (redirect-only), `/[district]` (SSR keşif), `/mekan/[slug]` (ISR, saatlik),
+`/favoriler` (auth), `/giris`.
+
+**🔴 KRİTİK bulgu — UYGULANMADI:** `/[district]` (ana keşif sayfası) ve `getDefaultDistrictSlug()`
+(`/`), `packages/api-client/src/index.ts`'in çıplak `fetch()` çağrısını kullanıyor (`cache`/
+`next.revalidate` seçeneği YOK). Route'ta da `export const dynamic`/`revalidate` yok. Next.js
+14 App Router'da bu, `fetch()` sonucunun **varsayılan olarak `force-cache` (süresiz)** cache'lenmesi
+demek — `getDistricts()`/`getVenues()` ilk istekte cache'lenir ve **hiçbir zaman kendiliğinden
+yenilenmez** (manuel `revalidatePath`/`revalidateTag` çağrısı da kod tabanının hiçbir yerinde yok,
+doğrulandı). Sonuç: bir curator yeni mekan onaylasa/mevcut birini arşivlese bile **anasayfa/keşif
+listesi bunu göstermez** — tek çözüm yolu redeploy. `/mekan/[slug]` bunun aksine bilinçli
+`revalidate=3600` ile ISR yapıyor; `/[district]` için hiç böyle bir mekanizma yok.
+→ **Aksiyon gerekiyor:** ya `/[district]`'e de kısa bir `revalidate` (örn. 60-300sn) eklenmeli,
+ya da admin onay/red akışına `revalidatePath`/`revalidateTag` çağrısı eklenmeli (ikincisi daha
+doğru — "hemen görünsün" beklentisine uyar, kürasyon onaylandığı anda sitede görünmesi ürün
+beklentisiyle örtüşür).
+
+**Vizyon notu (büyüme/marka fırsatı, sorun değil):** "Bir semte gidince ne yesem" personası için
+`/[district]` doğru giriş noktası ama URL yapısı sadece ilçe bazlı — "yakınımdaki" kavramı ayrı bir
+route değil, sadece otomatik en-yakın-ilçeye-yönlendirme. MVP'de (3 ilçe) örtüşüyor, İstanbul
+geneline büyürken tekrar gündeme gelebilir.
+
+### 2.2 — Özellikler
+Filtreler (kategori/fiyat/butik/şimdi açık/mesafe), konum-öncelikli otomatik sıralama, liste↔harita
+toggle, keyset pagination, çoklu favori listesi, "bilgi yanlış mı" formu, WhatsApp/native paylaşım,
+giriş/kayıt.
+
+**🟠 Önemli eksik özellik — UYGULANMADI:** Kod tabanının hiçbir yerinde (backend
+`VenueListQuerySchema` dahil, frontend `venue-filters`/`district-picker`/`category-quick-route`/
+`discovery-client` dahil) **serbest metin arama (isim/anahtar kelimeyle arama) yok** — sadece
+yapısal filtreler var. Kullanıcı mekan adını veya "künefe" gibi bir anahtar kelimeyi arayamıyor.
+Yelp/TripAdvisor/Google Maps gibi tüm referans ürünlerde standart olan bu özellik tamamen eksik.
+2.1'deki "mod bazlı arama" büyüme fırsatıyla birleşince: **arama/keşif deneyimi yapısal filtrelerin
+ötesine hiç geçmemiş.**
+
+**Güvenlik/optimizasyon taraması — sorun bulunmadı, doğrulandı:**
+- `dangerouslySetInnerHTML` kod tabanının hiçbir yerinde yok — XSS riski yok (React auto-escape).
+- `WhatsappShareButton`/`NativeShareButton`: `encodeURIComponent` doğru kullanılmış.
+- `discovery-client.tsx` tam okundu: race-guard'lar (`latestRequest`, `lastFetchCoordsRef`,
+  `autoSortedRef`/`userInteractedRef`) titizlikle senkronize, yeni bir sorun yok.
+
+**Küçük UX notu, güvenlik değil:** `ReportForm`'da client-side sadece `minLength={5}` var,
+`maxLength` yok (server 500 karakterde kesiyor) — uzun metin gönderilirse jenerik hata gösteriliyor,
+neden söylenmiyor.
+
+**Ertelenen (kullanıcı isteğiyle):** TR/EN dil desteği — vizyonun hedef kitlesi turistleri de
+kapsıyor ama UI %100 Türkçe; ileride ayrıca konuşulacak, şimdilik aksiyon yok.
+
+### 2.3 — Görünüş/tasarım dili
+
+**Sayısal doğrulama:** `tailwind.config.ts`'te `theme: { extend: {} }` — hiçbir özelleştirme yok,
+`globals.css` sadece 3 satır Tailwind direktifi. Marka renkleri (`#d75d3b`, `#201d18`, `#f4f0e7`,
+`#faf7f0`, `#9e422b`) grep'lendi: **17 dosyada, 180 ayrı yerde** hardcode hex değer olarak
+tekrarlanıyor — tasarım tokenı yok iddiası artık sayısal olarak doğrulanmış durumda.
+
+**🟠 Bulgu — vizyonla doğrudan çelişiyor:** `layout.tsx`'in `metadata` objesinde `openGraph`/
+`twitter` alanları yok, hiçbir sayfada `og:image` yok, per-page `generateMetadata` de yok (2.5'te
+tekrar gelecek). Sonuç: kullanıcı kendi `WhatsappShareButton`/`NativeShareButton`'ıyla bir mekan
+linkini paylaştığında, önizleme mekanın fotoğrafını/adını değil **jenerik, resimsiz site
+başlığını** gösteriyor — ürünün kendi paylaşım özelliğiyle çelişen bir boşluk, "akılda kalıcılık"
+hedefine doğrudan zarar veriyor.
+
+**🟠 Bulgu — serif başlıklar özel font yüklemiyor:** `font-serif` hiçbir `next/font`/`@font-face`
+ile desteklenmiyor, Tailwind'in sistem varsayılan serif stack'i (Georgia/Times/ui-serif)
+kullanılıyor — cihaza göre görünüm değişir, gerçekten özgün/akılda kalıcı bir tipografi değil.
+Vizyonun "marka kimliği güçlendirilsin" kararının önündeki en somut teknik engel.
+
+**🟡 Açık soru, kullanıcı kararı bekliyor:** `venue-card.tsx` (liste kartı) **hiç fotoğraf
+göstermiyor** — tamamen tipografik (kategori/isim/not/puan). "Editöryel dergi" kimliğiyle tutarlı
+bir zarafet tercihi olabilir, ama vizyonun "genç/sosyal medya kitlesi" hedef kitlesi görsel-öncelikli
+keşfe alışkın. Bilinçli bir farklılaşma mı, yoksa gözden kaçmış bir eksik mi — netleştirilmeli.
+
+**Kod kalitesi notu:** `app/layout.tsx:63`'te `h1`/`p` stilleri sayfaların kendi JSX'inde değil,
+layout'taki bir div'den arbitrary CSS selector'ı (`[&>main>h1]:font-serif...`) ile global enjekte
+ediliyor — kırılgan, keşfi zor bir desen.
+
+**Küçük optimizasyon notu:** `venue-detail.tsx`'teki `<img>` etiketlerinde `loading="lazy"` yok —
+zaten bilinen "next/image kullanılmıyor" bulgusunun bir parçası, ayrı aksiyon gerektirmiyor.
+
+**Doğrulanan, sorun yok:** `VenueList`'in boş-durum ekranı (`data-testid="empty-state"`) özenle
+tasarlanmış, editöryel ton hata durumunda da korunuyor. Kontrast/erişilebilirlik yeterli. Dark mode
+yokluğu bilinçli kapsam kararı, vizyonla çelişmiyor.
+
+### 2.4 — State ve race-guard'lar
+`favoriler/page.tsx` (279 satır) baştan sona okundu — kod tabanının en karmaşık state yönetimi.
+
+**Doğrulanan, sorun yok — çok titiz:** Identity değişimi render sırasında (useEffect değil)
+yakalanıp tüm session-scoped state temizleniyor; `latestListsRequest`/`latestCreateRequest` bilinçli
+olarak ayrı sayaçlar (3 Codex review turunun bulgusu, kod içinde belgeli); `venue-map-leaflet.tsx`'in
+`BoundsVenueLoader`'ı da aynı desenle tutarlı.
+
+**Bilinen, kabul edilmiş küçük UX tuhaflığı (sorun değil, kod içinde zaten dokümante):** Çok nadir
+bir senaryoda (create-list tam token-refresh anında biterse) yeni liste ekranda hemen görünmeyebilir,
+sayfadan çıkıp geri dönünce görünür — veri kaybı yok, sadece görüntüleme gecikmesi.
+
+**Yeni bulgu yok.**
+
+### 2.5 — PWA/SEO
+
+**🟠 Bulgu — PWA kurulum deneyiminde tutarsızlık:** `public/manifest.json`'da `theme_color`/
+`background_color` = `#1a1611` (koyu kahve), ama `app/layout.tsx`'teki `viewport.themeColor` =
+`#f4f0e7` (krem) — farklı. Ana ekrana eklendiğinde açılış (splash) ekranı koyu kahve görünür ama
+uygulamanın gerçek arayüzü krem/açık — ilk izlenimde tutarsızlık, "akılda kalıcı marka" hedefine ters.
+→ **Aksiyon:** ikisi aynı değere çekilmeli (muhtemelen `#f4f0e7`, uygulamanın gerçek zeminine uysun).
+
+**🔴 SEO altyapısı tamamen sıfır (doğrulandı — "zayıf" değil, hiç yok):**
+- `robots.txt` yok, `sitemap.xml` yok.
+- `generateMetadata` hiçbir sayfada yok — her mekan detay sayfası aynı jenerik title/description'ı
+  taşıyor, arama sonucunda birbirinden ayrışmıyor.
+- JSON-LD structured data (`application/ld+json`, örn. schema.org `Restaurant`/`LocalBusiness`)
+  hiç yok — Google'a fiyat aralığı/puan gibi bilgi veren hiçbir mekanizma yok, rich snippet imkanı sıfır.
+→ Vizyon notu: referans alınan ürünlerin (Michelin, TripAdvisor, Yelp) organik trafiğinin büyük
+kısmı bu tür rich snippet'lerden geliyor — GurmeGo şu an bu kanala tamamen kapalı, büyük ölçekli
+bir ürün için kullanıcı edinim maliyetini doğrudan etkiler.
+
+**Doğrulanan, sorun yok:** `sw.js` tasarımı bilinçli ve doğru — offline-first değil, sadece
+app-shell (statik varlıklar) cache-first, dinamik veri hiç cache'lenmiyor (2.1'deki Next.js
+data-cache sorunuyla karıştırılmasın, bu ayrı ve doğru çalışan bir katman).
+
+**Küçük not, düşük öncelik:** `manifest.json`'daki ikonlarda `"purpose":"maskable"` varyantı yok —
+Android'de adaptive icon maskesi ikonu awkward kırpabilir.
+
+### 2.6 — Web eksik/zayıf yönler (Bölüm 2 özeti/sentez)
+
+**Kritik:**
+- `/[district]` ana keşif sayfası fetch'leri süresiz cache'leniyor, manuel revalidate yok (§2.1).
+
+**Önemli/orta öncelik:**
+- Serbest metin arama hiç yok (§2.2).
+- Open Graph/Twitter meta hiç yok — paylaşım özelliğiyle çelişiyor (§2.3).
+- SEO altyapısı tamamen sıfır: robots.txt, sitemap.xml, JSON-LD, generateMetadata (§2.5).
+- Tasarım tokenı yok — 180 yerde hardcode hex renk (§2.3).
+- Serif başlıklar özel font yüklemiyor (§2.3).
+- Manifest/viewport `theme_color` tutarsızlığı (§2.5).
+- **Cross-cutting (yeni): hiçbir yerde özel `error.tsx`/`not-found.tsx`/`global-error.tsx` yok** —
+  bir hata/404 anında kullanıcı Next.js'in jenerik, unbranded ekranını görür; tam da en kritik anda
+  editöryel kimlik tamamen kayboluyor.
+- **Cross-cutting (yeni): `next.config.js`'de hiç güvenlik header'ı (CSP, X-Frame-Options vs.) yok**
+  — backend'deki `@fastify/helmet` eksikliğiyle aynı sınıftan, web tarafının karşılığı, birlikte
+  düşünülmeli.
+
+**Açık soru (kullanıcı kararı bekliyor):**
+- `venue-card` hiç fotoğraf göstermiyor — bilinçli mi, gözden kaçmış mı? (§2.3)
+
+**Düşük öncelik:** ReportForm'da client-side maxLength yok (§2.2), layout.tsx'te kırılgan
+arbitrary-selector stil deseni (§2.3), img'lerde lazy loading yok (§2.3), maskable icon yok (§2.5).
+
+**Ertelenen (kullanıcı isteğiyle):** TR/EN dil desteği (§2.2).
+
+**Doğrulanan, sağlam:** race-guard mimarisi (§2.4), service worker tasarımı (§2.5), empty-state
+tasarımı (§2.3), XSS/injection riski yok (§2.2), `.env.local` doğru gitignore'lu, secret sızıntısı yok.
+
+**BÖLÜM 2 (Web/PWA) KAPANDI.**
+
+---
+
+## Bölüm 3 — Admin Panel (`apps/admin`)
+
+### 3.1 — Route ve özellikler
+5 route: `/giris`, `/erisim-yok`, `(protected)` layout guard, `(protected)/kuyruk` (sadece REPORT
+tipi, PENDING, öncelik/acil rozetli onay-red), `(protected)/import` (CSV toplu yükleme). Sadece 2
+fonksiyonel sayfa.
+
+**Doğrulanan, çok sağlam:** `auth-context.tsx`'teki rol decode'u JWT imzasını doğrulamıyor ama kod
+içi yorum bunun bilinçli olduğunu belirtiyor (display-only gating, backend `RolesGuard` gerçek
+sınır). `import/page.tsx` (316 satır) ve `kuyruk/page.tsx`'in mutation akışı tam okundu — race-guard
+mimarisi web'in `favoriler/page.tsx`'iyle birebir aynı kalitede, 10 ayrı Codex review turu
+belgelenmiş (identity-gated reset, dedicated request counter, `key={identity}` ile native file
+input'u zorla remount etme dahil).
+
+**Cross-cutting bulgular (Web §2.6 ile aynı sınıftan, admin'de de var):**
+- `error.tsx`/`not-found.tsx` admin'de de yok — internal araç olduğu için düşük risk, ama
+  tutarlılık için not edildi.
+- `next.config.js`'de admin'de de hiç güvenlik header'ı yok — backend/web'deki aynı eksikliğin
+  üçüncü tekrarı (üçü birlikte tek bir "helmet-eşdeğeri ekle" aksiyonu olarak düşünülebilir).
+
+**Küçük UX notları, güvenlik değil:**
+- CSV yüklemeden önce client-side dosya boyutu kontrolü yok — backend'in 10MB limitine takılana
+  kadar kullanıcı bekler, sonra jenerik "yükleme başarısız" mesajı alır.
+- Yükleme sırasında gerçek ilerleme yüzdesi yok, sadece spinner.
+- Kuyruk listesinde sayfalama yok — backend §1.5'teki bilinçli kararla tutarlı, pilot ölçeğinde
+  sorun değil.
+
+**Beklenen, sorun değil:** Admin'de PWA/manifest yok — internal araç için gerekmiyor.
+
+### 3.2 — Görünüş
+Tailwind, component library yok. `slate`/`blue-700`/`rose`/`emerald` — 89 yerde tekrarlanan ama
+Tailwind'in isimlendirilmiş palet renkleri (web'in 180 rastgele hex'inden daha az ciddi, iç araç
+için tasarım tokenı eksikliği daha düşük öncelik). Responsive breakpoint kullanımı tutarlı.
+
+**🟡 Bulgu — düzeltilerek kaydedildi:** İlk taramada `queue-item.tsx`'teki approve/reject
+butonlarında `focus-visible` olmadığı iddia edildi — **bu YANLIŞTI, düzeltildi:** her iki buton da
+`focus-visible:outline` içeriyor, en kritik aksiyon butonları güvenli.
+
+**Gerçek bulgular (doğrulanmış):**
+- `(protected)/layout.tsx`'teki "Çıkış yap" butonu (her korumalı sayfada görünen paylaşılan
+  header) stilli ama `focus-visible` yok — küçük ama her sayfada tekrarlanan eksik.
+- **`erisim-yok/page.tsx` tamamen stilsiz** — hiç Tailwind class'ı yok, düz tarayıcı varsayılan
+  görünümü. Uygulamanın geri kalanı özenle tasarlanmışken, yetkisiz bir kullanıcının düştüğü bu
+  sayfa "unutulmuş/bitmemiş" görünüyor.
+
+**Bağlantılı örüntü (üç bölümde de tekrarlandı — önemli genel gözlem):** Web §2.6'da
+`error.tsx`/`not-found.tsx` yoktu, admin §3.1'de de yoktu, şimdi admin'in `erisim-yok` sayfası da
+unutulmuş. Yani üç kez karşımıza çıkan bir tema: **"mutlu yol" özenle tasarlanıyor, hata/kenar
+durumu ekranları sistematik olarak atlanıyor.** Mobile'da bu ayrım geçerli değil — mobile zaten
+her yerde tutarlı şekilde stilsiz.
+
+### 3.3 — Admin eksik/zayıf yönler (Bölüm 3 özeti/sentez)
+
+**🔴 Güvenlik açığı — UYGULANMADI, backend+admin bağlantılı:** `apps/api/src/admin/reports/
+admin-reports.service.ts:40-44`'teki `exportVenues()`, `Venue` alanlarını (`name`, `editorialNote`,
+`transportNote`, `address`) hiçbir sanitizasyon yapmadan `csv-stringify` ile CSV'ye yazıyor —
+**CSV/Formula Injection** (OWASP tanımlı sınıf). Bir katkıcı mekan adına `=HYPERLINK(...)` veya
+`=cmd|...` gibi bir "formül" girip curator gözden kaçırıp onaylarsa, admin/curator export edilen
+CSV'yi Excel/Sheets'te açtığında bu formül **otomatik çalışır**. → **Aksiyon:** export sırasında
+`=`/`+`/`-`/`@` ile başlayan hücrelerin önüne tek tırnak (`'`) eklenmeli (standart mitigasyon,
+`csv-stringify` bunu otomatik yapmıyor).
+
+**🟠 Bulgu — vizyonla ilgili, UYGULANMADI:** Hiçbir yerde audit/activity log yok. Rol atama
+(`admin/users/:id/roles`) kimin ne zaman hangi eski rolden yaptığını kaydetmiyor; CSV import'un
+kalıcı bir kaydı yok (sadece UI'da geçici sonuç). (`VenueVersion` mekan düzenlemeleri için zaten
+denetim izi sağlıyor — sorun sadece rol/import gibi diğer hassas işlemlerde.) §1'deki "observability
+logging yok" bulgusundan farklı: bu operasyonel debug logu değil, kalıcı/sorgulanabilir hesap
+verebilirlik kaydı. Büyük ölçekli bir şirket ürünü için özellikle rol/yetki değişikliklerinde
+standart bir beklenti.
+
+**Orta öncelik:**
+- `erisim-yok/page.tsx` tamamen stilsiz (§3.2).
+- `error.tsx`/`not-found.tsx` yok — cross-cutting, 3. tekrar (§3.1).
+- `next.config.js`'de güvenlik header'ı yok — 3. tekrar (§3.1).
+
+**Düşük öncelik:**
+- "Çıkış yap" butonunda focus-visible yok, her sayfada (§3.2).
+- CSV yüklemede client-side boyut kontrolü/ilerleme yüzdesi yok (§3.1).
+- Kuyruk listesinde sayfalama yok (bilinçli, backend §1.5 kararıyla tutarlı) (§3.1).
+- Manuel mekan düzenleme UI'ı yok — curator Prisma Studio'ya muhtaç (ilk envanterden).
+
+**Doğrulanan, sağlam:** race-guard mimarisi web kadar titiz (§3.1), auth decode tasarımı doğru
+(§3.1), responsive tasarım tutarlı (§3.2).
+
+**Vizyon notu:** Admin, kapsamı dar (2 sayfa) ve iç araç olduğu için marka/görsel kimlik yükü
+taşımıyor — doğru bir kapsam kararı, değişmesi gerekmiyor. Ölçek büyürse ilk ihtiyaç muhtemelen
+sayfalama + manuel mekan düzenleme UI'ı + audit log olur.
+
+**BÖLÜM 3 (Admin Panel) KAPANDI.**
+
+---
+
+## Bölüm 4 — Mobile App (`apps/mobile`)
+
+### 4.1 — Navigasyon ve ekranlar
+Stack: `Tabs` (Discovery+Favoriler) + `VenueDetail` + `Auth`. 4 ekran toplam.
+
+**🔴 Kritik bulgu — UYGULANMADI:** `auth-context.tsx`'te `signOut` tanımlı ve test edilmiş, ama
+**hiçbir ekran onu çağırmıyor**. Profil/Hesap/Ayarlar ekranı hiç yok — giriş yapmış bir kullanıcının
+mobile'da çıkış yapmasının **hiçbir yolu yok**. Web'de (header linki) ve admin'de ("Çıkış yap"
+butonu) bu var, mobile'da tamamen eksik. Kozmetik değil, temel hesap yönetimi özelliği eksik.
+
+**🟠 Bulgu — AuthScreen'de double-submit guard yok:** `handleSubmit`'te hiçbir in-flight
+kontrolü/loading state yok — hızlı çift dokunuş iki eşzamanlı `signIn`/`signUp` isteği tetikler.
+Kod tabanının geri kalanındaki (web/admin) titiz race-guard disiplini burada hiç yok.
+
+**🟡 Bulgu — başarılı girişten sonra otomatik geri dönüş yok:** `handleSubmit` başarılı olunca
+`navigation.goBack()` çağrılmıyor. Senaryo: kullanıcı favorilemek isterken Auth'a yönlendirilir,
+giriş yapar, ekranda kalır — favorileme niyeti kesintiye uğrar, manuel geri gitmesi gerekir.
+
+**Ek bulgu:** `TabNavigator.tsx`'te `tabBarIcon` tanımlı değil — tab bar sadece metin gösteriyor,
+ikon yok (bilinen "mobile'da tasarım sistemi yok" bulgusunun somut bir örneği).
+
+**Genel gözlem:** Yukarıdaki 3 bulgu (sign-out yok, double-submit guard yok, auto-navigate yok)
+birlikte gösteriyor ki **auth, mobile'ın en az cilalanmış/test edilmiş akışı** — backend/web/
+admin'deki aynı titizlik burada yok.
+
+### 4.2 — Görünüş/UI
+
+**Doğrulandı, kod seviyesinde:** `DiscoveryScreen.tsx`'te `<View>`/`<Text>`/`<Pressable>` hiçbir
+style prop'u olmadan kullanılıyor. Tüm `screens/`+`components/` genelinde grep'lendi: `StyleSheet`
+kullanımı **sıfır**, `ActivityIndicator` kullanımı **sıfır**, `style=` prop'u toplam sadece **3
+yerde** (hepsi `VenueDetailScreen.tsx`, muhtemelen harita/görsel boyutlandırma). "Sıfır tasarım
+sistemi" ve "loading göstergesi yok" bulguları artık tek ekrana özgü değil, **tüm uygulama
+genelinde doğrulanmış** durumda.
+
+**🟠 Yeni, önemli bulgu — mobile'da pagination hiç yok:** `apps/mobile/src/lib/api.ts`'teki
+`getVenues()` ne `cursor` gönderiyor ne `has_more`/`next_cursor` işliyor. Backend varsayılan sayfa
+boyutu 20 mekan — mobile kullanıcısı ilk 20 mekandan fazlasını hiçbir şekilde göremiyor, "daha
+fazla göster" mekanizması yok. Web'de keyset pagination özenle uygulanmışken (§2.2), mobile'da hiç
+yapılmamış. CLAUDE.md'nin kendi tanımına göre mobile "ana deneyim" — ana deneyimde kullanıcının
+katalogdaki mekanların çoğunu hiç görememesi ciddi bir işlevsel eksiklik.
+
+**Ek bulgu:** Hata durumunda (`catch`) sessizce boş liste gösteriliyor — "filtrelerine uyan mekan
+yok" ile "ağ hatası oldu" ayrımı kullanıcıya hiç yansımıyor.
+
+### 4.3 — Native özellikler ve config
+
+**Doğrulanan, sağlam:** `use-location.ts` web'in `useGeolocation`'ıyla aynı sözleşme; `supabase.ts`
+`expo-secure-store`'u (OS keychain/keystore) doğru kullanıyor; `env.ts`'teki literal
+`process.env.EXPO_PUBLIC_X` erişimi doğru (önceki dinamik-erişim bug'ının düzeltilmiş hali,
+teyit edildi); `directions.ts` web'le birebir aynı ve bilinçli bir tasarım (kod yorumunda
+"deliberate choice" diye belirtilmiş); `Share.share`/`Linking.openURL`'de `encodeURIComponent`
+doğru; `app.json`'daki izinler (`ACCESS_COARSE/FINE_LOCATION`, `NSLocationWhenInUseUsageDescription`)
+gerçek kod kullanımıyla birebir eşleşiyor — fazla/eksik izin yok.
+
+**Küçük dikkat notu (doğrulanmış bug değil, izlenmesi gereken risk):** `expo-secure-store`, bazı
+Android sürümlerinde Keystore-backed depolamada ~2048 byte boyut sınırı taşıyabiliyor (bilinen bir
+Expo/Supabase tuzağı). Supabase session objesi normalde altında kalır ama JWT büyürse (ileride
+custom claim eklenirse) sessiz yazma hatası riski var — şu an aktif değil, izlenmeli.
+
+**🟡 Küçük bulgu:** `ReportForm.tsx`'te (mobile) web'in aksine hiç client-side validasyon yok —
+`reason` alanında `minLength` kontrolü yok, sadece `submitting` durumunda disabled. Kullanıcı boş
+metinle gönderip backend'in `min(5)` kuralına takılabilir, jenerik hata alır — neden söylenmiyor.
+
+### 4.4 — Build/dağıtım durumu
+
+**Doğrulandı, kod/config seviyesinde — bilinenle birebir örtüşüyor:** `eas.json` yok,
+`app.json`'da `ios.bundleIdentifier`/`android.package` tanımlı değil, gerçek `.env.local` yok
+(sadece `.example`), `slug`/`name` hâlâ jenerik `"mobile"`, versiyon sabit `1.0.0` — build/version
+artırma stratejisi yok. Bunların hepsi **Plan 4e**'nin kapsamı, henüz başlanmamış (kullanıcı
+kararıyla ertelenmiş durumda).
+
+**Ek doğrulama:** `.env.local` git'e commit edilmemiş, `.gitignore`'da kapsanıyor; `env.ts`'te
+fallback/varsayılan secret yok; gerekli tüm ikon asset'leri (Android adaptive icon 3 varyant, iOS
+icon/splash) mevcut — secret sızıntısı veya eksik asset yok.
+
+**İleriye dönük not (Plan 4e'ye not düşülecek, şimdi aksiyon gerektirmiyor):** `.gitignore`'da
+henüz `.expo/`, keystore (`.jks`/`.p12`), `.mobileprovision` gibi imzalama dosyaları için özel
+kural yok — bu dosyalar Plan 4e'de üretilmeye başlayınca **asla commit edilmemeleri için**
+`.gitignore`'a eklenmesi gerekecek.
+
+### 4.5 — Mobile eksik/zayıf yönler (Bölüm 4 özeti/sentez)
+
+**🔴🔴 EN YÜKSEK RİSKLİ BULGU (dört bölümde de tekrar eden "kenar durumu ihmali" temasının en
+ağır sonuçlusu) — UYGULANMADI:** `App.tsx`'te hiçbir React Error Boundary yok
+(`ErrorBoundary`/`componentDidCatch`/`getDerivedStateFromError` — tüm kod tabanında sıfır sonuç),
+crash reporting (Sentry/Bugsnag) da hiç kurulu değil. Sonuç: bir bileşen render sırasında
+beklenmedik bir hata fırlatırsa (bug, null referans, API'nin beklenmedik şekil döndürmesi), **error
+boundary olmadığı için TÜM UYGULAMA ÇÖKER** — kullanıcı kırmızı hata ekranı (dev) veya uygulamanın
+kapanmasıyla (prod) karşılaşır, geri dönecek yol yok. Ayrıca prod'da bir çökme olsa **kimse
+haberdar olmaz** (crash reporting yok). Bu, Web §2.6 (`error.tsx` yok) ve Admin §3.2
+(`erisim-yok` stilsiz) ile aynı kök temanın (mutlu yol tasarlanıyor, hata yolu ihmal ediliyor)
+mobile'daki en yüksek sonuçlu versiyonu — web/admin'de kötü bir sayfa görünür, mobile'da uygulama
+tamamen kapanır. → **Aksiyon:** en azından root'ta bir Error Boundary + bir crash reporting SDK'sı
+(store'a çıkmadan önce, Plan 4e ile birlikte) şart.
+
+**Kritik:**
+- Hiçbir yerde sign-out yolu yok (§4.1).
+
+**Önemli/orta öncelik:**
+- Pagination hiç yok — ilk 20 mekandan fazlası görünmüyor, "ana deneyim" için ciddi eksiklik (§4.2).
+- AuthScreen'de double-submit guard ve auto-navigate-back yok (§4.1).
+- Sıfır tasarım sistemi, app-genelinde doğrulandı (§4.2).
+- DiscoveryScreen'de harita yok (ilk envanterden, bilinçli kapsam kararı).
+
+**Düşük öncelik:**
+- `tabBarIcon` yok (§4.1), hata/boş-sonuç ayrımı yok (§4.2), `ReportForm`'da client validasyon yok
+  (§4.3), `expo-secure-store` Android boyut sınırı riski — izlenmeli, aktif değil (§4.3).
+
+**Build/dağıtım:** Tamamen Plan 4e'yi bekliyor (§4.4).
+
+**Doğrulanan, sağlam:** native config/izinler doğru, env/secret yönetimi güvenli, FavoriteButton/
+FavoritesScreen race-guard mimarisi web kadar titiz (ilk envanterden).
+
+**Genel gözlem:** Mobile, backend/web/admin'e kıyasla belirgin şekilde daha az olgun — hem görsel
+tasarım hem temel akışlar (auth, pagination, crash koruması) açısından. CLAUDE.md'nin "ana deneyim"
+tanımıyla şu anki olgunluk seviyesi arasında belirgin bir fark var.
+
+**BÖLÜM 4 (Mobile App) KAPANDI.**
+
+---
+
+## Bölüm 5 — Ortak Gözlemler (tüm katmanlar)
+
+Review'ın son bölümü — 1-4 arası tüm bulgular sentezlendi. Buradan sonra "mevcut haliyle
+geliştirme" aşamasına (kod yazma) geçilebilir.
+
+### 5.1 — Tüm projedeki KRİTİK bulgular (öncelik sırasıyla değil, tespit sırasıyla)
+
+1. **§1.3 — `User` tablosu hiç doldurulmuyor.** Supabase Auth ile senkron yok. Favoriler VE
+   gelecekteki her türlü kullanıcı katkısı bu temel altyapıya bağımlı. Prod'da favoriler 500 verir.
+2. **§2.1 — Web ana sayfası (`/[district]`) fetch'leri süresiz cache'leniyor.** Manuel revalidate
+   yok. Yeni onaylanan/arşivlenen mekanlar redeploy'a kadar görünmüyor.
+3. **§3.3 — CSV export'ta Formula/CSV Injection açığı.** `admin-reports.service.ts`'in
+   `exportVenues()`'ı sanitizasyonsuz — kötü niyetli bir mekan adı Excel'de formül olarak çalışabilir.
+4. **§4.1 — Mobile'da hiç sign-out yolu yok.** Fonksiyon var, hiçbir ekran çağırmıyor.
+5. **§4.5 — Mobile'da hiç Error Boundary/crash reporting yok.** Beklenmedik bir hata tüm
+   uygulamayı çökertir, kimse haberdar olmaz.
+6. **§5.5 — CI hiç çalışmamış + tetiklense bile kırmızı çıkar.** Branch uyuşmazlığı (`main` yok)
+   + GitHub default branch'i stray worktree + 3 e2e testinin seed fixture'ı yok. Yazılan hiçbir kod
+   şu ana kadar otomatik bir CI koşumundan geçmemiş — bu, diğer 5 kritik bulgunun "CI yakalardı"
+   varsayımını da geçersiz kılıyor.
+
+### 5.2 — Tekrar eden temalar (tek seferlik değil, sistemik)
+
+- **"Mutlu yol tasarlanıyor, kenar durumu ihmal ediliyor"** — 4 kez bağımsız olarak tespit edildi:
+  Web'de `error.tsx`/`not-found.tsx` yok (§2.6), Admin'de `erisim-yok` tamamen stilsiz (§3.2),
+  Admin'de de `error.tsx` yok (§3.1), Mobile'da Error Boundary yok (§4.5, en ağır sonuçlu versiyon).
+  Bu, tek bir sayfanın eksikliği değil — **kod yazma disiplininin sistematik bir kör noktası.**
+  Öneri: bundan sonraki her yeni sayfa/ekran için "happy path + en az bir hata durumu" birlikte
+  tasarlanmalı, ayrı bir adım olarak değil.
+- **Güvenlik header'ı (helmet-eşdeğeri) 3 kez eksik** — Backend (`@fastify/helmet`, §1),
+  Web (`next.config.js` headers, §2.6), Admin (`next.config.js` headers, §3.1). Üçü birlikte tek
+  bir aksiyon olarak ele alınabilir.
+- **Kalıcı kayıt/hesap verebilirlik eksikliği 2 kez** — Backend'de observability logging yok (§1,
+  operasyonel/debug amaçlı), Admin'de audit log yok (§3.3, kalıcı/sorgulanabilir hesap
+  verebilirlik amaçlı) — farklı amaçlar ama aynı kök sorun: hiçbir katmanda "ne olduğunu sonradan
+  öğrenebilme" mekanizması yok.
+- **Race-guard mimarisi — bu bir SORUN DEĞİL, gerçek bir GÜÇLÜ YÖN:** Web (`favoriler`,
+  `discovery-client`, `venue-map-leaflet`), Admin (`kuyruk`, `import`) ve Mobile'ın favori
+  bileşenlerinde aynı titiz "monotonic request counter + identity-gated reset" deseni tutarlı
+  uygulanmış, çoğu Codex cross-model review turlarından geçmiş. Mobile'ın auth akışı (§4.1) bu
+  disipline uymuyor — istisna, kural değil.
+- **Tasarım tokenı/tema sistemi hiçbir yerde yok** ama şiddeti katmana göre değişiyor: Web en ciddi
+  (180 rastgele hex, marka kimliği için kritik, §2.3), Admin daha az ciddi (89 ama Tailwind'in
+  isimlendirilmiş paleti, iç araç için düşük öncelik, §3.2), Mobile en radikal (StyleSheet
+  kullanımı sıfır, hiç tasarım yok, §4.2).
+- **Rate-limit tutarsızlığı** — Backend'de favorites yazma uçları (§1.1) ve admin yazma uçları
+  (§1.2) korumasız, düşük öncelik ama aynı sınıftan iki ayrı bulgu.
+
+### 5.3 — Vizyon uyumu (2026-09-09'da netleşen karara göre)
+
+- **Gurme Puanı** — vizyon bunu markanın uzun vadeli kimliği ilan etti, ama kod tabanında hiç yok
+  (§1.4, §1.6). En büyük vizyon-gerçeklik makası burada.
+- **SEO + Open Graph** — büyük ölçekli ürün hedefiyle doğrudan çelişiyor: robots/sitemap/JSON-LD
+  hiç yok (§2.5), paylaşım özelliğinin kendisi OG meta'sı olmadığı için görsel karşılığı üretmiyor
+  (§2.3). Organik kullanıcı edinimi kanalı şu an kapalı.
+- **Serbest metin arama yok** (§2.2) — "semte gidince ne yesem" personasının doğal beklentisi bu,
+  şu an sadece yapısal filtrelerle karşılanıyor.
+- **Marka kimliği** (sıcak/editöryel) web'de güçlü ama serif font özel yüklenmiyor (§2.3), mobile'a
+  hiç taşınmamış (§4.2) — üç istemci arasında tutarlı bir marka deneyimi yok.
+- **Açık kalan sorular:** `venue-card`'da fotoğraf yokluğu (§2.3) — genç/sosyal medya kitlesi için
+  görsel-öncelik beklentisiyle gerilimde; TR/EN dil desteği (§2.2) — turist hedef kitlesiyle
+  gerilimde. İkisi de kullanıcı kararını bekliyor.
+
+### 5.4 — Genel değerlendirme
+
+Kod kalitesi katman katman **çok değişken**: backend ve web'in çekirdek mantığı (race-guard'lar,
+rule engine, keyset pagination, cross-model review disiplini) profesyonel/kurumsal seviyede sağlam
+— ama her katmanda "kenar durumu" ve "kalıcı kayıt" gibi üretim-olgunluğu gerektiren alanlarda
+tutarlı boşluklar var. Mobile, olgunluk açısından belirgin şekilde geride — hem görsel hem
+işlevsel. Genel olarak: **"MVP olarak doğru inşa edilmiş, üretim/ölçek olgunluğu için ek bir tur
+gerekiyor"** özeti doğru bir çerçeveleme.
+
+### 5.5 — Proje-geneli tooling taraması (ek)
+
+**~~✅ Önceki not (YANLIŞ, geri çekildi):~~** "CI sağlam çalışıyor" denmişti — bu sadece
+`ci.yml` dosyası **okunarak** varılan, doğrulanmamış bir sonuçtu. Gerçek bir Postgres+PostGIS
+container kurup (`docker run postgis/postgis:15-3.4`, port 5434) migration'ları uygulayıp asıl
+test suite'i çalıştırınca çok daha ciddi bir tablo çıktı:
+
+**🔴 KRİTİK bulgu — düzeltilmiş/güçlenmiş hâliyle:**
+1. **CI hiç çalışmamış.** `gh run list` → sıfır sonuç. Sebep: `ci.yml` `push: branches: [main]`
+   üzerinde tetikleniyor ama repoda **`main` branch'i hiç yok** (sadece `master`). Ayrıca GitHub'daki
+   **default branch bile `master` değil** — `worktree-mvp-backend-foundation` adında, temizlenmesi
+   gereken bir worktree branch'i olarak kalmış. `pull_request` tetikleyicisi de hiç ateşlenmemiş
+   çünkü tüm işler PR'sız, doğrudan `master`'a lokal merge edilmiş (STATE.md'nin kendi geçmişi).
+   Sonuç: yazılan hiçbir kod, şu ana kadar **hiçbir otomatik CI koşumundan geçmemiş.**
+2. **Tetiklense bile şu an kırmızı çıkardı.** Gerçek DB'ye karşı çalıştırınca: `admin-queue-race`,
+   `admin-venues-update-race`, `re-verify-race` e2e testlerinin **hiçbiri** kendi District/City
+   fixture'ını oluşturmuyor — `prisma.district.findFirstOrThrow()` ile var olan veriye güveniyorlar,
+   ama ne CI'da ne hiçbir test dosyasında bir seed adımı yok. Veritabanı boşken bu üç dosya kesin
+   başarısız olur.
+3. **Repo hijyeni:** İki worktree hâlâ diskte duruyor (`.claude/worktrees/mobile-theme`,
+   `.claude/worktrees/mvp-backend-foundation`) — ilgili işler `master`'a merge edildiği STATE.md'de
+   yazılı olmasına rağmen `finishing-a-development-branch` akışının worktree/branch temizleme adımı
+   tamamlanmamış. `worktree-mvp-backend-foundation` remote'ta da var ve GitHub'ın default branch'i.
+
+Yani §1'deki "backend e2e testlerini bu makinede doğrulayamadım, CI'da geçtiği varsayılıyor"
+notu de **yanlış bir varsayıma dayanıyormuş** — CI hiç çalışmadığı için "geçtiği" hiç doğrulanmamış.
+→ **Aksiyon gerekiyor (üçü birlikte):** (a) `ci.yml`'i `master`'ı da tetikleyecek şekilde düzelt
+(veya GitHub'da `main`'i gerçek ana branch yap), (b) GitHub default branch'i `master`'a çevir, (c)
+üç e2e dosyasına kendi District/City fixture'ını oluşturan bir `beforeAll` ekle (ya da CI'a bir
+seed adımı ekle), (d) stray worktree'leri temizle.
+
+**🟡 Bulgu — dokümantasyon/gerçeklik uyuşmazlığı:** `CLAUDE.md`'nin "Beklenen komutlar" bölümü
+"pre-commit hook (husky + lint-staged)" vaat ediyor ama kod tabanında ne `.husky` dizini ne
+`husky`/`lint-staged` bağımlılığı var (`package.json`'da doğrulandı). Geliştiriciler commit
+atarken lokal lint/format kontrolünden geçmiyor — tek güvenlik ağı CI, hatayı PR açıldıktan sonra
+(daha geç, daha maliyetli) yakalıyor. CLAUDE.md'nin vaat ettiği ama kurulmamış bir parça.
+
+**REVIEW TAMAMLANDI — 1'den 5'e kadar tüm bölümler bitti.**
+
+---
+
+## Aksiyon Günlüğü (review sonrası, kritik bulguları düzeltme aşaması)
+
+Kullanıcı sırayı onayladı: 1) CI/branch, 2) User tablosu, 3) CSV Injection, 4) Web cache,
+5) Mobile sign-out, 6) Mobile Error Boundary. Her biri TDD + `cross-model-review` ile.
+
+### Adım 1 — CI/branch düzeltmesi: TAMAMLANDI (kod kısmı)
+
+- ✅ `apps/api/test/global-setup.js` eklendi — Jest `globalSetup`, tüm e2e testlerinin ihtiyaç
+  duyduğu District/City fixture'ını bir kere oluşturuyor (idempotent, mevcut veri varsa atlıyor).
+- ✅ `apps/api/jest.config.js`'e `globalSetup` eklendi.
+- ✅ Gerçek doğrulama: docker'da `gurmego-test-db` (postgis/postgis:15-3.4, port 5434) kuruldu,
+  DB sıfırdan migrate edildi, **43/43 suite, 232/232 test geçti** (önceden 8 e2e dosyası
+  "No District found" ile başarısız oluyordu).
+- ✅ `.github/workflows/ci.yml`: `push.branches` `[main]` → `[master]`.
+- ✅ GitHub default branch `worktree-mvp-backend-foundation` → `master` (`gh repo edit`).
+- ✅ `worktree-mvp-backend-foundation`: worktree kaldırıldı, lokal+remote branch silindi (zaten
+  merge edilmişti, güvenle silindi).
+- **⏸️ `worktree-mobile-theme`: SİLİNMEDİ, dokunulmadı.** Silmeye çalışırken git "not fully
+  merged" uyarısı verdi — kontrol edilince gerçekten **9 commit, 1331 satır, unutulmuş ama gerçek
+  bir mobile geliştirme dalı** olduğu ortaya çıktı: `theme.ts` (tasarım sistemi), `MapScreen.tsx`
+  (mobile harita), `FilterSheet.tsx`, ve **Favoriler'de profil kartı + "Çıkış yap"** (§4.1'deki
+  "mobile'da sign-out yok" bulgusunu muhtemelen zaten çözüyor). Cross-model-review'dan geçmiş
+  (3 MAJOR+1 MINOR düzeltilmiş) ama cihazda hiç test edilmeden oturum kapanmış, yarım kalmış.
+  **Kullanıcı kararı: şimdilik dokunma, 6 bulgu bitince bu branch'e dönülecek.** Bu, Adım 5
+  (mobile sign-out) ve mobile'ın tasarım sistemi eksikliğiyle ilgili aksiyon planını etkileyebilir
+  — o adıma gelince bu branch tekrar gündeme getirilecek.
+- **Kalan:** henüz commit edilmedi (jest.config.js, global-setup.js, ci.yml, docs değişiklikleri
+  staged değil). Commit + `cross-model-review` bu adımı kapatacak.
+
+---
+
+*(Buradan sonrası: kullanıcının önceliklendirme kararına göre aksiyon planı — ayrı bir konuşma/plan
+dosyası olabilir.)*

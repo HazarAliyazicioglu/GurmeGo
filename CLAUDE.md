@@ -70,7 +70,7 @@ packages/api-client/  # OpenAPI'den üretilen tip güvenli istemci
 - PostGIS/pgvector raw SQL'i yalnızca repository katmanında; servis katmanı raw SQL görmemeli.
 - Rule engine eşikleri asla kodda sabit değer olarak yazılmaz.
 - Branch: `feat/...`, `fix/...`, `chore/...`; commit: Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`).
-- `main` korumalı — doğrudan push yok, PR + ≥1 onay + yeşil CI zorunlu, squash merge.
+- `master` korumalı — doğrudan push yok, PR + ≥1 onay + yeşil CI zorunlu, squash merge.
 
 ## Asla yapma
 
