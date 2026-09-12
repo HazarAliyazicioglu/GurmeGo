@@ -32,7 +32,7 @@ describe("VenueDetailScreen", () => {
   it("fetches and shows the venue's name, price range, and editorial note", async () => {
     (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
 
-    render(<VenueDetailScreen />);
+    await render(<VenueDetailScreen />);
 
     // Default waitFor timeout (1000ms) is occasionally too short when the full suite runs many
     // test files concurrently (real async resolution + rerender under CPU contention) — same
@@ -45,7 +45,7 @@ describe("VenueDetailScreen", () => {
   it("shows cuisine type, transport note, and address when present", async () => {
     (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
 
-    render(<VenueDetailScreen />);
+    await render(<VenueDetailScreen />);
 
     await waitFor(() => expect(screen.getByText("İtalyan")).toBeTruthy(), { timeout: 5000 });
     expect(screen.getByText("Metro Kadıköy'e 5 dk")).toBeTruthy();
@@ -55,7 +55,7 @@ describe("VenueDetailScreen", () => {
   it("shows each signature item", async () => {
     (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
 
-    render(<VenueDetailScreen />);
+    await render(<VenueDetailScreen />);
 
     await waitFor(() => expect(screen.getByText("Flat white")).toBeTruthy(), { timeout: 5000 });
     expect(screen.getByText("Cheesecake")).toBeTruthy();
@@ -66,7 +66,7 @@ describe("VenueDetailScreen", () => {
       ...FULL_VENUE, cuisineType: null, transportNote: null, editorialNote: null, address: null, photos: [],
     });
 
-    render(<VenueDetailScreen />);
+    await render(<VenueDetailScreen />);
 
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
   });
@@ -74,7 +74,7 @@ describe("VenueDetailScreen", () => {
   it("shows boutique badge, Google rating, opening hours, and last-verified date", async () => {
     (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
 
-    render(<VenueDetailScreen />);
+    await render(<VenueDetailScreen />);
 
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     expect(screen.getByText(/butik/i)).toBeTruthy();
@@ -89,7 +89,7 @@ describe("VenueDetailScreen", () => {
       ...FULL_VENUE, googleRating: null, googleRatingCount: null, openingHours: {},
     });
 
-    render(<VenueDetailScreen />);
+    await render(<VenueDetailScreen />);
 
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     expect(screen.queryByText(/Google/)).toBeFalsy();
@@ -101,7 +101,7 @@ describe("VenueDetailScreen", () => {
     const { Share } = require("react-native");
     const shareSpy = jest.spyOn(Share, "share").mockResolvedValue({ action: Share.sharedAction });
 
-    render(<VenueDetailScreen />);
+    await render(<VenueDetailScreen />);
 
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     fireEvent.press(screen.getByText("Paylaş"));

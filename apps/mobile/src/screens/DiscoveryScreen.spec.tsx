@@ -44,7 +44,7 @@ describe("DiscoveryScreen", () => {
       meta: { next_cursor: null, has_more: false },
     });
 
-    render(<DiscoveryScreen />);
+    await render(<DiscoveryScreen />);
 
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     fireEvent.press(screen.getByText("Test Cafe"));
@@ -54,7 +54,7 @@ describe("DiscoveryScreen", () => {
   it("filters by district when a district chip is pressed", async () => {
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
 
-    render(<DiscoveryScreen />);
+    await render(<DiscoveryScreen />);
 
     await waitFor(() => expect(screen.getByText("Kadıköy")).toBeTruthy(), { timeout: 5000 });
     fireEvent.press(screen.getByText("Kadıköy"));
@@ -67,7 +67,7 @@ describe("DiscoveryScreen", () => {
   it("filters by category when a category chip is pressed", async () => {
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
 
-    render(<DiscoveryScreen />);
+    await render(<DiscoveryScreen />);
 
     await waitFor(() => expect(screen.getByText("Kahve")).toBeTruthy());
     fireEvent.press(screen.getByText("Kahve"));
@@ -80,7 +80,7 @@ describe("DiscoveryScreen", () => {
   it("filters by price range when a price chip is pressed", async () => {
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
 
-    render(<DiscoveryScreen />);
+    await render(<DiscoveryScreen />);
 
     await waitFor(() => expect(screen.getByText("₺₺")).toBeTruthy());
     fireEvent.press(screen.getByText("₺₺"));
@@ -94,7 +94,7 @@ describe("DiscoveryScreen", () => {
     (useLocation as jest.Mock).mockReturnValue({ lat: 40.99, lng: 29.02 });
     (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
 
-    render(<DiscoveryScreen />);
+    await render(<DiscoveryScreen />);
 
     await waitFor(() =>
       expect(getVenues).toHaveBeenLastCalledWith(expect.any(Object), { lat: 40.99, lng: 29.02 }),

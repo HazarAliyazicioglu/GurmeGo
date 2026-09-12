@@ -8,7 +8,7 @@ describe("ReportForm", () => {
   it("submits the typed reason and shows a thank-you message on success", async () => {
     (reportVenue as jest.Mock).mockResolvedValue({ urgent: false });
 
-    render(<ReportForm venueId="v1" />);
+    await render(<ReportForm venueId="v1" />);
 
     await waitFor(() => expect(screen.getByTestId("report-reason")).toBeTruthy());
 
@@ -27,7 +27,7 @@ describe("ReportForm", () => {
   it("shows an error message when the submission fails", async () => {
     (reportVenue as jest.Mock).mockRejectedValue(new Error("network error"));
 
-    render(<ReportForm venueId="v1" />);
+    await render(<ReportForm venueId="v1" />);
 
     await waitFor(() => expect(screen.getByTestId("report-reason")).toBeTruthy());
 

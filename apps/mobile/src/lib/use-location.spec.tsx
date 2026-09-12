@@ -25,7 +25,7 @@ describe("useLocation", () => {
       coords: { latitude: 40.99, longitude: 29.02 },
     });
 
-    render(<Probe />);
+    await render(<Probe />);
 
     await waitFor(() => expect(screen.getByText("40.99,29.02")).toBeTruthy());
   });
@@ -33,7 +33,7 @@ describe("useLocation", () => {
   it("returns null (never throws) when permission is denied", async () => {
     (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: "denied" });
 
-    render(<Probe />);
+    await render(<Probe />);
 
     await waitFor(() => expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalled());
     expect(screen.getByText("no-coords")).toBeTruthy();

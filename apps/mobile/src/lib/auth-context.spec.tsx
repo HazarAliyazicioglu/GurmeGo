@@ -27,7 +27,7 @@ describe("AuthProvider", () => {
       data: { session: { access_token: "tok", user: { id: "u1" } } },
     });
 
-    render(
+    await render(
       <AuthProvider>
         <Probe />
       </AuthProvider>,
