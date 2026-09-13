@@ -8,6 +8,15 @@ jest.mock("../lib/api", () => ({
   getDistricts: jest.fn(),
 }));
 jest.mock("../lib/use-location", () => ({ useLocation: jest.fn() }));
+// Spreading react-native's module object (`{ ...actual, FlatList: ... }`) eagerly evaluates every
+// one of its lazy-getter exports and crashes with an invariant violation deep in
+// @react-native/virtualized-lists -- redefine only the one property instead.
+jest.mock("react-native", () => {
+  const actual = jest.requireActual("react-native");
+  const { mockFlatList } = require("../../test-utils/mock-flat-list");
+  Object.defineProperty(actual, "FlatList", { value: mockFlatList, configurable: true });
+  return actual;
+});
 
 const mockNavigate = jest.fn();
 jest.mock("@react-navigation/native", () => ({
@@ -15,17 +24,12 @@ jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
-// Every test here mounts a tree containing two real VirtualizedLists whose data arrives
-// asynchronously (districts, from the mocked getDistricts() promise via useEffect+setDistricts;
-// venues, from getVenues() the same way) -- on a slow/shared CI runner, VirtualizedList's own
-// internal setTimeout-based initial-cell-render deferral (a fixed 1240ms was observed for the
-// venues list) can eat into a test's whole budget even for assertions that don't themselves touch
-// either list (e.g. asserting on static CATEGORIES/PRICE_RANGES text, or on a mock's call args).
-// apps/mobile/package.json's package-level `jest.testTimeout: 15000` (vs. Jest's 5000ms default)
-// covers the overall per-test budget; the three `waitFor` calls below whose OWN target text lives
-// inside one of those two async-fed lists (the first venue-list test, the district-filter test,
-// and the stale-request race test) additionally need their own `{ timeout: 5000 }` bump, since
-// waitFor's default internal timeout (1000ms) is shorter than the observed render delay.
+// FlatList is mocked (above) to render its items synchronously -- react-native's real
+// VirtualizedList defers its initial cell render behind its own setTimeout, which was observed
+// to occasionally exceed this whole file's 15s test budget on CI's shared runner (root-caused
+// separately from the render()-await race this file also had; see git history). The remaining
+// `{ timeout: 5000 }` bumps below are just a safety margin for the getVenues()/getDistricts()
+// promise resolution itself, not for any virtualization delay.
 describe("DiscoveryScreen", () => {
   beforeEach(() => {
     mockNavigate.mockReset();

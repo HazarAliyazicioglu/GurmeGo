@@ -17,6 +17,15 @@ jest.mock("@react-navigation/native", () => ({
   ...jest.requireActual("@react-navigation/native"),
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
+// Spreading react-native's module object (`{ ...actual, FlatList: ... }`) eagerly evaluates every
+// one of its lazy-getter exports and crashes with an invariant violation deep in
+// @react-native/virtualized-lists -- redefine only the one property instead.
+jest.mock("react-native", () => {
+  const actual = jest.requireActual("react-native");
+  const { mockFlatList } = require("../../test-utils/mock-flat-list");
+  Object.defineProperty(actual, "FlatList", { value: mockFlatList, configurable: true });
+  return actual;
+});
 
 function renderScreen() {
   return render(
@@ -35,12 +44,10 @@ const ONE_LIST = [
   },
 ];
 
-// The waitFor calls below asserting on a real venue name bump their timeout to 5000ms: venue rows
-// render into a real VirtualizedList fed by the mocked getFavoriteLists() promise, and
-// VirtualizedList's own internal setTimeout-based initial-cell-render deferral has been observed
-// to exceed waitFor's default 1000ms on a slow/shared CI runner (same root cause diagnosed in
-// DiscoveryScreen.spec.tsx; apps/mobile/package.json's package-level `jest.testTimeout: 15000`
-// covers the overall per-test budget this races against).
+// FlatList is mocked (above) to render its items synchronously, avoiding react-native's real
+// VirtualizedList setTimeout-based initial-cell-render deferral (root-caused in
+// DiscoveryScreen.spec.tsx). The waitFor calls below still bump their timeout to 5000ms as a
+// safety margin for the getFavoriteLists() promise resolution itself.
 describe("FavoritesScreen", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
