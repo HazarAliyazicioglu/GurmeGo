@@ -749,6 +749,72 @@ Kullanıcı sırayı onayladı: 1) CI/branch, 2) User tablosu, 3) CSV Injection,
 - **Kalan:** henüz commit edilmedi (jest.config.js, global-setup.js, ci.yml, docs değişiklikleri
   staged değil). Commit + `cross-model-review` bu adımı kapatacak.
 
+### Adım 1 — devamı: CI'yı ilk kez gerçekten tetikleyince çıkan zincirleme bulgular
+
+CI push edildikten sonra **5 ayrı CI koşumu** gerekti, her biri farklı, gerçek, önceden hiç
+bilinmeyen bir sorun ortaya çıkardı (hepsi TDD+cross-model-review ile düzeltildi, commit'lendi):
+
+1. **`apps/api` postinstall eksik** — `prisma generate` hiç tetiklenmiyordu, CI'ın kendi
+  `prisma migrate deploy` adımı generate yapmıyor. `postinstall: "prisma generate"` eklendi
+  (`d87c6d7` sonrası, `6a8e7d8`).
+2. **Turbo env-passthrough** — `turbo run test`, Turborepo 2.x'in strict env modu yüzünden
+  `DATABASE_URL`/`SUPABASE_JWKS_URL`'i alt task'lara geçirmiyordu. `turbo.json`'da `test` task'ına
+  `env` array'i eklendi (`ac9be9a`).
+3. **Mobile VirtualizedList timing flake** — CI'nın paylaşımlı runner'ında `waitFor`/Jest
+  timeout'ları gerçek FlatList render gecikmesine (~1240ms) yetmiyordu. 6 review turu sonunda
+  paket-geneli `testTimeout: 15000` + ilgili `waitFor`'larda `{timeout:5000}` ile düzeltildi
+  (`152adc8`).
+4. **🟡 AÇIK — çözülemedi, geri alındı:** 4. CI koşumunda mobile'da FARKLI bir hata çıktı:
+  `` `render` function has not been called `` (timeout değil). Turbo'nun paralellik seviyesini
+  CI'da `--concurrency=2`'ye düşürerek CPU çekişmesini azaltmayı denedim — ama bu, **lokalde
+  apps/api'nin e2e testlerinde 5 yeni, önceden hiç görülmemiş başarısızlık** açtı
+  (`venues-cursor-pagination.e2e-spec.ts` dahil). Bu, **e2e testlerin paralel/farklı sıralı
+  çalışmaya karşı güvenli olmadığını** gösteriyor — testler aynı paylaşılan gerçek DB'yi
+  kullanıyor, aralarında transaction-rollback/izolasyon yok. Bu, "CI'yı tetikle" hedefinin çok
+  ötesinde, **ayrı ve büyük bir bulgu**: e2e test mimarisinin kendisi concurrency-safe değil.
+  `--concurrency=2` değişikliği geri alındı (yeni sorun açtığı için), CI'daki asıl mobile
+  flake'i (render-not-called) henüz çözülmedi.
+
+**Karar:** Kullanıcı "devam edelim" dedi — açık noktalar systematic-debugging ile kök nedenine
+kadar izlendi.
+
+### Adım 1 — kapanış: mobile flake'in gerçek kök nedeni ve fix'i
+
+5. **Kök neden #1 — `render()`/`rerender()` await edilmiyordu (RACE):**
+   `@testing-library/react-native` v14.0.1'de `render`/`rerender` artık `async` fonksiyonlar
+   (`dist/render.js`): dahili `act()` çağrısı `await` edilip sonuç `screen`'e kaydedildikten
+   (`setRenderResult`) SONRA dönüyorlar. Kod tabanında 16 çağrı yerinde (`ReportForm.spec.tsx`,
+   `use-location.spec.tsx`, `auth-context.spec.tsx`, `DiscoveryScreen.spec.tsx` ×5,
+   `VenueDetailScreen.spec.tsx` ×7) `render(...)` `await` edilmeden çağrılıyordu. Await
+   edilmezse bir sonraki satır (`waitFor`/`screen.getByText`) `setRenderResult` çalışmadan önce
+   tetiklenebiliyor — tam da gözlenen `` `render` function has not been called `` hatası. Kanıt:
+   dosyadaki TEK `await render(...)` kullanan test (satır 124, "does not let a slower... request")
+   CI'da hep geçti; await etmeyenlerden biri (ilk test) başarısız oldu. Bu bir timing/race
+   olduğu için `152adc8`'deki timeout artırma hiç işe yaramamıştı. Fix: 16 çağrıya `await`
+   eklendi (`f625cba`), `cross-model-review` TEMİZ verdi.
+6. **Kök neden #2 — gerçek `VirtualizedList`'in setTimeout gecikmesi (AYRI sorun):**
+   #5 fix'inden sonra AYNI test bu kez `Exceeded timeout of 15000 ms` ile patladı — CI'da
+   `DiscoveryScreen.spec.tsx` dosyasının TAMAMI 34.5 saniye sürdü (lokalde tüm 13 suite 11-12
+   saniyede bitiyor). Bu, `152adc8`'in orijinal teorisini (CI'nın paylaşımlı runner'ında gerçek
+   kaynak çekişmesi) doğruladı ama sorun timeout değil, **testlerin gerçek, ağır
+   `VirtualizedList` bileşenini mock'lamadan render etmesiydi**. systematic-debugging kuralı
+   gereği (aynı semptomda 3. gerçek düzeltme girişimi: timeout artırma → concurrency düşürme →
+   bu) kullanıcıya soruldu, "FlatList'i mock'la" seçildi. `apps/mobile/test-utils/mock-flat-list.tsx`
+   eklendi (senkron render eden basit bir FlatList yerine geçen mock), `DiscoveryScreen.spec.tsx`
+   ve `FavoritesScreen.spec.tsx`'e uygulandı (`b7b22d4`). İlk deneme (`{ ...actual, FlatList }`
+   ile module spread) react-native'in lazy-getter export'larını eager tetikleyip invariant
+   hatası verdi — `Object.defineProperty` ile sadece `FlatList` export'u değiştirilerek düzeltildi.
+   `cross-model-review` bir MINOR bulgu dışında TEMİZ verdi (renderItem eksikse mock çöker,
+   mevcut kullanımı etkilemiyor, yine de düzeltildi).
+7. **Sonuç:** CI koşumu `b7b22d4` tüm adımlarda yeşil (lint, typecheck, test, build,
+   smoke-api). Adım 1 kapandı.
+
+**Kalıcı, ayrı bulgu (Adım 1 kapsamı dışında, backlog'a):** #4'te turbo `--concurrency=2`
+denemesi sırasında ortaya çıkan "`apps/api`'nin e2e testleri paralel/sıra-bağımlı çalışmaya
+karşı güvenli değil" bulgusu geçerliliğini koruyor — mevcut CI seri çalıştığı için buna maruz
+kalmıyor, ama testler aynı gerçek DB'yi transaction-izolasyonu olmadan paylaşıyor. Gelecekte
+CI paralelleştirilirse veya test suite büyürse yeniden gündeme gelecek.
+
 ---
 
 *(Buradan sonrası: kullanıcının önceliklendirme kararına göre aksiyon planı — ayrı bir konuşma/plan

@@ -1,10 +1,9 @@
-# Durum — 2026-09-11
+# Durum — 2026-09-13
 
 ## Veri sınırı
 Codex: izinli (kişisel proje, kurumsal işaret yok — repo HazarAliyazicioglu/GurmeGo)
 GLM: izinli
-Kaynak: daha önce (2026-09-08, worktree-mobile-theme dalının STATE.md'sinde) kullanıcıya
-sorulup yanıtlanmış, buraya taşındı — tekrar sorulmayacak.
+Kaynak: 2026-09-08 kullanıcı beyanı (worktree-mobile-theme STATE.md'sinden taşındı) — tekrar sorulmayacak.
 
 ## Kod `master`'da, tam ürün review'ı tamamlandı (2026-09-09/10)
 Web/mobile MVP merge edildi (git log `31284f8`). Sonrasında ilerletme değil, A'dan Z'ye envanter +
@@ -16,20 +15,19 @@ Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ma
 kimlik korunup güçlendirilecek. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md "Ürün vizyonu" bölümü.
 
 ## Şu an neredeyiz
-Review bitti, §5.5'te önemli bir DÜZELTME yapıldı: önceki "CI sağlam" notu yanlıştı (sadece
-ci.yml okunarak varılmış, doğrulanmamıştı). Gerçek Postgres kurup denendi: CI **hiç çalışmamış**
-(branch uyuşmazlığı: main yok, GitHub default branch'i stray worktree) ve tetiklense bile 3 e2e
-testi seed fixture'ı olmadığı için kırmızı çıkar. §5.1'de artık 6 kritik bulgu var (User tablosu,
-web cache, CSV injection, mobile sign-out, mobile error boundary, CI hiç çalışmamış). Kullanıcı
-"kritik bulguları sırayla düzelt" dedi — CI bulgusu son eklendi, sıralama netleşmeli.
+**Adım 1 (CI fix) TAMAMLANDI (2026-09-13) — CI yeşil (`b7b22d4`).** İki kök neden
+systematic-debugging + cross-model-review ile düzeltildi: RNTL v14'te await edilmeyen
+`render()`/`rerender()` (race) ve gerçek `VirtualizedList`'in CI'da 15sn'i aşan setTimeout
+gecikmesi (FlatList mock'landı). Detay + ayrı bırakılan e2e paralel-izolasyon borcu:
+REVIEW-PLAN.md "Adım 1 — kapanış" bölümü.
 
-## Test altyapısı (bu oturumda kuruldu)
-`apps/api` için gerçek Postgres+PostGIS test DB'si: docker container `gurmego-test-db`
-(postgis/postgis:15-3.4, port 5434). `apps/api/.env` oluşturuldu (gitignore'lu) — e2e testler artık
-bu makinede gerçekten çalıştırılabiliyor.
+## Test altyapısı
+`apps/api` e2e'leri gerçek Postgres+PostGIS docker container'a (`gurmego-test-db`, port 5434)
+karşı çalışıyor, `apps/api/.env` gitignore'lu.
 
 ## Sıradaki adım
-Kullanıcıyla önceliklendirme: 6 kritik bulgudan hangisi/hangileri önce ele alınacak.
+Adım 1 kapandı. Kalan 5 kritik bulgudan (User tablosu, web cache, CSV injection, mobile sign-out,
+mobile error boundary) hangisi Adım 2 olacak — kullanıcıyla önceliklendirilecek.
 
 ## Bloke olanlar
 - Yok.
