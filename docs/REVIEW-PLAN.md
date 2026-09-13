@@ -614,8 +614,9 @@ geliştirme" aşamasına (kod yazma) geçilebilir.
 
 ### 5.1 — Tüm projedeki KRİTİK bulgular (öncelik sırasıyla değil, tespit sırasıyla)
 
-1. **§1.3 — `User` tablosu hiç doldurulmuyor.** Supabase Auth ile senkron yok. Favoriler VE
-   gelecekteki her türlü kullanıcı katkısı bu temel altyapıya bağımlı. Prod'da favoriler 500 verir.
+1. **✅ ÇÖZÜLDÜ (Adım 2, 2026-09-14, `fd4a44c`) — §1.3 — `User` tablosu hiç doldurulmuyor.**
+   Supabase Auth ile senkron yok. Favoriler VE gelecekteki her türlü kullanıcı katkısı bu temel
+   altyapıya bağımlı. Prod'da favoriler 500 verir. Fix: "Aksiyon Günlüğü — Adım 2" bölümü.
 2. **§2.1 — Web ana sayfası (`/[district]`) fetch'leri süresiz cache'leniyor.** Manuel revalidate
    yok. Yeni onaylanan/arşivlenen mekanlar redeploy'a kadar görünmüyor.
 3. **§3.3 — CSV export'ta Formula/CSV Injection açığı.** `admin-reports.service.ts`'in
@@ -814,6 +815,62 @@ denemesi sırasında ortaya çıkan "`apps/api`'nin e2e testleri paralel/sıra-b
 karşı güvenli değil" bulgusu geçerliliğini koruyor — mevcut CI seri çalıştığı için buna maruz
 kalmıyor, ama testler aynı gerçek DB'yi transaction-izolasyonu olmadan paylaşıyor. Gelecekte
 CI paralelleştirilirse veya test suite büyürse yeniden gündeme gelecek.
+
+### Adım 2 — §1.3 KRİTİK bulgu: User tablosu hiç doldurulmuyordu
+
+Kullanıcı "user tablosuna geçelim" dedi (2026-09-14). Bounded brainstorming + TDD +
+cross-model-review akışı izlendi.
+
+**Kök sorun:** `FavoriteList.userId -> User.id` zorunlu FK, ama `apps/api/src`'de hiçbir yerde
+Supabase Auth ile kendi `User` tablosu arasında senkron yoktu — gerçek bir kullanıcı ilk favori
+listesini oluşturmaya çalıştığında FK ihlali (500) alıyordu (`favorites.service.spec.ts`
+tamamen mock'lu Prisma kullandığı için hiç yakalanmamıştı).
+
+**Karar (kullanıcı onayı ile):** Lazy-upsert'i tek bir merkezi noktada, `JwtAuthGuard`'da yap —
+her geçerli JWT doğrulamasında (`FavoritesService.createList()`'te değil, tek bir call site'ta
+değil) — böylece gelecekteki her yeni User-bağımlı yazma noktası (katkı kuyruğu, Gurme Puanı
+oyu) bu sınıf hatayı bir daha hiç yaşamaz. JWT payload şeması artık `email` claim'ini de zorunlu
+kılıyor (`User.email` DB'de required+unique); eksikse 401 INVALID_TOKEN. Email her istekte
+güncelleniyor (`update: { email }`) — Supabase kaynak-doğru kabul ediliyor.
+
+**Uygulama:** Upsert, token-doğrulama try/catch'inin **dışında** — bir DB hatası yanlışlıkla
+401'e maskelenmeyip gerçek 500 olarak yükseliyor. TDD ile yazıldı: `jwt-auth.guard.spec.ts`'e
+16 test (email eksik/geçersiz, upsert create/update argümanları, DB hatası propagasyonu, vb.)
+eklendi. `admin-queue-jwt-guard.e2e-spec.ts` (gerçek `AuthModule` + gerçek Postgres'e karşı)
+`PrismaModule` import etmiyordu ve mock JWT payload'larında `email` yoktu — ikisi de düzeltildi,
+artık gerçek DB'ye User row yazıp temizliyor.
+
+**cross-model-review (Codex) bulgusu (MINOR, düzeltildi):** e2e testler yalnızca upsert'in
+`create` yolunu gerçek DB'ye karşı çalıştırıyordu, `update` (email değişikliği) yolu sadece
+mock'ta test edilmişti — yeni bir e2e test eklendi (aynı `sub` ile farklı email, gerçek DB'de
+email'in güncellendiğini doğruluyor).
+
+**Sonuç:** `7482448` — 43/43 suite, 237/237 test lokalde yeşil, ama CI ilk pushta **ilgisiz bir
+sebeple** kırmızı çıktı (aşağıya bkz). `fd4a44c`'te düzeltilip CI yeşile döndü.
+
+### Adım 2 — yan bulgu: CI'da tarih/saat dilimine bağlı bir flake (bizim değişikliğimizle ilgisiz)
+
+`7482448` push'unun CI koşumu `venues-open-now-midnight.e2e-spec.ts`'te patladı — User tablosu
+değişikliğiyle hiç ilgisi yoktu. Kök neden systematic-debugging ile izlendi: CI koşumu tam
+UTC 21:02'de çalıştı, bu saatte İstanbul (UTC+3) zaten bir sonraki takvim gününe geçmişti
+(Pazar → Pazartesi). Test dosyası `isoDow`'u `new Date().getDay()` ile (test runner'ın YEREL
+saatiyle, GitHub Actions'ta UTC) hesaplıyordu, ama gerçek SQL sorgusu
+`EXTRACT(ISODOW FROM now() AT TIME ZONE 'Europe/Istanbul')` kullanıyordu — Cuma→Cumartesi ve
+Pazar→Pazartesi geçişlerinde (21:00-23:59 UTC penceresi) ikisi farklı gün verebiliyordu. Test bu
+yüzden yanlış opening-hours bucket'ına ("sat_sun") yazdı, SQL doğru olana ("mon_fri") baktı, o
+key yoktu, sorgunun bilinçli "eksik/bozuk saat → dahil et" (fail-open) davranışı devreye girip
+testin hariç tutulmasını beklediği bir mekanı dahil etti.
+
+**Fix (`fd4a44c`):** `isoDow` artık zaten hesaplanan İstanbul-dönüştürülmüş `Date`'ten türetiliyor,
+fresh `new Date().getDay()` kullanımı kaldırıldı — `venues-open-now-midnight.e2e-spec.ts` VE
+`venues-open-now.e2e-spec.ts`'te (cross-model-review aynı anti-pattern'i orada da buldu).
+`TZ=UTC` ile lokalde CI'nın saat dilimini simüle ederek doğrulandı. Codex çok daha dar bir
+kalıntı riski işaretledi (İstanbul-dönüştürülmüş `now` ile SQL'in kendi `now()`'ı birkaç ms
+farklı anlarda okunuyor) — kabul edildi, çünkü gerçek-Postgres bir e2e testte zamanı
+sabitlemek bu dosyanın kasıtlı "gerçek zaman" tasarımıyla çelişir.
+
+**Ders:** Test'te tarih/gün hesaplarken asla runner'ın yerel saatiyle (`new Date().getDay()`)
+başlama — SQL/prod kod hangi saat dilimini kullanıyorsa test de aynısını kullanmalı.
 
 ---
 

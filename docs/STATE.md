@@ -1,9 +1,9 @@
-# Durum — 2026-09-13
+# Durum — 2026-09-14
 
 ## Veri sınırı
 Codex: izinli (kişisel proje, kurumsal işaret yok — repo HazarAliyazicioglu/GurmeGo)
 GLM: izinli
-Kaynak: 2026-09-08 kullanıcı beyanı (worktree-mobile-theme STATE.md'sinden taşındı) — tekrar sorulmayacak.
+Kaynak: 2026-09-08 kullanıcı beyanı — tekrar sorulmayacak.
 
 ## Kod `master`'da, tam ürün review'ı tamamlandı (2026-09-09/10)
 Web/mobile MVP merge edildi (git log `31284f8`). Sonrasında ilerletme değil, A'dan Z'ye envanter +
@@ -15,19 +15,16 @@ Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ma
 kimlik korunup güçlendirilecek. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md "Ürün vizyonu" bölümü.
 
 ## Şu an neredeyiz
-**Adım 1 (CI fix) TAMAMLANDI (2026-09-13) — CI yeşil (`b7b22d4`).** İki kök neden
-systematic-debugging + cross-model-review ile düzeltildi: RNTL v14'te await edilmeyen
-`render()`/`rerender()` (race) ve gerçek `VirtualizedList`'in CI'da 15sn'i aşan setTimeout
-gecikmesi (FlatList mock'landı). Detay + ayrı bırakılan e2e paralel-izolasyon borcu:
-REVIEW-PLAN.md "Adım 1 — kapanış" bölümü.
+**Adım 1 (CI fix) ve Adım 2 (User tablosu §1.3) TAMAMLANDI — CI yeşil (`fd4a44c`).**
+`JwtAuthGuard` artık her geçerli JWT'de `prisma.user.upsert` ile User row'unu lazy-provision
+ediyor (DB hatası 401'e maskelenmiyor, gerçek 500 olarak yükseliyor). Detay: REVIEW-PLAN.md
+"Aksiyon Günlüğü".
 
 ## Test altyapısı
-`apps/api` e2e'leri gerçek Postgres+PostGIS docker container'a (`gurmego-test-db`, port 5434)
-karşı çalışıyor, `apps/api/.env` gitignore'lu.
+`apps/api` e2e'leri gerçek Postgres+PostGIS docker container'a (`gurmego-test-db`, port 5434) karşı çalışıyor, `apps/api/.env` gitignore'lu.
 
 ## Sıradaki adım
-Adım 1 kapandı. Kalan 5 kritik bulgudan (User tablosu, web cache, CSV injection, mobile sign-out,
-mobile error boundary) hangisi Adım 2 olacak — kullanıcıyla önceliklendirilecek.
+Kalan 4 kritik bulgudan (web cache, CSV injection, mobile sign-out, mobile error boundary) hangisi Adım 3 olacak — kullanıcıyla önceliklendirilecek.
 
 ## Bloke olanlar
 - Yok.
@@ -48,3 +45,6 @@ mobile error boundary) hangisi Adım 2 olacak — kullanıcıyla önceliklendiri
 - Mobile gerçek Expo dev server'da hiç elle denenmemiş (sadece jest).
 - CI'nın "yazıldı = çalışıyor" varsayımı: ELENDİ — gerçekten tetiklenip tetiklenmediği (branch adı,
   default branch) ayrıca doğrulanmalı, dosya okumak yetmez.
+- Test'te tarih/gün hesaplarken `new Date().getDay()` (runner'ın yerel saatiyle): ELENDİ — CI UTC
+  çalışıyor, İstanbul'la (UTC+3) günde ayrışabiliyor (21:00-23:59 UTC penceresi). Zaman dilimine
+  bağlı her hesap açıkça dönüştürülmüş bir Date'ten türetilmeli.
