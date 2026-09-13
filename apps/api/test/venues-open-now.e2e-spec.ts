@@ -25,9 +25,13 @@ describe("GET /venues?openNow=true — fail-open on malformed data", () => {
 
   it("includes venues with unparseable or missing openingHours instead of excluding them", async () => {
     const district = await prisma.district.findFirstOrThrow();
-    // ISODOW: 1=Monday...7=Sunday. Match the SQL's own bucket selection exactly so the malformed
-    // value actually lands in the branch the query will evaluate today, on any day of the week.
-    const isoDow = ((new Date().getDay() + 6) % 7) + 1; // JS getDay(): 0=Sunday -> ISODOW 7
+    // ISODOW: 1=Monday...7=Sunday. Must be derived from Istanbul time, not a fresh
+    // `new Date().getDay()` (the test runner's local timezone, UTC on GitHub Actions) -- the SQL
+    // computes EXTRACT(ISODOW FROM now() AT TIME ZONE 'Europe/Istanbul'), which disagrees with UTC's
+    // calendar day for the ~3 hours (21:00-23:59 UTC) where Istanbul (UTC+3) has already crossed
+    // into the next day (see venues-open-now-midnight.e2e-spec.ts for the full writeup).
+    const istanbulNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Istanbul" }));
+    const isoDow = ((istanbulNow.getDay() + 6) % 7) + 1; // JS getDay(): 0=Sunday -> ISODOW 7
     const todaysBucket: "mon_fri" | "sat_sun" = isoDow >= 1 && isoDow <= 5 ? "mon_fri" : "sat_sun";
 
     const malformed = await venuesRepository.createWithLocation(prisma, {
