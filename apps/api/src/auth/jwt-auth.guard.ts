@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { FastifyRequest } from "fastify";
 import { createRemoteJWKSet, jwtVerify, JWTVerifyOptions } from "jose";
 import { z } from "zod";
+import { PrismaService } from "../prisma/prisma.service";
 
 export interface AuthenticatedUser {
   id: string;
@@ -21,8 +22,12 @@ export interface AuthenticatedRequest extends FastifyRequest {
 // empty-string user id treated as a valid identity) instead of being rejected, and a non-string
 // `user_role` would flow through unchecked. Supabase's custom access token hook nests the app's role
 // claim under `user_role`; `sub` is the standard JWT subject claim.
+// `email` is required here (not `.optional()`) because `User.email` is required+unique in the
+// Prisma schema -- a token missing it can't be used to provision a User row, so it's rejected the
+// same way a missing `sub` is, rather than silently skipping provisioning.
 const SupabaseJwtPayloadSchema = z.object({
   sub: z.string().min(1),
+  email: z.string().email(),
   user_role: z.string().optional(),
 });
 
@@ -68,6 +73,8 @@ function buildVerifyOptions(): JWTVerifyOptions {
 // became visible to guards/controllers, so every role-gated route returned 403 unconditionally.
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  constructor(private prisma: PrismaService) {}
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const header = req.headers.authorization;
@@ -75,6 +82,7 @@ export class JwtAuthGuard implements CanActivate {
       req.user = undefined;
       return true;
     }
+    let claims: z.infer<typeof SupabaseJwtPayloadSchema>;
     try {
       const token = header.slice("Bearer ".length);
       const { payload } = await jwtVerify(token, JWKS, buildVerifyOptions());
@@ -82,17 +90,26 @@ export class JwtAuthGuard implements CanActivate {
       if (!parsed.success) {
         throw new UnauthorizedException({ error: { code: "INVALID_TOKEN", message: "Geçersiz oturum" } });
       }
-      // Normalize casing here, at the single point this guard first reads the claim: the Prisma
-      // `UserRole` enum stores roles UPPERCASE (see admin-users.service.ts's `assignRole`, which
-      // writes `role.toUpperCase()`), but every `@Roles(...)` decorator across the codebase compares
-      // against lowercase strings. Once a real Supabase custom access token hook populates this
-      // claim from the DB, it will arrive as e.g. "CURATOR" — lowercase it so RolesGuard's existing
-      // comparisons keep working unchanged.
-      req.user = { id: parsed.data.sub, role: (parsed.data.user_role ?? "user").toLowerCase() };
+      claims = parsed.data;
     } catch (err) {
       if (err instanceof UnauthorizedException) throw err;
       throw new UnauthorizedException({ error: { code: "INVALID_TOKEN", message: "Geçersiz oturum" } });
     }
+    // §1.3 KRİTİK bulgu: FavoriteList.userId -> User.id is a required FK, but nothing ever created
+    // the User row Supabase Auth's JWT implies. Deliberately OUTSIDE the try/catch above: a DB
+    // error here is a real infra failure, not a bad token, and must not be masked as a 401.
+    await this.prisma.user.upsert({
+      where: { id: claims.sub },
+      create: { id: claims.sub, email: claims.email },
+      update: { email: claims.email },
+    });
+    // Normalize casing here, at the single point this guard first reads the claim: the Prisma
+    // `UserRole` enum stores roles UPPERCASE (see admin-users.service.ts's `assignRole`, which
+    // writes `role.toUpperCase()`), but every `@Roles(...)` decorator across the codebase compares
+    // against lowercase strings. Once a real Supabase custom access token hook populates this
+    // claim from the DB, it will arrive as e.g. "CURATOR" — lowercase it so RolesGuard's existing
+    // comparisons keep working unchanged.
+    req.user = { id: claims.sub, role: (claims.user_role ?? "user").toLowerCase() };
     return true;
   }
 }

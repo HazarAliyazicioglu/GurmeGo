@@ -2,6 +2,8 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AdminQueueController } from "../src/admin/queue/admin-queue.controller";
 import { AdminQueueService } from "../src/admin/queue/admin-queue.service";
+import { PrismaModule } from "../src/prisma/prisma.module";
+import { PrismaService } from "../src/prisma/prisma.service";
 
 // MINOR 2 fix (final whole-branch review): admin-queue.controller.spec.ts's existing e2e-style
 // tests bypass the REAL JwtAuthGuard entirely via an `x-test-role` header/hook -- they prove
@@ -38,8 +40,13 @@ jest.mock("jose", () => ({
 
 describe("Real JwtAuthGuard + RolesGuard chain (e2e) — GET /admin/queue", () => {
   let app: NestFastifyApplication;
+  let prisma: PrismaService;
   let service: { list: jest.Mock; approve: jest.Mock; reject: jest.Mock };
   const OLD_ENV = process.env;
+  // Every JWT payload below now needs a valid `email` claim: JwtAuthGuard's real class (imported
+  // below, unmocked) lazy-upserts a User row per docs/REVIEW-PLAN.md §1.3's fix, and `User.email`
+  // is required+unique in the schema.
+  const SEEDED_USER_IDS = ["denied-user", "curator-1"];
 
   beforeAll(async () => {
     process.env = { ...OLD_ENV, SUPABASE_JWKS_URL: "http://localhost:54321/auth/v1/.well-known/jwks.json" };
@@ -53,18 +60,23 @@ describe("Real JwtAuthGuard + RolesGuard chain (e2e) — GET /admin/queue", () =
 
     service = { list: jest.fn(), approve: jest.fn(), reject: jest.fn() };
 
+    // PrismaModule must be imported explicitly here: it's `@Global()` in the real app (via
+    // AppModule), but a `Test.createTestingModule` that only imports AuthModule doesn't pull in
+    // any module that provides PrismaService, and JwtAuthGuard now constructor-injects it.
     const moduleRef = await Test.createTestingModule({
-      imports: [AuthModule],
+      imports: [PrismaModule, AuthModule],
       controllers: [AdminQueueController],
       providers: [{ provide: AdminQueueService, useValue: service }],
     }).compile();
 
+    prisma = moduleRef.get(PrismaService);
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   });
 
   afterAll(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: SEEDED_USER_IDS } } });
     await app.close();
     process.env = OLD_ENV;
   });
@@ -81,7 +93,7 @@ describe("Real JwtAuthGuard + RolesGuard chain (e2e) — GET /admin/queue", () =
     // `assignRole`) -- proves Task 17's lowercase-normalization fix is actually what lets
     // RolesGuard's lowercase comparison correctly DENY this role, not accidentally allow it
     // through unnormalized.
-    jwtVerifyMock.mockResolvedValue({ payload: { sub: "denied-user", user_role: "USER" } });
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "denied-user", email: "denied-user@example.com", user_role: "USER" } });
 
     const res = await app.inject({
       method: "GET",
@@ -103,7 +115,7 @@ describe("Real JwtAuthGuard + RolesGuard chain (e2e) — GET /admin/queue", () =
   });
 
   it("allows the request through the real guard chain (200) for a real (mock-verified) JWT carrying an allowed, lowercase-normalized role", async () => {
-    jwtVerifyMock.mockResolvedValue({ payload: { sub: "curator-1", user_role: "CURATOR" } });
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "curator-1", email: "curator-1@example.com", user_role: "CURATOR" } });
     service.list.mockResolvedValue([]);
 
     const res = await app.inject({
@@ -114,6 +126,32 @@ describe("Real JwtAuthGuard + RolesGuard chain (e2e) — GET /admin/queue", () =
 
     expect(res.statusCode).toBe(200);
     expect(service.list).toHaveBeenCalled();
+  });
+
+  // cross-model-review finding (Adım 2, §1.3 fix): the tests above only ever exercise the upsert's
+  // CREATE path against the real DB -- the UPDATE path (re-authenticating with the same `sub` but a
+  // changed `email`) was only proven against a mock in jwt-auth.guard.spec.ts. This proves it holds
+  // for the real Postgres constraint too (User.email is unique -- an update that collided with it
+  // would surface here as a real P2002 error, not just a mock call assertion).
+  it("updates the real User row's email on re-authentication with the same sub but a changed email", async () => {
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "curator-1", email: "curator-1@example.com", user_role: "CURATOR" } });
+    service.list.mockResolvedValue([]);
+    await app.inject({
+      method: "GET",
+      url: "/admin/queue",
+      headers: { authorization: "Bearer real-looking-jwt.signed.token" },
+    });
+
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "curator-1", email: "curator-1-updated@example.com", user_role: "CURATOR" } });
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/queue",
+      headers: { authorization: "Bearer real-looking-jwt.signed.token" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: "curator-1" } });
+    expect(user.email).toBe("curator-1-updated@example.com");
   });
 
   // TASK 27 fix (Codex cross-model review of Task 26, MINOR): the suite above only ever mocked

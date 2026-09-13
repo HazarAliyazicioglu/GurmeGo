@@ -8,12 +8,24 @@ jest.mock("jose", () => ({
   jwtVerify: (...args: any[]) => jwtVerifyMock(...args),
 }));
 
+// jwt-auth.guard.ts imports the real class only for NestJS's constructor-injection type metadata --
+// every test below passes its own plain mock object instead. Mocking the module here keeps this
+// unit test from transitively importing `@prisma/client`, whose generated runtime eagerly reloads
+// dotenv on import and re-populates any env var (e.g. SUPABASE_JWKS_URL) present in a developer's
+// real apps/api/.env, breaking the "delete env var, reimport, expect throw" test below regardless
+// of what the test itself does.
+jest.mock("../prisma/prisma.service", () => ({ PrismaService: class PrismaService {} }));
+
 function makeContext(req: any) {
   return {
     switchToHttp: () => ({
       getRequest: () => req,
     }),
   } as any;
+}
+
+function makePrismaMock() {
+  return { user: { upsert: jest.fn().mockResolvedValue({}) } };
 }
 
 describe("JwtAuthGuard", () => {
@@ -32,9 +44,9 @@ describe("JwtAuthGuard", () => {
   });
 
   it("verifies with an algorithm allowlist and skips issuer/audience when unset, preserving user_role", async () => {
-    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", user_role: "curator" } });
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com", user_role: "curator" } });
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
-    const guard = new JwtAuthGuard();
+    const guard = new JwtAuthGuard(makePrismaMock() as any);
     const req: any = { headers: { authorization: "Bearer sometoken" } };
 
     const result = await guard.canActivate(makeContext(req));
@@ -49,9 +61,9 @@ describe("JwtAuthGuard", () => {
   it("passes issuer/audience to jwtVerify when both env vars are set", async () => {
     process.env.SUPABASE_JWT_ISSUER = "https://proj.supabase.co/auth/v1";
     process.env.SUPABASE_JWT_AUDIENCE = "authenticated";
-    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1" } });
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com" } });
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
-    const guard = new JwtAuthGuard();
+    const guard = new JwtAuthGuard(makePrismaMock() as any);
     const req: any = { headers: { authorization: "Bearer sometoken" } };
 
     await guard.canActivate(makeContext(req));
@@ -66,7 +78,7 @@ describe("JwtAuthGuard", () => {
   it("rejects when jwtVerify throws (e.g. disallowed algorithm)", async () => {
     jwtVerifyMock.mockRejectedValue(new Error("alg not allowed"));
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
-    const guard = new JwtAuthGuard();
+    const guard = new JwtAuthGuard(makePrismaMock() as any);
     const req: any = { headers: { authorization: "Bearer badtoken" } };
 
     await expect(guard.canActivate(makeContext(req))).rejects.toMatchObject({
@@ -79,9 +91,9 @@ describe("JwtAuthGuard", () => {
     // validates the decoded payload shape at runtime, so a token that verifies cryptographically but
     // carries no `sub` claim flowed through `payload.sub ?? ""`, turning a malformed token into a
     // valid-looking empty-string user id instead of being rejected. This must throw instead.
-    jwtVerifyMock.mockResolvedValue({ payload: { user_role: "curator" } });
+    jwtVerifyMock.mockResolvedValue({ payload: { email: "u1@example.com", user_role: "curator" } });
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
-    const guard = new JwtAuthGuard();
+    const guard = new JwtAuthGuard(makePrismaMock() as any);
     const req: any = { headers: { authorization: "Bearer sometoken" } };
 
     await expect(guard.canActivate(makeContext(req))).rejects.toMatchObject({
@@ -90,14 +102,76 @@ describe("JwtAuthGuard", () => {
   });
 
   it("rejects with UnauthorizedException when `user_role` is present but not a string", async () => {
-    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", user_role: 12345 } });
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com", user_role: 12345 } });
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
-    const guard = new JwtAuthGuard();
+    const guard = new JwtAuthGuard(makePrismaMock() as any);
     const req: any = { headers: { authorization: "Bearer sometoken" } };
 
     await expect(guard.canActivate(makeContext(req))).rejects.toMatchObject({
       response: { error: { code: "INVALID_TOKEN" } },
     });
+  });
+
+  // §1.3 KRİTİK bulgu fix (docs/REVIEW-PLAN.md): FavoriteList.userId -> User.id is a required FK,
+  // but nothing ever created the User row Supabase Auth's JWT implies -- a real user's first
+  // favorite-list write hit a raw Postgres FK violation (500), since favorites.service.spec.ts's
+  // fully-mocked Prisma never exercised the real constraint. This guard is the single place every
+  // authenticated request already passes through, so it lazy-upserts the User row here instead of
+  // requiring every future User-dependent write site to remember to do it themselves.
+  it("lazy-upserts the User row with the JWT's sub as id and email, keyed for future re-authentication", async () => {
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com", user_role: "curator" } });
+    const prisma = makePrismaMock();
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard(prisma as any);
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await guard.canActivate(makeContext(req));
+
+    expect(prisma.user.upsert).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      create: { id: "u1", email: "u1@example.com" },
+      update: { email: "u1@example.com" },
+    });
+  });
+
+  it("rejects with 401 INVALID_TOKEN when the email claim is missing (User.email is required+unique in the DB)", async () => {
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", user_role: "curator" } });
+    const prisma = makePrismaMock();
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard(prisma as any);
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await expect(guard.canActivate(makeContext(req))).rejects.toMatchObject({
+      response: { error: { code: "INVALID_TOKEN" } },
+    });
+    expect(prisma.user.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects with 401 INVALID_TOKEN when the email claim is not a valid email string", async () => {
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "not-an-email" } });
+    const prisma = makePrismaMock();
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard(prisma as any);
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await expect(guard.canActivate(makeContext(req))).rejects.toMatchObject({
+      response: { error: { code: "INVALID_TOKEN" } },
+    });
+    expect(prisma.user.upsert).not.toHaveBeenCalled();
+  });
+
+  // A DB failure during provisioning is a genuine infra error, not a bad token -- it must NOT be
+  // swallowed into the catch-all UnauthorizedException the token-verification step above uses, or
+  // ops would see a misleading "Geçersiz oturum" for what is actually a database outage.
+  it("propagates a database error from the upsert as-is, not masked as an INVALID_TOKEN 401", async () => {
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com" } });
+    const prisma = makePrismaMock();
+    prisma.user.upsert.mockRejectedValue(new Error("connection terminated"));
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard(prisma as any);
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await expect(guard.canActivate(makeContext(req))).rejects.toThrow("connection terminated");
   });
 
   // Regression test for the casing blocker: the Prisma `UserRole` enum stores roles UPPERCASE
@@ -108,9 +182,9 @@ describe("JwtAuthGuard", () => {
   // unchanged — silently breaking every role-gated route once that hook is wired up. The guard must
   // normalize casing at the point it first reads the claim.
   it("lowercases the JWT's user_role claim so it matches the lowercase @Roles(...) comparisons", async () => {
-    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", user_role: "CURATOR" } });
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com", user_role: "CURATOR" } });
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
-    const guard = new JwtAuthGuard();
+    const guard = new JwtAuthGuard(makePrismaMock() as any);
     const req: any = { headers: { authorization: "Bearer sometoken" } };
 
     await guard.canActivate(makeContext(req));
@@ -120,7 +194,8 @@ describe("JwtAuthGuard", () => {
 
   it("sets user to undefined and allows through when no Bearer header is present", async () => {
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
-    const guard = new JwtAuthGuard();
+    const prisma = makePrismaMock();
+    const guard = new JwtAuthGuard(prisma as any);
     const req: any = { headers: {} };
 
     const result = await guard.canActivate(makeContext(req));
@@ -128,6 +203,7 @@ describe("JwtAuthGuard", () => {
     expect(req.user).toBeUndefined();
     expect(result).toBe(true);
     expect(jwtVerifyMock).not.toHaveBeenCalled();
+    expect(prisma.user.upsert).not.toHaveBeenCalled();
   });
 
   // Regression test for the 403-always bug (docs/STATE.md "ACİL" entry, fixed by making this a Guard
@@ -141,7 +217,7 @@ describe("JwtAuthGuard", () => {
   // `ExecutionContext`, the way Nest's guard chain actually does per-request, and would fail again if
   // the two guards ever went back to reading from independently-constructed request objects.
   it("writes req.user somewhere a subsequently-run RolesGuard, reading via the SAME ExecutionContext, can see it", async () => {
-    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", user_role: "curator" } });
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com", user_role: "curator" } });
     const { JwtAuthGuard } = await import("./jwt-auth.guard");
     const { RolesGuard } = await import("./roles.guard");
 
@@ -157,7 +233,7 @@ describe("JwtAuthGuard", () => {
     } as unknown as ExecutionContext;
     const reflector = { getAllAndOverride: () => ["curator", "admin"] } as unknown as Reflector;
 
-    const jwtGuard = new JwtAuthGuard();
+    const jwtGuard = new JwtAuthGuard(makePrismaMock() as any);
     const rolesGuard = new RolesGuard(reflector);
 
     await jwtGuard.canActivate(context);
