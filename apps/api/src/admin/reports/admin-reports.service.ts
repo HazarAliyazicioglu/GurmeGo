@@ -14,6 +14,22 @@ type SourceGroupResult = {
   _count: number;
 };
 
+// OWASP CSV/Formula Injection mitigation: a curator-approved contribution can carry a free-text
+// Venue field (name, editorialNote, transportNote, address, cuisineType) starting with a character
+// a spreadsheet app interprets as a formula prefix -- opening the exported CSV in Excel/Sheets
+// would execute it automatically. Only string fields need this: array/object fields (signatureItems,
+// photos, openingHours) are JSON-stringified by `csv-stringify` into a cell starting with `[`/`{`,
+// which is never treated as a formula. JSON export is untouched -- it's never opened by a
+// spreadsheet app, so there's nothing to mitigate there.
+// Leading tab/CR/LF are included alongside the four OWASP-canonical characters: some spreadsheet
+// import paths skip leading whitespace/control characters before formula-prefix detection, so a
+// value like "\t=cmd(...)" can still be interpreted as a formula despite not visibly starting with
+// one of the four base characters.
+const CSV_FORMULA_PREFIX = /^[=+\-@\t\r\n]/;
+function escapeCsvFormulaInjection(value: unknown): unknown {
+  return typeof value === "string" && CSV_FORMULA_PREFIX.test(value) ? `'${value}` : value;
+}
+
 @Injectable()
 export class AdminReportsService {
   constructor(private prisma: PrismaService) {}
@@ -40,6 +56,9 @@ export class AdminReportsService {
   async exportVenues(format: "json" | "csv"): Promise<string> {
     const venues = await this.prisma.venue.findMany({ where: { status: "PUBLISHED" } });
     if (format === "json") return JSON.stringify(venues);
-    return stringify(venues, { header: true });
+    const rows = venues.map((venue) =>
+      Object.fromEntries(Object.entries(venue).map(([key, value]) => [key, escapeCsvFormulaInjection(value)])),
+    );
+    return stringify(rows, { header: true });
   }
 }
