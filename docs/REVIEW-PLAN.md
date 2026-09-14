@@ -619,8 +619,9 @@ geliştirme" aşamasına (kod yazma) geçilebilir.
    altyapıya bağımlı. Prod'da favoriler 500 verir. Fix: "Aksiyon Günlüğü — Adım 2" bölümü.
 2. **§2.1 — Web ana sayfası (`/[district]`) fetch'leri süresiz cache'leniyor.** Manuel revalidate
    yok. Yeni onaylanan/arşivlenen mekanlar redeploy'a kadar görünmüyor.
-3. **§3.3 — CSV export'ta Formula/CSV Injection açığı.** `admin-reports.service.ts`'in
-   `exportVenues()`'ı sanitizasyonsuz — kötü niyetli bir mekan adı Excel'de formül olarak çalışabilir.
+3. **✅ ÇÖZÜLDÜ (Adım 3, 2026-09-14, `f1ac2fc`) — §3.3 — CSV export'ta Formula/CSV Injection
+   açığı.** `admin-reports.service.ts`'in `exportVenues()`'ı sanitizasyonsuzdu — kötü niyetli bir
+   mekan adı Excel'de formül olarak çalışabilirdi. Fix: "Aksiyon Günlüğü — Adım 3" bölümü.
 4. **§4.1 — Mobile'da hiç sign-out yolu yok.** Fonksiyon var, hiçbir ekran çağırmıyor.
 5. **§4.5 — Mobile'da hiç Error Boundary/crash reporting yok.** Beklenmedik bir hata tüm
    uygulamayı çökertir, kimse haberdar olmaz.
@@ -871,6 +872,36 @@ sabitlemek bu dosyanın kasıtlı "gerçek zaman" tasarımıyla çelişir.
 
 **Ders:** Test'te tarih/gün hesaplarken asla runner'ın yerel saatiyle (`new Date().getDay()`)
 başlama — SQL/prod kod hangi saat dilimini kullanıyorsa test de aynısını kullanmalı.
+
+### Adım 3 — §3.3 KRİTİK bulgu: CSV export'ta Formula/CSV Injection
+
+Kullanıcı "4 kritik bulgudan sıradakine geçelim" dedi (2026-09-14) — onaylanan sıraya göre bu
+CSV Injection'dı. Bounded brainstorming + TDD + cross-model-review akışı izlendi.
+
+**Kök sorun:** `admin-reports.service.ts`'in `exportVenues('csv')`'ı `Venue`'nün serbest metin
+alanlarını (`name`, `editorialNote`, `transportNote`, `address`, `cuisineType`) sanitizasyonsuz
+`csv-stringify`'a veriyordu. Bir katkıcı mekan adına `=HYPERLINK(...)` gibi bir "formül" girip
+curator gözden kaçırıp onaylarsa, admin CSV'yi Excel/Sheets'te açtığında bu formül otomatik
+çalışırdı (OWASP CSV/Formula Injection).
+
+**İnceleme:** Array/JSON alanların (`signatureItems`, `photos`, `openingHours`) zaten güvenli
+olduğu doğrulandı — `csv-stringify` bunları `[...]`/`{...}` şeklinde JSON'a çevirip hücreye
+yazıyor, `[`/`{` formül tetiklemiyor (node ile ampirik olarak test edildi). Risk yalnızca düz
+string alanlarda.
+
+**Uygulama:** `escapeCsvFormulaInjection()` — `=`/`+`/`-`/`@` (OWASP'ın 4 kanonik karakteri) ile
+başlayan string değerlerin önüne tek tırnak ekliyor, sadece `format === "csv"` yolunda. JSON
+export'a dokunulmadı (spreadsheet'te açılmıyor, risk yok). TDD ile yazıldı.
+
+**cross-model-review (Codex) bulguları (2 tur, hepsi düzeltildi):**
+- Tur 1: regex `\t`/`\r`/`\n` ile başlayan hücreleri kapsamıyordu (bazı spreadsheet import
+  yolları formül-öneki tespitinden önce baştaki boşluk/kontrol karakterlerini atlıyor) — regex'e
+  eklendi, TDD ile (önce eski regex'le kırmızıya düşürülüp doğrulandı). Array/JSON alanların
+  güvenli olduğu iddiası sadece yorumda belgelenmişti, testle doğrulanmamıştı — test eklendi.
+- Tur 2 (son diff): `openingHours` (JSON obje) için ayrı test yoktu (sadece array test edilmişti)
+  — eklendi. Bir yorum bloğu yanlışlıkla iki kez tekrarlanmıştı — düzeltildi.
+
+**Sonuç:** `f1ac2fc` — 43/43 suite, 248/248 test lokalde ve CI'da yeşil.
 
 ---
 

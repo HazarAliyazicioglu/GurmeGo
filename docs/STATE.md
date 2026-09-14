@@ -15,16 +15,16 @@ Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ma
 kimlik korunup güçlendirilecek. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md "Ürün vizyonu" bölümü.
 
 ## Şu an neredeyiz
-**Adım 1 (CI fix) ve Adım 2 (User tablosu §1.3) TAMAMLANDI — CI yeşil (`fd4a44c`).**
-`JwtAuthGuard` artık her geçerli JWT'de `prisma.user.upsert` ile User row'unu lazy-provision
-ediyor (DB hatası 401'e maskelenmiyor, gerçek 500 olarak yükseliyor). Detay: REVIEW-PLAN.md
-"Aksiyon Günlüğü".
+**Adım 1, 2, 3 TAMAMLANDI — CI yeşil (`f1ac2fc`).** Adım 1: CI fix. Adım 2: `JwtAuthGuard`
+artık her geçerli JWT'de `prisma.user.upsert` ile User row'unu lazy-provision ediyor. Adım 3:
+`exportVenues('csv')`'daki CSV/Formula Injection açığı kapatıldı (=/+/-/@/tab/CR/LF ile
+başlayan string alanlar tek tırnakla kaçırılıyor). Detay: REVIEW-PLAN.md "Aksiyon Günlüğü".
 
 ## Test altyapısı
 `apps/api` e2e'leri gerçek Postgres+PostGIS docker container'a (`gurmego-test-db`, port 5434) karşı çalışıyor, `apps/api/.env` gitignore'lu.
 
 ## Sıradaki adım
-Kalan 4 kritik bulgudan (web cache, CSV injection, mobile sign-out, mobile error boundary) hangisi Adım 3 olacak — kullanıcıyla önceliklendirilecek.
+Kalan 3 kritik bulgudan (web cache, mobile sign-out, mobile error boundary) hangisi Adım 4 olacak — kullanıcıyla önceliklendirilecek.
 
 ## Bloke olanlar
 - Yok.
