@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { notFound } from "next/navigation";
 import { getDistricts, getVenues } from "@/lib/api";
-import DiscoveryPage from "./page";
+import DiscoveryPage, { generateMetadata } from "./page";
 
 vi.mock("@/lib/api", () => ({
   getDistricts: vi.fn(),
@@ -86,5 +86,33 @@ describe("DiscoveryPage — forwards SSR pagination metadata to DiscoveryClient 
     render(page);
 
     expect(screen.queryByTestId("load-more")).not.toBeInTheDocument();
+  });
+});
+
+// §W1 audit finding: every district page shared the root layout's generic title, so Google
+// couldn't tell "Kadıköy'deki mekanlar" from "Beşiktaş'taki mekanlar".
+describe("DiscoveryPage metadata", () => {
+  beforeEach(() => {
+    vi.mocked(getDistricts).mockReset();
+  });
+
+  it("titles the page with the district's own name", async () => {
+    vi.mocked(getDistricts).mockResolvedValue([
+      { id: "d1", slug: "kadikoy", name: "Kadıköy" },
+    ] as never);
+
+    const meta = await generateMetadata({ params: { district: "kadikoy" } });
+
+    expect(meta.title).toBe("Kadıköy'de butik mekanlar | GurmeGo");
+  });
+
+  it("returns empty metadata for an unknown district slug, letting the page's own notFound() handle it", async () => {
+    vi.mocked(getDistricts).mockResolvedValue([
+      { id: "d1", slug: "kadikoy", name: "Kadıköy" },
+    ] as never);
+
+    const meta = await generateMetadata({ params: { district: "unknown-district" } });
+
+    expect(meta).toEqual({});
   });
 });

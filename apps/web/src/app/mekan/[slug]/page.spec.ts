@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { VenueDetail as VenueDetailType } from "@gurmego/shared";
 import { ApiHttpError } from "@gurmego/api-client";
 import { getVenueBySlug } from "@/lib/api";
-import VenueDetailPage, { generateStaticParams } from "./page";
+import VenueDetailPage, { generateStaticParams, generateMetadata } from "./page";
 
 vi.mock("@/lib/api", () => ({
   getVenueBySlug: vi.fn(),
@@ -89,5 +89,70 @@ describe("venue detail page", () => {
     expect(notFound).not.toHaveBeenCalled();
     expect(result.type).toBeDefined();
     expect(result.props.venue).toEqual(venue);
+  });
+});
+
+// §W1 audit finding: every venue page shared the root layout's generic title/description, so
+// Google and share-card previews showed "GurmeGo — İstanbul'un butik mekan rehberi" for every
+// single venue instead of that venue's own name/district.
+describe("venue detail page metadata", () => {
+  it("titles the page with the venue's name and district", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue(venue as never);
+
+    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+
+    expect(meta.title).toBe("Test Cafe — Kadıköy | GurmeGo");
+  });
+
+  it("uses the venue's editorial note as the description when present", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue(
+      { ...venue, editorialNote: "Sessiz, çalışmaya uygun, gerçek filtre kahve." } as never,
+    );
+
+    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+
+    expect(meta.description).toBe("Sessiz, çalışmaya uygun, gerçek filtre kahve.");
+  });
+
+  it("falls back to a generic description when there is no editorial note", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue({ ...venue, editorialNote: null } as never);
+
+    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+
+    expect(meta.description).toBe("Kadıköy'de GurmeGo tarafından kürasyonlu bir mekan: Test Cafe.");
+  });
+
+  it("uses the venue's first photo as the Open Graph image when present", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue(
+      { ...venue, photos: ["https://cdn.example.com/p1.jpg", "https://cdn.example.com/p2.jpg"] } as never,
+    );
+
+    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+
+    expect(meta.openGraph?.images).toEqual(["https://cdn.example.com/p1.jpg"]);
+  });
+
+  it("omits the Open Graph image field when the venue has no photos", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue({ ...venue, photos: [] } as never);
+
+    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+
+    expect(meta.openGraph?.images).toBeUndefined();
+  });
+
+  it("returns empty metadata when the venue can't be found, letting Next.js inherit the root layout's generic title/description instead of overriding with something wrong", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue(null as never);
+
+    const meta = await generateMetadata({ params: { slug: "missing-venue" } });
+
+    expect(meta).toEqual({});
+  });
+
+  it("returns empty metadata (same fallback) when the venue lookup itself throws", async () => {
+    vi.mocked(getVenueBySlug).mockRejectedValue(new Error("fetch failed"));
+
+    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+
+    expect(meta).toEqual({});
   });
 });

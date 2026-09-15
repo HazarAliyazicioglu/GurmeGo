@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Proje durumu
 
-Bu repo şu an yalnızca `docs/` altında spec/tasarım dokümanlarından oluşuyor — henüz kod yok (`apps/`, `packages/`, `package.json` mevcut değil). İlk kod yazma turunda [architecture.md](docs/architecture.md) §3'teki monorepo iskeletini (pnpm workspace + Turborepo) kurmak gerekecek. Aşağıdaki komutlar ve yapı, bu dokümanlarda **kararlaştırılmış** hedef durumu anlatır; iskelet kurulana kadar gerçek scriptler mevcut değildir.
+Kod var ve aktif geliştiriliyor — `apps/api` (NestJS), `apps/web`, `apps/admin` (Next.js), `apps/mobile` (Expo/React Native) hepsi `master`'da, gerçek bir CI hattı (`.github/workflows/ci.yml`) ve yüzlerce test var. Güncel durum ve aktif iş için bkz. `docs/STATE.md` (yukarıda otomatik yükleniyor) ve `docs/REVIEW-PLAN.md`.
 
 ## Ürün özeti
 
