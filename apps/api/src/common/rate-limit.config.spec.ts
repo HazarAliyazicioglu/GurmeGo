@@ -1,6 +1,7 @@
 describe("RATE_LIMITS — env override", () => {
   const original = process.env.RATE_LIMIT_READ_PER_MINUTE;
   const originalReport = process.env.RATE_LIMIT_REPORT_PER_DAY;
+  const originalWrite = process.env.RATE_LIMIT_WRITE_PER_MINUTE;
 
   afterEach(() => {
     // `process.env.X = undefined` stores the literal string "undefined", not an absent var --
@@ -12,6 +13,8 @@ describe("RATE_LIMITS — env override", () => {
     else process.env.RATE_LIMIT_READ_PER_MINUTE = original;
     if (originalReport === undefined) delete process.env.RATE_LIMIT_REPORT_PER_DAY;
     else process.env.RATE_LIMIT_REPORT_PER_DAY = originalReport;
+    if (originalWrite === undefined) delete process.env.RATE_LIMIT_WRITE_PER_MINUTE;
+    else process.env.RATE_LIMIT_WRITE_PER_MINUTE = originalWrite;
     jest.resetModules();
   });
 
@@ -68,5 +71,23 @@ describe("RATE_LIMITS — env override", () => {
     jest.resetModules();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     expect(() => require("./rate-limit.config")).toThrow(/RATE_LIMIT_REPORT_PER_DAY/);
+  });
+
+  // docs/DENETIM-RAPORU.md KRİTİK bulgu: favorite-list write endpoints (create/add/remove) had
+  // no rate limit at all -- any signed-up account could hammer them.
+  it("has a write tier, falling back to 20 per minute when unset", () => {
+    delete process.env.RATE_LIMIT_WRITE_PER_MINUTE;
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    expect(require("./rate-limit.config").RATE_LIMITS.write.limit).toBe(20);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    expect(require("./rate-limit.config").RATE_LIMITS.write.windowSeconds).toBe(60);
+  });
+
+  it("uses the env value for the write tier when set", () => {
+    process.env.RATE_LIMIT_WRITE_PER_MINUTE = "7";
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    expect(require("./rate-limit.config").RATE_LIMITS.write.limit).toBe(7);
   });
 });

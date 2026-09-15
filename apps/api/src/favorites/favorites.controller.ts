@@ -23,13 +23,18 @@ export class FavoritesController {
     return this.favorites.listLists(req.user!.id);
   }
 
+  // docs/DENETIM-RAPORU.md KRİTİK bulgu: these three write endpoints had no rate limit at all.
   @Post()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(RATE_LIMITS.write.limit, RATE_LIMITS.write.windowSeconds)
   @UsePipes(new ZodValidationPipe(CreateFavoriteListSchema))
   create(@Req() req: AuthenticatedRequest, @Body() body: { name: string }) {
     return this.favorites.createList(req.user!.id, body);
   }
 
   @Post(":id/venues")
+  @UseGuards(RateLimitGuard)
+  @RateLimit(RATE_LIMITS.write.limit, RATE_LIMITS.write.windowSeconds)
   addVenue(
     @Req() req: AuthenticatedRequest,
     @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) listId: string,
@@ -39,6 +44,8 @@ export class FavoritesController {
   }
 
   @Delete(":id/venues/:venueId")
+  @UseGuards(RateLimitGuard)
+  @RateLimit(RATE_LIMITS.write.limit, RATE_LIMITS.write.windowSeconds)
   removeVenue(
     @Req() req: AuthenticatedRequest,
     @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) listId: string,

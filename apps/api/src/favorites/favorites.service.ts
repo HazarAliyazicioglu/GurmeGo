@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateFavoriteList } from "@gurmego/shared";
+import { FAVORITES_LIMITS } from "./favorites.config";
 
 // Minimal venue projection nested under a favorite — matches `FavoriteVenueSchema` in
 // `packages/shared/src/schemas/favorite-list.schema.ts`. Keep the two in sync.
@@ -27,7 +28,24 @@ export class FavoritesService {
     });
   }
 
-  createList(userId: string, dto: CreateFavoriteList) {
+  // docs/DENETIM-RAPORU.md KRİTİK bulgu: nothing capped how many lists one account accumulates.
+  // cross-model-review flagged this count-then-create as a TOCTOU race (two concurrent requests
+  // could both read a count under the cap and both insert, landing one or two lists past it) --
+  // accepted, not fixed: this is a soft anti-abuse cap paired with a 20/minute rate limit, not a
+  // hard security invariant, and closing it properly needs a DB-level guard (e.g. an advisory
+  // lock or a trigger-enforced count), which is more machinery than this deserves at pilot scale.
+  async createList(userId: string, dto: CreateFavoriteList) {
+    // §api-spec.md: business-rule violations are 422, not 400 (400 is reserved for input
+    // validation -- the request body itself is well-formed here, it's the account's existing
+    // state that makes it unprocessable).
+    const listCount = await this.prisma.favoriteList.count({ where: { userId } });
+    if (listCount >= FAVORITES_LIMITS.maxListsPerUser) {
+      const limitReached = new UnprocessableEntityException({
+        error: { code: "LIST_LIMIT_REACHED", message: "Liste sayısı sınırına ulaşıldı" },
+      });
+      limitReached.message = "Liste sayısı sınırına ulaşıldı";
+      throw limitReached;
+    }
     return this.prisma.favoriteList.create({
       data: { userId, name: dto.name },
       include: { favorites: { include: { venue: { select: VENUE_SELECT } } } },
@@ -51,6 +69,20 @@ export class FavoritesService {
       const notFound = new NotFoundException({ error: { code: "VENUE_NOT_FOUND", message: "Mekan bulunamadı" } });
       notFound.message = "Mekan bulunamadı";
       throw notFound;
+    }
+    // docs/DENETIM-RAPORU.md KRİTİK bulgu: nothing capped how many venues one list accumulates.
+    // Only checked for a genuinely NEW favorite -- re-adding one already in the list (idempotent
+    // upsert) must never be blocked by a cap it doesn't grow past.
+    const alreadyFavorited = await this.prisma.favorite.findUnique({ where: { listId_venueId: { listId, venueId } } });
+    if (!alreadyFavorited) {
+      const venueCount = await this.prisma.favorite.count({ where: { listId } });
+      if (venueCount >= FAVORITES_LIMITS.maxVenuesPerList) {
+        const limitReached = new UnprocessableEntityException({
+          error: { code: "VENUE_LIMIT_REACHED", message: "Mekan sayısı sınırına ulaşıldı" },
+        });
+        limitReached.message = "Mekan sayısı sınırına ulaşıldı";
+        throw limitReached;
+      }
     }
     return this.prisma.favorite.upsert({
       where: { listId_venueId: { listId, venueId } },

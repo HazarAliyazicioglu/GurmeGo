@@ -127,4 +127,57 @@ describe("FavoritesController (e2e) — RolesGuard", () => {
     expect(res.statusCode).toBe(400);
     expect(service.removeVenue).not.toHaveBeenCalled();
   });
+
+  // docs/DENETIM-RAPORU.md KRİTİK bulgu: create/add/remove had no rate limit at all -- any
+  // signed-up account could hammer them. Proves the guard is actually wired up on all three, not
+  // just that the config constant exists.
+  describe("write-endpoint rate limiting", () => {
+    beforeEach(() => {
+      cacheStore.increment.mockReset();
+    });
+
+    it("returns 429 (not the service call) once the write rate limit is exceeded on list creation", async () => {
+      cacheStore.increment.mockResolvedValue(9999);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/me/lists",
+        headers: { "x-test-role": "user" },
+        payload: { name: "Bir liste daha" },
+      });
+
+      expect(res.statusCode).toBe(429);
+      expect(service.createList).not.toHaveBeenCalled();
+    });
+
+    it("returns 429 once the write rate limit is exceeded on adding a venue", async () => {
+      cacheStore.increment.mockResolvedValue(9999);
+      const listId = "d290f1ee-6c54-4b01-90e6-d701748f0855";
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/me/lists/${listId}/venues`,
+        headers: { "x-test-role": "user" },
+        payload: { venueId: "d290f1ee-6c54-4b01-90e6-d701748f0851" },
+      });
+
+      expect(res.statusCode).toBe(429);
+      expect(service.addVenue).not.toHaveBeenCalled();
+    });
+
+    it("returns 429 once the write rate limit is exceeded on removing a venue", async () => {
+      cacheStore.increment.mockResolvedValue(9999);
+      const listId = "d290f1ee-6c54-4b01-90e6-d701748f0851";
+      const venueId = "d290f1ee-6c54-4b01-90e6-d701748f0852";
+
+      const res = await app.inject({
+        method: "DELETE",
+        url: `/me/lists/${listId}/venues/${venueId}`,
+        headers: { "x-test-role": "user" },
+      });
+
+      expect(res.statusCode).toBe(429);
+      expect(service.removeVenue).not.toHaveBeenCalled();
+    });
+  });
 });

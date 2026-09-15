@@ -21,6 +21,12 @@ export const RATE_LIMITS = {
     limit: parsePositiveIntEnv("RATE_LIMIT_REPORT_PER_DAY", process.env.RATE_LIMIT_REPORT_PER_DAY, 10),
     windowSeconds: 86400,
   },
+  // docs/DENETIM-RAPORU.md KRİTİK bulgu: favorite-list write endpoints (create list, add/remove
+  // venue) had no rate limit at all.
+  write: {
+    limit: parsePositiveIntEnv("RATE_LIMIT_WRITE_PER_MINUTE", process.env.RATE_LIMIT_WRITE_PER_MINUTE, 20),
+    windowSeconds: 60,
+  },
 };
 
 // How long an expired `rate_limit_counters` row is kept after its window closes before
