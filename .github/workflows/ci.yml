@@ -37,6 +37,15 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           SUPABASE_JWKS_URL: http://localhost:54321/auth/v1/.well-known/jwks.json
       - run: pnpm exec turbo run build
+        env:
+          # apps/web and apps/admin construct a Supabase client at module scope in pages that get
+          # statically prerendered during `next build` -- a real project (or, locally, a
+          # gitignored .env.local) is needed to *construct* the client even though no network call
+          # happens until a real user interacts with it in the browser. Dummy but well-formed
+          # values are enough; see apps/web/.env.example and apps/admin/.env.example.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:3001/v1
       - run: bash scripts/smoke-api.sh
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
