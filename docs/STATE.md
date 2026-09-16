@@ -1,9 +1,7 @@
-# Durum — 2026-09-15
+# Durum — 2026-09-16
 
 ## Veri sınırı
-Codex: izinli (kişisel proje, kurumsal işaret yok — repo HazarAliyazicioglu/GurmeGo)
-GLM: izinli
-Kaynak: 2026-09-08 kullanıcı beyanı.
+Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo). Kaynak: 2026-09-08.
 
 ## Kod `master`'da, tam ürün review'ı tamamlandı (2026-09-09/10)
 Web/mobile MVP merge edildi (`31284f8`). A'dan Z'ye envanter + vizyon taraması bitti (§1-5).
@@ -18,16 +16,17 @@ REVIEW-PLAN.md Adım 1-3 bitti (CI, User tablosu, CSV injection). **Yeni faz:**
 `docs/DENETIM-RAPORU.md` — 4 uygulama + altyapının taze, ayrıntılı denetimi (53 bulgu:
 11 Kritik/28 Orta/14 Düşük), artifact olarak da yayınlandı. Kullanıcı: "önerilen çözümleri
 uygula, maliyet 0 olursa iyi olur" — sıra Kritik→Orta→Düşük, gruplar halinde onay.
-**Kritik'ten TAMAMLANAN (CI yeşil, `8ddf525`):** CLAUDE.md yanlış beyan düzeltildi; CI artık
-web+admin'i de derliyor (turbo.json outputs + CI'da dummy Supabase env'leri, üç app'e
-.env.example); web'e generateMetadata (mekan/ilçe) + sitemap.ts/robots.ts eklendi.
+**Kritik'ten TAMAMLANAN (CI yeşil):** CLAUDE.md yanlış beyan düzeltildi; CI artık web+admin'i
+de derliyor (turbo.json outputs + CI'da dummy Supabase env'leri, üç app'e .env.example); web'e
+generateMetadata (mekan/ilçe) + sitemap.ts/robots.ts eklendi; backend favoriler yazma uçlarına
+rate-limit (20/dk) + hesap başına liste/mekan üst sınırı eklendi (`139eaf5`).
 
 ## Test altyapısı
 `apps/api` e2e'leri gerçek Postgres+PostGIS docker container'a (`gurmego-test-db`, port 5434) karşı çalışıyor, `apps/api/.env` gitignore'lu.
 
 ## Sıradaki adım
-Kalan Kritik'ler: Backend favoriler rate-limit, Mobile (safe-area, sayfalama, mekan detay
-loading/error, mağaza config), Genel Next.js+Fastify güvenlik yükseltmesi (büyük/riskli, ayrı).
+Kalan Kritik'ler: Mobile (safe-area, sayfalama, mekan detay loading/error, mağaza config),
+Genel Next.js+Fastify güvenlik yükseltmesi (büyük/riskli, ayrı ele alınacak).
 
 ## Bloke olanlar: Yok
 
