@@ -109,3 +109,47 @@ describe("VenueDetailScreen", () => {
     expect(shareSpy).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Test Cafe") }));
   });
 });
+
+// §M3 audit finding: this screen previously rendered nothing at all while getVenueBySlug was
+// in flight, or forever if it failed -- the user couldn't tell "still loading" from "crashed",
+// and had no way to retry.
+describe("VenueDetailScreen — loading and error states", () => {
+  beforeEach(() => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null, session: null });
+    (getVenueBySlug as jest.Mock).mockReset();
+  });
+
+  it("shows a loading indicator while the venue is being fetched", async () => {
+    let resolveVenue!: (v: unknown) => void;
+    (getVenueBySlug as jest.Mock).mockReturnValue(new Promise((resolve) => { resolveVenue = resolve; }));
+
+    await render(<VenueDetailScreen />);
+
+    expect(screen.getByTestId("venue-loading")).toBeTruthy();
+    resolveVenue(FULL_VENUE);
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy());
+  });
+
+  it("shows a retry option instead of a blank screen when the fetch fails", async () => {
+    (getVenueBySlug as jest.Mock).mockRejectedValue(new Error("network error"));
+
+    await render(<VenueDetailScreen />);
+
+    await waitFor(() => expect(screen.getByTestId("venue-error")).toBeTruthy());
+    expect(screen.getByText(/Mekan yüklenemedi/)).toBeTruthy();
+    expect(screen.getByText("Tekrar dene")).toBeTruthy();
+  });
+
+  it("retries the fetch and shows the venue when the retry button is pressed after a failure", async () => {
+    (getVenueBySlug as jest.Mock).mockRejectedValueOnce(new Error("network error"));
+    (getVenueBySlug as jest.Mock).mockResolvedValueOnce(FULL_VENUE);
+
+    await render(<VenueDetailScreen />);
+    await waitFor(() => expect(screen.getByTestId("venue-error")).toBeTruthy());
+
+    fireEvent.press(screen.getByText("Tekrar dene"));
+
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy());
+    expect(getVenueBySlug).toHaveBeenCalledTimes(2);
+  });
+});

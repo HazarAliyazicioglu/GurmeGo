@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import MapView, { Marker } from "react-native-maps";
@@ -12,15 +12,55 @@ import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type VenueDetailRoute = RouteProp<RootStackParamList, "VenueDetail">;
 
+// §M3 audit finding: this screen used to render nothing at all while loading, and forever if the
+// fetch failed -- the user couldn't tell "still loading" from "crashed", with no way to retry.
+type Status = "loading" | "error" | "loaded";
+
 export default function VenueDetailScreen() {
   const route = useRoute<VenueDetailRoute>();
   const [venue, setVenue] = useState<VenueDetail | null>(null);
+  const [status, setStatus] = useState<Status>("loading");
+  // Bumped on every fetch (initial + each retry) so a stale, slower request can't overwrite the
+  // result of a newer one -- same monotonic-counter pattern used project-wide (DiscoveryScreen,
+  // FavoritesScreen, FavoriteButton).
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
-    getVenueBySlug(route.params.slug).then(setVenue).catch(() => setVenue(null));
-  }, [route.params.slug]);
+    let cancelled = false;
+    setStatus("loading");
+    getVenueBySlug(route.params.slug)
+      .then((res) => {
+        if (cancelled) return;
+        setVenue(res);
+        setStatus("loaded");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [route.params.slug, retryToken]);
 
-  if (!venue) return null;
+  if (status === "loading") {
+    return (
+      <View testID="venue-loading" style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (status === "error" || !venue) {
+    return (
+      <View testID="venue-error" style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <Text>Mekan yüklenemedi</Text>
+        <Pressable onPress={() => setRetryToken((t) => t + 1)}>
+          <Text>Tekrar dene</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <ScrollView>

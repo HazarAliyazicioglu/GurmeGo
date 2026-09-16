@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getVenues, getDistricts, type VenueListItem } from "../lib/api";
@@ -34,7 +35,16 @@ const PRICE_RANGES: { label: string; value: string }[] = [
 export default function DiscoveryScreen() {
   const navigation = useNavigation<Nav>();
   const coords = useLocation();
+  // §M1 audit finding: this tab's native header is hidden (TabNavigator.tsx), so nothing
+  // accounted for the status bar/notch -- this screen's own first row (district chips) could
+  // render half-hidden under it.
+  const insets = useSafeAreaInsets();
   const [venues, setVenues] = useState<VenueListItem[]>([]);
+  // §M2 audit finding: the backend paginates /venues, but this screen only ever showed the first
+  // page -- once a district's venue count passed the first page size, the rest were permanently
+  // unreachable.
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [districts, setDistricts] = useState<District[]>([]);
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | undefined>(undefined);
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(undefined);
@@ -46,28 +56,67 @@ export default function DiscoveryScreen() {
   // requestId still matches by the time it resolves. Same pattern as FavoriteButton.tsx's
   // latestClickRequest and FavoritesScreen.tsx's latestRefetchRequest.
   const latestVenuesRequest = useRef(0);
+  // cross-model-review finding: FlatList's onEndReached can fire more than once (e.g. in quick
+  // succession near the threshold) before the first page-2 request resolves -- without this,
+  // both calls pass the same hasMore/nextCursor check and fetch (and append) the same page twice.
+  const loadingMore = useRef(false);
 
   useEffect(() => {
     getDistricts().then(setDistricts).catch(() => setDistricts([]));
   }, []);
 
-  useEffect(() => {
-    const requestId = ++latestVenuesRequest.current;
+  function buildQuery(): Record<string, string> {
     const query: Record<string, string> = {};
     if (selectedDistrictId) query.districtId = selectedDistrictId;
     if (selectedCategory) query.category = selectedCategory;
     if (selectedPriceRange) query.priceRange = selectedPriceRange;
-    getVenues(query, coords)
+    return query;
+  }
+
+  useEffect(() => {
+    const requestId = ++latestVenuesRequest.current;
+    getVenues(buildQuery(), coords)
       .then((res) => {
-        if (requestId === latestVenuesRequest.current) setVenues(res.data);
+        if (requestId === latestVenuesRequest.current) {
+          setVenues(res.data);
+          setNextCursor(res.meta.next_cursor);
+          setHasMore(res.meta.has_more);
+        }
       })
       .catch(() => {
-        if (requestId === latestVenuesRequest.current) setVenues([]);
+        if (requestId === latestVenuesRequest.current) {
+          setVenues([]);
+          setNextCursor(null);
+          setHasMore(false);
+        }
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDistrictId, selectedCategory, selectedPriceRange, coords]);
 
+  function loadMore() {
+    if (!hasMore || !nextCursor || loadingMore.current) return;
+    loadingMore.current = true;
+    const requestId = latestVenuesRequest.current;
+    getVenues({ ...buildQuery(), cursor: nextCursor }, coords)
+      .then((res) => {
+        // Guards against a filter change firing its own (resetting) fetch while this page-2
+        // request is still in flight -- appending stale results on top of a fresh, filtered list.
+        if (requestId !== latestVenuesRequest.current) return;
+        setVenues((prev) => [...prev, ...res.data]);
+        setNextCursor(res.meta.next_cursor);
+        setHasMore(res.meta.has_more);
+      })
+      .catch(() => {
+        // Swallow -- the user already sees the pages fetched so far; onEndReached will just fire
+        // again on the next scroll if they try again.
+      })
+      .finally(() => {
+        loadingMore.current = false;
+      });
+  }
+
   return (
-    <View>
+    <View testID="discovery-root" style={{ flex: 1, paddingTop: insets.top }}>
       <FlatList
         horizontal
         data={districts}
@@ -101,6 +150,7 @@ export default function DiscoveryScreen() {
         )}
       />
       <FlatList
+        testID="venues-list"
         data={venues}
         keyExtractor={(v) => v.id}
         renderItem={({ item }) => (
@@ -108,6 +158,8 @@ export default function DiscoveryScreen() {
             <Text>{item.name}</Text>
           </Pressable>
         )}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
       />
     </View>
   );

@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent, act } from "@testing-library/react-
 import DiscoveryScreen from "./DiscoveryScreen";
 import { getVenues, getDistricts } from "../lib/api";
 import { useLocation } from "../lib/use-location";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 jest.mock("../lib/api", () => ({
   getVenues: jest.fn(),
@@ -162,5 +163,119 @@ describe("DiscoveryScreen", () => {
     await waitFor(() =>
       expect(getVenues).toHaveBeenLastCalledWith(expect.not.objectContaining({ category: expect.anything() }), null),
     );
+  });
+
+  // §M1 audit finding: this tab's own header is hidden (TabNavigator.tsx), so nothing accounted
+  // for the status bar/notch -- the district-chip row (this screen's first content) could render
+  // half-hidden under it.
+  it("pads its top by the device's real safe-area inset, not a fixed guess", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+    (useSafeAreaInsets as jest.Mock).mockReturnValue({ top: 44, right: 0, bottom: 0, left: 0 });
+
+    await render(<DiscoveryScreen />);
+
+    expect(screen.getByTestId("discovery-root").props.style).toEqual(
+      expect.objectContaining({ paddingTop: 44 }),
+    );
+  });
+
+  // §M2 audit finding: the backend paginates /venues (has_more/next_cursor), but this screen
+  // only ever showed the first page -- once a district's venue count passed the first page size,
+  // the rest were permanently unreachable (no filter could surface them).
+  describe("pagination (onEndReached)", () => {
+    const PAGE_1_VENUE = {
+      id: "v1", name: "First Page Cafe", slug: "first-page-cafe", category: "cafe",
+      priceRange: "MODERATE", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null,
+    };
+    const PAGE_2_VENUE = {
+      id: "v2", name: "Second Page Cafe", slug: "second-page-cafe", category: "cafe",
+      priceRange: "MODERATE", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null,
+    };
+
+    it("fetches and appends the next page when the list end is reached and has_more is true", async () => {
+      (getVenues as jest.Mock)
+        .mockResolvedValueOnce({ data: [PAGE_1_VENUE], meta: { next_cursor: "cursor-1", has_more: true } })
+        .mockResolvedValueOnce({ data: [PAGE_2_VENUE], meta: { next_cursor: null, has_more: false } });
+
+      await render(<DiscoveryScreen />);
+      await waitFor(() => expect(screen.getByText("First Page Cafe")).toBeTruthy(), { timeout: 5000 });
+
+      await act(async () => {
+        screen.getByTestId("venues-list").props.onEndReached();
+      });
+
+      await waitFor(() => expect(screen.getByText("Second Page Cafe")).toBeTruthy());
+      expect(screen.getByText("First Page Cafe")).toBeTruthy();
+      expect(getVenues).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: "cursor-1" }), null);
+    });
+
+    // cross-model-review finding (MAJOR): FlatList can fire onEndReached more than once before
+    // the first page's request resolves -- without an in-flight guard, both calls would pass the
+    // same has_more/cursor check and fetch (and append) the same page twice.
+    it("does not start a second fetch while the first onEndReached request is still in flight", async () => {
+      let resolvePage2!: (v: unknown) => void;
+      (getVenues as jest.Mock)
+        .mockResolvedValueOnce({ data: [PAGE_1_VENUE], meta: { next_cursor: "cursor-1", has_more: true } })
+        .mockReturnValueOnce(new Promise((resolve) => { resolvePage2 = resolve; }));
+
+      await render(<DiscoveryScreen />);
+      await waitFor(() => expect(screen.getByText("First Page Cafe")).toBeTruthy(), { timeout: 5000 });
+
+      // Both calls happen synchronously (before either request can resolve), same as two
+      // onEndReached firings in quick succession would on a real device.
+      await act(async () => {
+        screen.getByTestId("venues-list").props.onEndReached();
+        screen.getByTestId("venues-list").props.onEndReached();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(getVenues).toHaveBeenCalledTimes(2); // 1 initial load + 1 page-2 fetch, not 2 page-2 fetches
+      // Let the in-flight request settle fully before the test (and RNTL's implicit unmount)
+      // ends -- otherwise its state updates can land after this test's own teardown, on
+      // whatever component the NEXT test happens to have mounted by then.
+      await act(async () => {
+        resolvePage2({ data: [PAGE_2_VENUE], meta: { next_cursor: null, has_more: false } });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(screen.getByText("Second Page Cafe")).toBeTruthy());
+    });
+
+    it("does not fetch again once has_more is false", async () => {
+      (getVenues as jest.Mock).mockResolvedValue({
+        data: [PAGE_1_VENUE],
+        meta: { next_cursor: null, has_more: false },
+      });
+
+      await render(<DiscoveryScreen />);
+      await waitFor(() => expect(screen.getByText("First Page Cafe")).toBeTruthy(), { timeout: 5000 });
+      const callsBefore = (getVenues as jest.Mock).mock.calls.length;
+
+      await act(async () => {
+        screen.getByTestId("venues-list").props.onEndReached();
+      });
+
+      expect((getVenues as jest.Mock).mock.calls.length).toBe(callsBefore);
+    });
+
+    it("resets to the first page's results when a filter changes mid-pagination", async () => {
+      (getVenues as jest.Mock)
+        .mockResolvedValueOnce({ data: [PAGE_1_VENUE], meta: { next_cursor: "cursor-1", has_more: true } })
+        .mockResolvedValueOnce({ data: [PAGE_2_VENUE], meta: { next_cursor: null, has_more: false } })
+        .mockResolvedValueOnce({ data: [], meta: { next_cursor: null, has_more: false } });
+
+      await render(<DiscoveryScreen />);
+      await waitFor(() => expect(screen.getByText("First Page Cafe")).toBeTruthy(), { timeout: 5000 });
+      await act(async () => {
+        screen.getByTestId("venues-list").props.onEndReached();
+      });
+      await waitFor(() => expect(screen.getByText("Second Page Cafe")).toBeTruthy());
+
+      fireEvent.press(screen.getByText("Kahve"));
+
+      await waitFor(() => expect(screen.queryByText("Second Page Cafe")).toBeFalsy());
+      expect(screen.queryByText("First Page Cafe")).toBeFalsy();
+    });
   });
 });

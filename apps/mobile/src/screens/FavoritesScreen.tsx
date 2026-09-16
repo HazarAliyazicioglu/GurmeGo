@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../lib/auth-context";
@@ -25,6 +26,9 @@ function flattenFavorites(lists: FavoriteList[]): FlatFavorite[] {
 export default function FavoritesScreen() {
   const { user, session } = useAuth();
   const navigation = useNavigation<Nav>();
+  // §M1 audit finding: this tab's native header is hidden (TabNavigator.tsx), so nothing
+  // accounted for the status bar/notch on either of this screen's render branches.
+  const insets = useSafeAreaInsets();
   const [favorites, setFavorites] = useState<FlatFavorite[]>([]);
   // Guards against a stale request resolving after a newer one and clobbering the screen with
   // another user's data -- e.g. user A's slow getFavoriteLists() call resolving AFTER user B has
@@ -59,7 +63,7 @@ export default function FavoritesScreen() {
 
   if (!user) {
     return (
-      <View>
+      <View testID="favorites-root" style={{ flex: 1, paddingTop: insets.top }}>
         <Text>Favorilerini görmek için giriş yap</Text>
       </View>
     );
@@ -75,19 +79,21 @@ export default function FavoritesScreen() {
   }
 
   return (
-    <FlatList
-      data={favorites}
-      keyExtractor={(item) => item.venueId}
-      renderItem={({ item }) => (
-        <View>
-          <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
-            <Text>{item.name}</Text>
-          </Pressable>
-          <Pressable onPress={() => handleRemove(item.listId, item.venueId)}>
-            <Text>Kaldır</Text>
-          </Pressable>
-        </View>
-      )}
-    />
+    <View testID="favorites-root" style={{ flex: 1, paddingTop: insets.top }}>
+      <FlatList
+        data={favorites}
+        keyExtractor={(item) => item.venueId}
+        renderItem={({ item }) => (
+          <View>
+            <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
+              <Text>{item.name}</Text>
+            </Pressable>
+            <Pressable onPress={() => handleRemove(item.listId, item.venueId)}>
+              <Text>Kaldır</Text>
+            </Pressable>
+          </View>
+        )}
+      />
+    </View>
   );
 }

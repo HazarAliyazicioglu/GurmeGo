@@ -12,3 +12,11 @@ describe("App", () => {
     expect(screen.queryByText("Favorilerim")).toBeNull();
   });
 });
+
+// §M1 audit finding: tab screens hide their native header (TabNavigator.tsx), so nothing
+// accounted for the status bar/notch area. App.tsx now wraps everything in SafeAreaProvider so
+// DiscoveryScreen/FavoritesScreen's useSafeAreaInsets() calls (tested directly in each screen's
+// own spec, where the hook is mocked to a non-zero value) read real device insets in production
+// instead of always getting zero. Not independently tested here: without a real device/simulator
+// there is no meaningful assertion at the App level beyond "still renders", which the test above
+// already covers.

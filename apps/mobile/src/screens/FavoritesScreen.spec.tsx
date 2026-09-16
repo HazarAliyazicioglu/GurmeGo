@@ -3,6 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import FavoritesScreen from "./FavoritesScreen";
 import { useAuth } from "../lib/auth-context";
 import { getFavoriteLists, removeFavoriteVenue } from "../lib/api";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 jest.mock("../lib/auth-context", () => ({ useAuth: jest.fn() }));
 jest.mock("../lib/api", () => ({
@@ -140,5 +141,35 @@ describe("FavoritesScreen", () => {
 
     expect(screen.queryByText("Test Cafe")).toBeFalsy();
     expect(screen.getByText("User B Cafe")).toBeTruthy();
+  });
+});
+
+// §M1 audit finding: this tab's own header is hidden (TabNavigator.tsx), so nothing accounted
+// for the status bar/notch -- both of this screen's render branches (signed-out prompt, favorite
+// list) could render half-hidden under it.
+describe("FavoritesScreen — safe-area padding", () => {
+  beforeEach(() => {
+    (useSafeAreaInsets as jest.Mock).mockReturnValue({ top: 44, right: 0, bottom: 0, left: 0 });
+  });
+
+  it("pads the signed-out prompt by the device's real safe-area inset", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null, session: null });
+
+    await renderScreen();
+
+    expect(screen.getByTestId("favorites-root").props.style).toEqual(
+      expect.objectContaining({ paddingTop: 44 }),
+    );
+  });
+
+  it("pads the favorites list by the device's real safe-area inset", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" } });
+    (getFavoriteLists as jest.Mock).mockResolvedValue([]);
+
+    await renderScreen();
+
+    expect(screen.getByTestId("favorites-root").props.style).toEqual(
+      expect.objectContaining({ paddingTop: 44 }),
+    );
   });
 });
