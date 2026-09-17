@@ -18,7 +18,7 @@ halinde onay. **Kritik'ten TAMAMLANAN, CI yeşil (9/11):** CLAUDE.md yanlış be
 CI web+admin'i de derliyor; web'e generateMetadata+sitemap.ts/robots.ts eklendi; backend
 favoriler yazma uçlarına rate-limit+üst sınır eklendi; mobilin 4 Kritik'i bitti (safe-area,
 sayfalama, mekan detay loading/error, mağaza config). Commit'ler: `ff0c504`,`8ddf525`,
-`139eaf5`,`508887e` (bu sonuncunun CI'sı push anında henüz kontrol edilmemişti — önce bak).
+`139eaf5`,`508887e` — hepsinin CI'sı yeşil doğrulandı.
 
 ## Kullanıcıya SORULACAK açık soru (PC kapatılmadan önce kaydedildi)
 Son kalan Kritik bulgu: **Next.js + Fastify güvenlik yükseltmesi** (majör sürüm atlaması,
