@@ -11,25 +11,25 @@ Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ma
 
 ## Şu an neredeyiz
 REVIEW-PLAN.md Adım 1-3 bitti (CI, User tablosu, CSV injection). **Yeni faz:**
-`docs/DENETIM-RAPORU.md` — 4 uygulama + altyapının taze, ayrıntılı denetimi (53 bulgu:
-11 Kritik/28 Orta/14 Düşük), artifact olarak da yayınlandı. Kullanıcı: "önerilen çözümleri
-uygula, maliyet 0 olursa iyi olur" — sıra Kritik→Orta→Düşük, gruplar halinde onay.
-**Kritik'ten TAMAMLANAN (CI yeşil):** CLAUDE.md yanlış beyan düzeltildi; CI artık web+admin'i
-de derliyor (turbo.json outputs + CI'da dummy Supabase env'leri, üç app'e .env.example); web'e
-generateMetadata (mekan/ilçe) + sitemap.ts/robots.ts eklendi; backend favoriler yazma uçlarına
-rate-limit (20/dk) + hesap başına liste/mekan üst sınırı eklendi; mobilin 4 Kritik'i de bitti
-(safe-area, sayfalama, mekan detay loading/error, mağaza config — `508887e`, CI kontrol ediliyor).
-**Kalan tek Kritik grubu:** Genel Next.js+Fastify güvenlik yükseltmesi — büyük/riskli, henüz
-başlanmadı, ayrı ele alınacak (major sürüm atlaması gerektiriyor).
+`docs/DENETIM-RAPORU.md` — 4 uygulama+altyapının denetimi (53 bulgu: 11 Kritik/28 Orta/14
+Düşük), artifact olarak yayınlandı (her bulguda önerilen VE alternatif çözüm var). Kullanıcı:
+"önerilen çözümleri uygula, maliyet 0 olursa iyi olur" — sıra Kritik→Orta→Düşük, gruplar
+halinde onay. **Kritik'ten TAMAMLANAN, CI yeşil (9/11):** CLAUDE.md yanlış beyan düzeltildi;
+CI web+admin'i de derliyor; web'e generateMetadata+sitemap.ts/robots.ts eklendi; backend
+favoriler yazma uçlarına rate-limit+üst sınır eklendi; mobilin 4 Kritik'i bitti (safe-area,
+sayfalama, mekan detay loading/error, mağaza config). Commit'ler: `ff0c504`,`8ddf525`,
+`139eaf5`,`508887e` (bu sonuncunun CI'sı push anında henüz kontrol edilmemişti — önce bak).
+
+## Kullanıcıya SORULACAK açık soru (PC kapatılmadan önce kaydedildi)
+Son kalan Kritik bulgu: **Next.js + Fastify güvenlik yükseltmesi** (majör sürüm atlaması,
+büyük/riskli). Henüz cevaplanmadı: "Şimdi dikkatli/izole denensin mi (önerilen), yoksa
+şimdilik atlanıp Orta bulgulara (28 madde) mi geçilsin?" Cevap gelince sonuç ne olursa olsun
+Orta bulgulara aynı akışla devam. Kaynak: docs/DENETIM-RAPORU.md (53 bulgunun tam listesi).
 
 ## Test altyapısı
-`apps/api` e2e'leri gerçek Postgres+PostGIS docker container'a (`gurmego-test-db`, port 5434) karşı, `apps/api/.env` gitignore'lu.
+`apps/api` e2e'leri Postgres+PostGIS docker'a (`gurmego-test-db`, port 5434) karşı, `.env` gitignore'lu.
 
-## Sıradaki adım
-CI (508887e) yeşile dönünce: Next.js+Fastify yükseltmesini şimdi mi yoksa Orta bulgulara (28
-madde) geçip sonra mı yapacağımıza kullanıcı karar verecek — büyük/riskli sürüm atlaması içeriyor.
-
-## Bloke olanlar: Yok
+## Bloke olanlar: Yok — sadece yukarıdaki açık soru bekleniyor.
 
 ## Yakın kararlar
 - ADR 005: native mobile pivot (docs/adr/005). Plan 4d/4e ertelendi. Plan 1 kararları: docs/adr/001-004.
