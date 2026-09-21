@@ -12,8 +12,9 @@ import { SITE_URL } from "@/lib/site";
 // `generateStaticParams` escape hatch: Next.js attempts to prerender it at BUILD time whenever
 // `revalidate` is set, which fails without a live backend reachable during `next build` (this
 // repo's CI has none, by design -- see the build-step widening this same finding batch shipped).
-// `force-dynamic` is the only option in Next.js 14 that defers the fetch to request time; at
-// pilot scale (~30-45 venues, low crawl frequency) the missing cache is a non-issue in practice.
+// `force-dynamic` is the option that defers the fetch to request time; the underlying API reads
+// (`getDistricts`, `getVenues`) carry their own data-cache TTL since the Next 16 upgrade, so a
+// crawler hitting this route repeatedly does not translate into repeated backend calls.
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
