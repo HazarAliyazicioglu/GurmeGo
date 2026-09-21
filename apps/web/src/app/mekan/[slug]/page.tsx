@@ -18,10 +18,11 @@ export async function generateStaticParams() {
 // layout's own generic metadata rather than throwing -- generateMetadata running before the page
 // component itself means a thrown error here would break the route entirely instead of letting
 // the page component's own try/catch produce a proper not-found response.
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
   let venue: Awaited<ReturnType<typeof getVenueBySlug>> | null;
   try {
-    venue = await getVenueBySlug(params.slug);
+    venue = await getVenueBySlug(slug);
   } catch {
     venue = null;
   }
@@ -48,14 +49,15 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default async function VenueDetailPage({ params }: { params: { slug: string } }) {
+export default async function VenueDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   // Only a genuine 404 from the API becomes Next's not-found page. Any other failure (5xx,
   // network error, malformed response) must propagate so it hits the route's error boundary
   // instead — conflating them here would silently turn a backend outage into a wrong
   // "mekan bulunamadı" page for the user AND mask a real incident from monitoring.
   let venue: Awaited<ReturnType<typeof getVenueBySlug>> | null;
   try {
-    venue = await getVenueBySlug(params.slug);
+    venue = await getVenueBySlug(slug);
   } catch (err) {
     if (err instanceof ApiHttpError && err.status === 404) {
       venue = null;

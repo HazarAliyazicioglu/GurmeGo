@@ -11,9 +11,10 @@ import type { Metadata } from "next";
 // §W1 audit finding: without this, every district page shared the root layout's generic title.
 // An unknown district slug returns empty metadata (not an error) -- the page component's own
 // notFound() call is what actually produces the 404, this only needs to not crash ahead of it.
-export async function generateMetadata({ params }: { params: { district: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ district: string }> }): Promise<Metadata> {
+  const { district } = await params;
   const districts = await getDistricts();
-  const current = districts.find((d) => d.slug === params.district);
+  const current = districts.find((d) => d.slug === district);
   if (!current) return {};
 
   const locative = districtLocative(current.name);
@@ -29,18 +30,19 @@ export async function generateMetadata({ params }: { params: { district: string 
   };
 }
 
-export default async function DiscoveryPage({ params }: { params: { district: string } }) {
+export default async function DiscoveryPage({ params }: { params: Promise<{ district: string }> }) {
+  const { district } = await params;
   const districts = await getDistricts();
-  const current = districts.find((d) => d.slug === params.district);
+  const current = districts.find((d) => d.slug === district);
   if (!current) notFound();
 
   const { data: venues, meta } = await getVenues({ districtId: current.id, sort: "newest" });
-  const center = DISTRICT_CENTERS[params.district] ?? DEFAULT_CENTER;
+  const center = DISTRICT_CENTERS[district] ?? DEFAULT_CENTER;
 
   return (
     <main>
       <LocationProvider>
-        <DistrictPicker districts={districts} current={params.district} />
+        <DistrictPicker districts={districts} current={district} />
         <h1>{current.name}</h1>
         <DiscoveryClient
           key={current.id}
