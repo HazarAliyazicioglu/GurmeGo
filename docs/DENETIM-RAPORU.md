@@ -30,7 +30,11 @@ cache'lemediği için web §2 "`/[district]` süresiz cache" bilinen borcu da ka
 Yükseltme sırasında raporun öngörmediği bir regresyon bulundu ve düzeltildi: Fastify 5'in `@fastify/cors`
 varsayılanı `PUT/DELETE` preflight'ını düşürüyordu (web favori silme, admin rol atama kırılırdı).
 
-**Sıradaki:** Orta bulgular (28 madde) — paket paket: API sertleştirme → web → admin → mobil → altyapı.
+**Orta paket A (backend §1.2/§1.3) tamamlandı (2026-09-21, PR #4 + #5):** admin rate-limit, güvenlik başlıkları, CSV satır sınırı, liste indeksi
+(**ölçüldü**, 50k satırda 7.7→0.07 ms; `(status, category)` indeksi ölçüldü ve eklenmedi), rol/CSV/mekan audit log (ADR 006), `req.ip` fallback'i,
+rol ucu zod pipe, bayat test yorumu. Bu rapordaki *favori toplam sınırı* Kritik'te zaten yapılmıştı; *`@fastify/static` kullanılmıyor* bulgusu yanlıştı.
+
+**Sıradaki:** kalan Orta bulgular — web → admin → mobil → altyapı (sırayla, paket paket).
 
 ---
 
