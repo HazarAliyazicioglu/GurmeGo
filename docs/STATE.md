@@ -7,41 +7,33 @@ Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo).
 Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Marka: sıcak/editöryel kimlik. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Şu an neredeyiz
-`docs/DENETIM-RAPORU.md` (53 bulgu: 11 Kritik/28 Orta/14 Düşük) uygulanıyor. Kullanıcı 2026-09-21'de
-tüm yetkiyi devretti ("planlama, programlama, araştırma sende; vizyona uygun en üst seviye").
-**Kritik 11/11 KAPANDI**: son ikisi PR #1 (web+admin Next 16.3.5/React 19.3) ve PR #2 (API
-NestJS 11.2.5 + Fastify 5) ile `master`'da; ikisi de Codex ile çapraz-model review'lı, CI yeşil.
-Prod `pnpm audit`: 3 critical/50 high → 0 critical/0 high. Yükseltmeler: fastify exact-pin
-(5.11.3, platform-fastify ile aynı), `pnpm.overrides` transitive yamalar (kök package.json),
-SSR okumalarına bilinçli data-cache TTL (Next 15+ bare fetch'i cache'lemiyor), CORS methods açık.
+`docs/DENETIM-RAPORU.md` (53 bulgu) uygulanıyor. Kullanıcı 2026-09-21'de tüm yetkiyi devretti ("planlama, programlama, araştırma sende; vizyona uygun en üst seviye").
+**Kritik 11/11 KAPANDI** (PR #1 Next 16/React 19, #2 NestJS 11+Fastify 5; prod audit 3 critical/50 high → 0/0).
+**Orta paket A (API) KAPANDI** (PR #4 çekirdek, #5 audit log; plan: docs/superpowers/plans/2026-09-21-api-hardening.md, ADR 006 v2): helmet, gzip,
+ortak admin rate-limit (60/dk tek kova, import 5/saat), CSV 2000 satır sınırı, ölçülmüş liste indeksi (50k satırda 7.7→0.07 ms), hata zarfı normalizasyonu,
+DB-seviyesinde append-only `audit_log` (rol/venue/kuyruk atomik+fail-closed, CSV niyet-önce-etki). API: 54 suite / 352 test.
 
 ## Sıradaki adım
-Orta bulgular (28): paket paket — API sertleştirme (admin rate-limit, helmet, compress, CSV satır
-sınırı, indeksler, audit log) → web → admin → mobil → altyapı. Her paket: TDD → Codex review → PR → CI → merge.
-
-## Test altyapısı
-`apps/api` e2e'leri Postgres+PostGIS docker'a (`gurmego-test-db`, port 5434) karşı, `.env` gitignore'lu. Docker Desktop kapalıysa önce aç.
+Kalan Orta bulgular, paket paket (TDD → Codex review → PR → CI → merge): **web** (next/image, tasarım tokenı+font, error/not-found, güvenlik başlıkları, favori liste unique, harita CSS) →
+admin (rol/veri-kalitesi/geri-alma ekranları, nav, hata listesi sınırı) → mobil (8 Orta) → altyapı (Dependabot, .env.example, docs gerçeği). API'de ayrıca: pino observability (KVKK: konum redaksiyonu), DB pooling kararı.
 
 ## Bloke olanlar: Yok.
+Plan 4e (canlıya çıkış) eylem maddeleri: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
+
+## Test altyapısı
+`apps/api` e2e'leri Postgres+PostGIS docker'a (`gurmego-test-db`, port 5434) karşı, `.env` gitignore'lu. Docker Desktop kapalıysa önce aç. Yerel smoke: önce `rm -rf apps/api/dist`.
+
 ## Yakın kararlar
-- ADR 005: native mobile pivot (docs/adr/005). Plan 4d/4e ertelendi. Plan 1 kararları: docs/adr/001-004.
-- Round 1-3 red-team + Pilot Karar Sözleşmesi: docs/CHANGELOG.md, prd.md §1+§5.
+ADR 005 native mobile · ADR 006 audit log · Plan 1: docs/adr/001-004 · Round 1-3 red-team: docs/CHANGELOG.md, prd.md §1+§5.
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar (KALICI dersler)
-- Tam menü/semantic search (MVP'de): Faz 2'ye. Gurme Puanı/geniş katkı da Faz 2'de ama artık
-  markanın uzun vadeli kimliği sayılıyor — öncelik yeniden bakılabilir.
-- Review/red-team'i tek turda bitirmeyi ummak: ELENDİ.
-- Cross-session/cross-user guard'larda TEK sinyal kullanmak: ELENDİ — monotonic counter pattern
-  proje genelinde tutarlı (tek istisna: mobile auth akışı, REVIEW-PLAN.md §5.2).
-- Expo `EXPO_PUBLIC_*` env'lerini dinamik erişimle okumak: ELENDİ. Mobile gerçek Expo dev
-  server'da hiç elle denenmemiş (sadece jest).
-- CI'nın "yazıldı = çalışıyor" varsayımı: ELENDİ — gerçekten tetiklenip tetiklenmediği ayrıca doğrulanmalı.
-- Test'te tarih/gün hesaplarken `new Date().getDay()`: ELENDİ — CI UTC, İstanbul'la (UTC+3)
-  günde ayrışabiliyor; zaman dilimine bağlı hesap açıkça dönüştürülmüş Date'ten türetilmeli.
-- react-native-safe-area-context'in kendi jest mock'unu (`jest/mock.js`) kullanmak: ELENDİ —
-  sadece `default` export set ediyor, named export tüketen kodları (örn. react-navigation) kırıyor.
-- Codex review'ı "çalışıyor" saymak (çıktıyı görmeden): ELENDİ — model/CLI uyumsuzluğu (`gpt-6-astra` vs
-  codex 0.144) `ERROR` ile sessizce biter. Çıktıda `^ERROR` yok + gerçek bulgu bloğu var mı bak. CLI 0.155.1'e güncellendi.
-- Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ — Fastify 5 cors preflight
-  methods regresyonunu yalnızca canlı boot + curl yakaladı. Yükseltmede derlenmiş uygulamayı ayağa kaldırıp probe et.
-- Framework'ün kendi bağımlılığı olan paketi (fastify) `^` ile pinlemek: ELENDİ — çift tip evreni. Exact pin.
+- Tam menü/semantic search (MVP'de): Faz 2'ye; Gurme Puanı/geniş katkı markanın uzun vadeli kimliği, öncelik yeniden bakılabilir.
+- Review/red-team'i tek turda bitirmeyi ummak · CI'nın "yazıldı = çalışıyor" varsayımı · cross-session guard'larda TEK sinyal: ELENDİ (monotonic counter).
+- Expo `EXPO_PUBLIC_*` dinamik erişim: ELENDİ; mobile gerçek Expo dev server'da hiç elle denenmemiş.
+- Testte `new Date().getDay()`: ELENDİ (CI UTC vs İstanbul UTC+3). react-native-safe-area-context'in `jest/mock.js`'i: ELENDİ (named export kırar).
+- Codex review'ı çıktısını görmeden "çalışıyor" saymak: ELENDİ. Sessiz hatalar: model/CLI uyumsuzluğu (`ERROR` satırı) VE Windows'ta ~32KB üstü prompt (`Argument list too long`).
+  Kural: prompt `codex exec … - < dosya` (stdin), bitiş = çıktıda `tokens used`, `^ERROR` yok; "codex.exe var mı" ile bekleme (başka codex işlemi yanıltır).
+- Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ (Fastify 5 cors metod regresyonunu yalnız canlı probe yakaladı). Framework'ün kendi bağımlılığı olan paketi `^` ile pinlemek: ELENDİ (exact pin).
+- `prisma migrate dev`'in ürettiği migration'ı olduğu gibi uygulamak: ELENDİ, KALICI — PostGIS GiST `Venue_location_idx`'i "drift" sanıp DROP önerir; her migration'da elle çıkar (e2e koruması var).
+- `src/` dışından import (tsconfig include=[src]): ELENDİ — rootDir kayar, çıktı `dist/src/main.js` olur, CI smoke kırılır. jest 29 ESM-only transitive'leri parse edemez (Nest 12 ESM-only ⇒ Vitest göçü gerekir, KOŞULLU).
+- Okuma-sonra-yazma ile "önceki değeri" kaydetmek (kilitsiz): ELENDİ — koşullu `updateMany` kalıbı; transaction atomikliği kaydedilen öncekinin doğruluğunu sağlamaz.
