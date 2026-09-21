@@ -1,3 +1,4 @@
+import { auditStub } from "../../audit/audit-stub";
 import { Prisma } from "@prisma/client";
 import { AdminVenuesService } from "./admin-venues.service";
 
@@ -20,15 +21,15 @@ describe("AdminVenuesService.create — status", () => {
   it("uses input.status when provided", async () => {
     const repo = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
     const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
-    const service = new AdminVenuesService({} as any, boutique, repo);
-    await service.create({ name: "A", slug: "a", districtId: "d1", category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: {}, branchCount: 1, franchiseFlag: false, status: "PUBLISHED" } as any);
+    const service = new AdminVenuesService({ $transaction: (fn: any) => fn({}) } as any, boutique, repo, auditStub());
+    await service.create({ name: "A", slug: "a", districtId: "d1", category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: {}, branchCount: 1, franchiseFlag: false, status: "PUBLISHED" } as any, "actor-1");
     expect(repo.createWithLocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "PUBLISHED" }));
   });
   it("defaults to DRAFT when status is omitted", async () => {
     const repo = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
     const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
-    const service = new AdminVenuesService({} as any, boutique, repo);
-    await service.create({ name: "A", slug: "a", districtId: "d1", category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: {}, branchCount: 1, franchiseFlag: false } as any);
+    const service = new AdminVenuesService({ $transaction: (fn: any) => fn({}) } as any, boutique, repo, auditStub());
+    await service.create({ name: "A", slug: "a", districtId: "d1", category: "cafe", priceRange: "MODERATE", signatureItems: [], openingHours: {}, branchCount: 1, franchiseFlag: false } as any, "actor-1");
     expect(repo.createWithLocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "DRAFT" }));
   });
 });
@@ -41,8 +42,8 @@ describe("AdminVenuesService.update — atomic snapshot + write, partial-update 
       updateWithLocation: jest.fn().mockResolvedValue({ id: "v1" }),
     } as any;
     const boutique = { evaluate: jest.fn().mockReturnValue(true) } as any;
-    const service = new AdminVenuesService(prisma, boutique, repo);
-    await service.update("v1", { branchCount: 5 } as any);
+    const service = new AdminVenuesService(prisma, boutique, repo, auditStub());
+    await service.update("v1", { branchCount: 5 } as any, "actor-1");
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(boutique.evaluate).toHaveBeenCalledWith({ branchCount: 5, franchiseFlag: false, hasEditorialNote: true, status: "PUBLISHED" });
     expect(repo.updateWithLocation).toHaveBeenCalled();
@@ -64,25 +65,25 @@ describe("AdminVenuesService.revert", () => {
       findRawForSnapshot: jest.fn().mockResolvedValue({ id: "v1", name: "Current Name", status: "PUBLISHED" }),
       updateWithLocation: jest.fn().mockResolvedValue({ id: "v1" }),
     } as any;
-    const service = new AdminVenuesService(prisma, {} as any, repo);
-    await service.revert("v1", "ver1");
-    expect(txClient.venueVersion.create).toHaveBeenCalledWith({ data: { venueId: "v1", snapshot: expect.objectContaining({ name: "Current Name" }), createdBy: null } });
+    const service = new AdminVenuesService(prisma, {} as any, repo, auditStub());
+    await service.revert("v1", "ver1", "actor-1");
+    expect(txClient.venueVersion.create).toHaveBeenCalledWith({ data: { venueId: "v1", snapshot: expect.objectContaining({ name: "Current Name" }), createdBy: "actor-1" } });
     expect(repo.updateWithLocation).toHaveBeenCalledWith(txClient, "v1", expect.objectContaining({ name: "Old Name", source: "MANUAL", verifiedAt: expect.any(Date) }));
   });
   it("throws NotFoundException if the version doesn't belong to this venue", async () => {
     const txClient = { venueVersion: { findUnique: jest.fn().mockResolvedValue({ id: "ver1", venueId: "OTHER", snapshot: {} }) } };
     const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
-    const service = new AdminVenuesService(prisma, {} as any, { findRawForSnapshot: jest.fn() } as any);
-    await expect(service.revert("v1", "ver1")).rejects.toThrow("Bu mekan için böyle bir versiyon bulunamadı");
+    const service = new AdminVenuesService(prisma, {} as any, { findRawForSnapshot: jest.fn() } as any, auditStub());
+    await expect(service.revert("v1", "ver1", "actor-1")).rejects.toThrow("Bu mekan için böyle bir versiyon bulunamadı");
   });
 
   it("throws a clean 404 (not an uncaught Prisma error) when versionId is well-formed but no such version exists (regression: was findUniqueOrThrow surfacing as a 500)", async () => {
     const txClient = { venueVersion: { findUnique: jest.fn().mockResolvedValue(null) } };
     const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
-    const service = new AdminVenuesService(prisma, {} as any, { findRawForSnapshot: jest.fn() } as any);
+    const service = new AdminVenuesService(prisma, {} as any, { findRawForSnapshot: jest.fn() } as any, auditStub());
 
     try {
-      await service.revert("v1", "missing-version-id");
+      await service.revert("v1", "missing-version-id", "actor-1");
       throw new Error("expected revert to throw");
     } catch (err: any) {
       expect(err.getResponse()).toEqual({ error: { code: "VENUE_VERSION_NOT_FOUND", message: "Bu mekan için böyle bir versiyon bulunamadı" } });
@@ -153,7 +154,7 @@ describe("AdminVenuesService.importRows", () => {
     } as any;
     const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
     const venuesRepository = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
-    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
+    const service = new AdminVenuesService(prisma, boutique, venuesRepository, auditStub());
 
     const result = await service.importRows(rows);
 
@@ -191,7 +192,7 @@ describe("AdminVenuesService.importRows", () => {
     } as any;
     const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
     const venuesRepository = { createWithLocation: jest.fn() } as any;
-    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
+    const service = new AdminVenuesService(prisma, boutique, venuesRepository, auditStub());
 
     const result = await service.importRows(rows);
 
@@ -225,7 +226,7 @@ describe("AdminVenuesService.importRows", () => {
     const venuesRepository = {
       createWithLocation: jest.fn().mockRejectedValue(new Error("relation \"venues\" violates constraint fk_district_internal_detail")),
     } as any;
-    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
+    const service = new AdminVenuesService(prisma, boutique, venuesRepository, auditStub());
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await service.importRows(rows);
@@ -272,7 +273,7 @@ describe("AdminVenuesService.importRows", () => {
       meta: { code: "23505", message: 'duplicate key value violates unique constraint "Venue_slug_key"' },
     });
     const venuesRepository = { createWithLocation: jest.fn().mockRejectedValue(uniqueViolation) } as any;
-    const service = new AdminVenuesService(prisma, boutique, venuesRepository);
+    const service = new AdminVenuesService(prisma, boutique, venuesRepository, auditStub());
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await service.importRows(rows);
@@ -291,7 +292,7 @@ describe("AdminVenuesService.importRows — status/address default", () => {
     const prisma = { venue: { findUnique: jest.fn().mockResolvedValue(null) }, district: { findUnique: jest.fn().mockResolvedValue({ id: "d1" }) } } as any;
     const repo = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
     const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
-    const service = new AdminVenuesService(prisma, boutique, repo);
+    const service = new AdminVenuesService(prisma, boutique, repo, auditStub());
     await service.importRows([{ row: 1, data: { name: "A", slug: "a", districtSlug: "kadikoy", category: "cafe", priceRange: "MODERATE", branchCount: 1, franchiseFlag: false, lat: 40.99, lng: 29.02, openingHours: {} } as any }]);
     expect(repo.createWithLocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "PUBLISHED" }));
   });
@@ -299,8 +300,69 @@ describe("AdminVenuesService.importRows — status/address default", () => {
     const prisma = { venue: { findUnique: jest.fn().mockResolvedValue(null) }, district: { findUnique: jest.fn().mockResolvedValue({ id: "d1" }) } } as any;
     const repo = { createWithLocation: jest.fn().mockResolvedValue({ id: "v1" }) } as any;
     const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
-    const service = new AdminVenuesService(prisma, boutique, repo);
+    const service = new AdminVenuesService(prisma, boutique, repo, auditStub());
     await service.importRows([{ row: 1, data: { name: "A", slug: "a", districtSlug: "kadikoy", category: "cafe", priceRange: "MODERATE", branchCount: 1, franchiseFlag: false, lat: 40.99, lng: 29.02, openingHours: {}, status: "DRAFT", address: "Bahariye Cd. No:1" } as any }]);
     expect(repo.createWithLocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: "DRAFT", address: "Bahariye Cd. No:1" }));
+  });
+});
+
+describe("AdminVenuesService.importWithAudit", () => {
+  function setup(opts: { auditImpl?: jest.Mock; importResult?: object } = {}) {
+    const calls: string[] = [];
+    const tx = {};
+    const prisma = {
+      $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
+      venue: { findUnique: jest.fn(async () => { calls.push("importRows"); return { id: "x" }; }) },
+      district: { findUnique: jest.fn() },
+    } as any;
+    const record = opts.auditImpl ?? jest.fn(async (_tx: unknown, e: { action: string }) => { calls.push(e.action); });
+    const audit = { record } as any;
+    const service = new AdminVenuesService(prisma, {} as any, {} as any, audit);
+    return { service, calls, record, prisma };
+  }
+  const row = { row: 2, data: { name: "Secret Cafe", slug: "secret-cafe", districtSlug: "kadikoy" } } as any;
+
+  it("records CSV_IMPORT_STARTED BEFORE any row is touched, then CSV_IMPORTED", async () => {
+    const { service, calls } = setup();
+    await service.importWithAudit([row], 3, "curator-1");
+    expect(calls).toEqual(["CSV_IMPORT_STARTED", "importRows", "CSV_IMPORTED"]);
+  });
+
+  it("puts a shared importId, row counts and NO row content in the audit entries", async () => {
+    const { service, record } = setup();
+    await service.importWithAudit([row], 3, "curator-1");
+    const [started, finished] = record.mock.calls.map((c: unknown[]) => c[1] as { action: string; actorId: string; meta: any });
+    expect(started).toMatchObject({ action: "CSV_IMPORT_STARTED", actorId: "curator-1", targetType: "VenueImport" });
+    expect(started.meta.rowCount).toBe(4); // 1 valid + 3 rows that failed schema validation
+    expect(finished.meta.importId).toBe(started.meta.importId);
+    expect(started.meta.importId).toEqual(expect.any(String));
+    expect(JSON.stringify([started, finished])).not.toContain("Secret Cafe");
+  });
+
+  // Codex review MINOR: a malformed file yields no valid rows; there is no effect to record and no real row
+  // count to report, so it must not leave STARTED/IMPORTED noise behind.
+  it("writes NO audit records and imports nothing when there are no valid rows", async () => {
+    const { service, record, prisma } = setup();
+    const result = await service.importWithAudit([], 1, "curator-1");
+    expect(result).toEqual({ created: 0, skipped: 0, rowErrors: [], createdVenueIds: [] });
+    expect(record).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("does not run the import at all when the STARTED record cannot be written (fail-closed)", async () => {
+    const { service, calls, prisma } = setup({ auditImpl: jest.fn().mockRejectedValue(new Error("audit down")) });
+    await expect(service.importWithAudit([row], 0, "curator-1")).rejects.toThrow("audit down");
+    expect(calls).toEqual([]);
+    expect(prisma.venue.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("still returns the import result, and logs, when only the final CSV_IMPORTED record fails", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const record = jest.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("audit down at the end"));
+    const { service } = setup({ auditImpl: record });
+    const result = await service.importWithAudit([row], 0, "curator-1");
+    expect(result).toMatchObject({ created: 0, skipped: 1 });
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

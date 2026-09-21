@@ -1,3 +1,4 @@
+import { auditStub } from "../../audit/audit-stub";
 import { AdminQueueService } from "./admin-queue.service";
 import { VenuesRepository } from "../../venues/venues.repository";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -62,7 +63,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   // `limit` only ever slices the final, already-sorted response.
   it("fetches every matching row with no DB-level cap -- priority sorting always sees the true candidate set", async () => {
     const prisma = makeQueuePrisma([], []);
-    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository, auditStub());
 
     await service.list(undefined, "PENDING", 25);
 
@@ -73,7 +74,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   it("still respects a small `limit` for the RESPONSE size even though the DB fetch is uncapped", async () => {
     const items = Array.from({ length: 5 }, (_, i) => ({ id: `c${i}`, type: "EDIT", venueId: null, venue: null }));
     const prisma = makeQueuePrisma(items, []);
-    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository, auditStub());
 
     const result = await service.list(undefined, "PENDING", 2);
 
@@ -86,7 +87,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   it("defaults `limit` to 100 when not passed, slicing the response to exactly 100 items", async () => {
     const items = Array.from({ length: 150 }, (_, i) => ({ id: `c${i}`, type: "EDIT", venueId: null, venue: null }));
     const prisma = makeQueuePrisma(items, []);
-    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository, auditStub());
 
     const result = await service.list();
 
@@ -107,7 +108,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
     const items = [...oldItems, { id: "urgent-last", type: "REPORT", venueId: "v1", venue: { name: "A", slug: "a" } }];
     const groupByResult = [{ venueId: "v1", _count: { _all: 3 } }]; // >= default threshold 3 -> urgent
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository, auditStub());
 
     const result = await service.list(undefined, "PENDING", limit);
 
@@ -127,7 +128,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
     ];
     const groupByResult = [{ venueId: "v1", _count: { _all: 3 } }];
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository, auditStub());
 
     const result = await service.list();
 
@@ -146,7 +147,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
       { venueId: "v2", _count: { _all: 1 } },
     ];
     const prisma = makeQueuePrisma(items, groupByResult);
-    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository, auditStub());
 
     const result = await service.list();
 
@@ -171,7 +172,7 @@ describe("AdminQueueService.list — pagination and batched urgency count", () =
   it("skips the groupBy call entirely when the page has no REPORT rows", async () => {
     const items = [{ id: "c3", type: "EDIT", venueId: "v3", venue: { name: "C", slug: "c" } }];
     const prisma = makeQueuePrisma(items, []);
-    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository);
+    const service = new AdminQueueService(prisma as unknown as PrismaService, unusedVenuesRepository, auditStub());
 
     const result = await service.list();
 
@@ -193,7 +194,7 @@ describe("AdminQueueService.approve — REPORT vs EDIT branching", () => {
     };
     const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
     const venuesRepository = { findRawForSnapshot: jest.fn() } as any;
-    const service = new AdminQueueService(prisma, venuesRepository);
+    const service = new AdminQueueService(prisma, venuesRepository, auditStub());
     await service.approve("c1", "curator-1");
     expect(venuesRepository.findRawForSnapshot).not.toHaveBeenCalled();
     expect(txClient.venue.update).not.toHaveBeenCalled();
@@ -217,7 +218,7 @@ describe("AdminQueueService.approve — REPORT vs EDIT branching", () => {
     };
     const prisma = { $transaction: jest.fn((fn) => fn(txMock)) } as any;
     const venuesRepository = { findRawForSnapshot: jest.fn().mockResolvedValue(snapshot) } as any;
-    const service = new AdminQueueService(prisma, venuesRepository);
+    const service = new AdminQueueService(prisma, venuesRepository, auditStub());
     await service.approve("c2", "curator-1");
     expect(venuesRepository.findRawForSnapshot).toHaveBeenCalledWith(txMock, "v1");
     expect(txMock.venueVersion.create).toHaveBeenCalledWith({ data: { venueId: "v1", snapshot, createdBy: "curator-1" } });
@@ -229,7 +230,7 @@ describe("AdminQueueService.approve — REPORT vs EDIT branching", () => {
     const venue = { id: "v1", name: "A", editorialNote: "old" };
     const prisma = makePrisma({ item, venue });
     const venuesRepository = { findRawForSnapshot: jest.fn() } as any;
-    const service = new AdminQueueService(prisma, venuesRepository);
+    const service = new AdminQueueService(prisma, venuesRepository, auditStub());
 
     await expect(service.approve("c1", "curator-1")).rejects.toMatchObject({
       response: { error: { code: "CONTRIBUTION_ALREADY_PROCESSED" } },
@@ -245,7 +246,7 @@ describe("AdminQueueService.approve — REPORT vs EDIT branching", () => {
       contributionQueue: { findUnique: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn((fn) => fn(prisma)),
     } as any;
-    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any);
+    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any, auditStub());
 
     try {
       await service.approve("missing-id", "curator-1");
@@ -273,7 +274,7 @@ describe("AdminQueueService.approve — REPORT vs EDIT branching", () => {
       venue: { update: jest.fn() }, venueVersion: { create: jest.fn() },
     };
     const prisma = { $transaction: jest.fn((fn) => fn(txClient)) } as any;
-    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any);
+    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any, auditStub());
 
     await expect(service.approve("c1", "curator-2")).rejects.toMatchObject({
       response: { error: { code: "CONTRIBUTION_ALREADY_PROCESSED" } },
@@ -287,7 +288,7 @@ describe("AdminQueueService.reject", () => {
   it("updates status to REJECTED for a PENDING item", async () => {
     const item = { id: "c1", type: "EDIT", venueId: "v1", status: "PENDING" };
     const prisma = makePrisma({ item });
-    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any);
+    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any, auditStub());
 
     await service.reject("c1", "curator-1");
 
@@ -300,7 +301,7 @@ describe("AdminQueueService.reject", () => {
   it("throws a conflict error and makes no writes when the item is already REJECTED", async () => {
     const item = { id: "c1", type: "EDIT", venueId: "v1", status: "REJECTED" };
     const prisma = makePrisma({ item });
-    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any);
+    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any, auditStub());
 
     await expect(service.reject("c1", "curator-1")).rejects.toMatchObject({
       response: { error: { code: "CONTRIBUTION_ALREADY_PROCESSED" } },
@@ -312,7 +313,7 @@ describe("AdminQueueService.reject", () => {
       contributionQueue: { findUnique: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn((fn) => fn(prisma)),
     } as any;
-    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any);
+    const service = new AdminQueueService(prisma, { findRawForSnapshot: jest.fn() } as any, auditStub());
 
     await expect(service.reject("missing-id", "curator-1")).rejects.toThrow("Katkı bulunamadı");
   });

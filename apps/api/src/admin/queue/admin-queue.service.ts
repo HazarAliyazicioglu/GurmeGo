@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { ContributionStatus, ContributionType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuditService } from "../../audit/audit.service";
 import { VenuesRepository } from "../../venues/venues.repository";
 import { getUrgentReportThreshold } from "../../common/rule-config";
 
@@ -27,7 +28,7 @@ function notFoundError() {
 
 @Injectable()
 export class AdminQueueService {
-  constructor(private prisma: PrismaService, private venuesRepository: VenuesRepository) {}
+  constructor(private prisma: PrismaService, private venuesRepository: VenuesRepository, private audit: AuditService) {}
 
   // Security/ops finding: this used to run one SEPARATE `count()` query per REPORT row to compute
   // urgency -- the same venue's report count getting recomputed redundantly across its own
@@ -140,6 +141,15 @@ export class AdminQueueService {
         data: { status: "APPROVED", reviewedBy: reviewerId, reviewedAt: new Date() },
       });
       if (claimed.count !== 1) throw alreadyProcessedError();
+      await this.audit.record(tx, {
+        actorId: reviewerId,
+        action: "QUEUE_APPROVED",
+        targetType: "ContributionQueue",
+        targetId: id,
+        before: { status: "PENDING" },
+        after: { status: "APPROVED" },
+        meta: { type: item.type },
+      });
       if (item.type === "EDIT" && item.venueId) {
         const snapshot = await this.venuesRepository.findRawForSnapshot(tx, item.venueId);
         await tx.venueVersion.create({ data: { venueId: item.venueId, snapshot: snapshot as unknown as Prisma.InputJsonValue, createdBy: reviewerId } });
@@ -162,6 +172,15 @@ export class AdminQueueService {
         data: { status: "REJECTED", reviewedBy: reviewerId, reviewedAt: new Date() },
       });
       if (claimed.count !== 1) throw alreadyProcessedError();
+      await this.audit.record(tx, {
+        actorId: reviewerId,
+        action: "QUEUE_REJECTED",
+        targetType: "ContributionQueue",
+        targetId: id,
+        before: { status: "PENDING" },
+        after: { status: "REJECTED" },
+        meta: { type: item.type },
+      });
       return tx.contributionQueue.findUniqueOrThrow({ where: { id } });
     });
   }

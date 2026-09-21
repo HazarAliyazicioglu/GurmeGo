@@ -1,7 +1,9 @@
+import { randomUUID } from "crypto";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { AdminVenueCreateInput, AdminVenueUpdateInput } from "@gurmego/shared";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuditService } from "../../audit/audit.service";
 import { BoutiqueService } from "../../rule-engine/boutique.service";
 import { VenuesRepository, snapshotToUpdateInput, AdminVenueRow } from "../../venues/venues.repository";
 import type { CsvImportRow } from "./csv-import.service";
@@ -24,33 +26,49 @@ export class AdminVenuesService {
     private prisma: PrismaService,
     private boutique: BoutiqueService,
     private venuesRepository: VenuesRepository,
+    private audit: AuditService,
   ) {}
 
-  create(input: AdminVenueCreateInput) {
+  // Public create = insert + audit row in ONE transaction (ADR 006). CSV import deliberately uses
+  // `insertVenue` directly: its audit trail is a single summary (intent-before-effect), not one row per venue.
+  create(input: AdminVenueCreateInput, actorId: string) {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const venue = await this.insertVenue(tx, input);
+      await this.audit.record(tx, { actorId, action: "VENUE_CREATED", targetType: "Venue", targetId: venue.id, meta: { status: venue.status } });
+      return venue;
+    });
+  }
+
+  private insertVenue(client: Pick<PrismaService, "$queryRaw">, input: AdminVenueCreateInput) {
     const status = input.status ?? "DRAFT";
     const isBoutique = this.boutique.evaluate({ branchCount: input.branchCount, franchiseFlag: input.franchiseFlag, hasEditorialNote: !!input.editorialNote, status });
     // `location` is a required PostGIS column the Prisma client can't write (ADR 002) — delegated to
     // the repository's raw-SQL insert, which also handles isBoutique/verifiedAt/status/source.
-    return this.venuesRepository.createWithLocation(this.prisma, { ...input, isBoutique, verifiedAt: new Date(), status, source: "MANUAL" });
+    return this.venuesRepository.createWithLocation(client, { ...input, isBoutique, verifiedAt: new Date(), status, source: "MANUAL" });
   }
 
-  async update(id: string, input: AdminVenueUpdateInput) {
+  async update(id: string, input: AdminVenueUpdateInput, actorId: string) {
     // Snapshot + write must be atomic (A4): the version row and the venue mutation land together or
     // not at all. Partial-update completeness — recompute isBoutique from the merged (request +
     // current DB) state, so a patch that only changes branchCount still evaluates the rule correctly.
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await this.venuesRepository.findRawForSnapshot(tx, id);
-      await tx.venueVersion.create({ data: { venueId: id, snapshot: existing as unknown as Prisma.InputJsonValue, createdBy: null } });
+      await tx.venueVersion.create({ data: { venueId: id, snapshot: existing as unknown as Prisma.InputJsonValue, createdBy: actorId } });
       const branchCount = input.branchCount ?? existing.branchCount;
       const franchiseFlag = input.franchiseFlag ?? existing.franchiseFlag;
       const hasEditorialNote = input.editorialNote !== undefined ? !!input.editorialNote : !!existing.editorialNote;
       const status = input.status ?? existing.status;
       const isBoutique = this.boutique.evaluate({ branchCount, franchiseFlag, hasEditorialNote, status });
-      return this.venuesRepository.updateWithLocation(tx, id, { ...input, isBoutique, verifiedAt: new Date() });
+      const updated = await this.venuesRepository.updateWithLocation(tx, id, { ...input, isBoutique, verifiedAt: new Date() });
+      // Field NAMES only -- never values: venue free text (editorial note, address, ...) must not leak into
+      // the audit trail (ADR 006 PII boundary). The full before-state is the VenueVersion snapshot above.
+      const fields = Object.entries(input).filter(([, v]) => v !== undefined).map(([k]) => k);
+      await this.audit.record(tx, { actorId, action: "VENUE_UPDATED", targetType: "Venue", targetId: id, meta: { fields } });
+      return updated;
     });
   }
 
-  async revert(venueId: string, versionId: string) {
+  async revert(venueId: string, versionId: string, actorId: string) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // `findUnique` (not `findUniqueOrThrow`) -- a well-formed but non-existent `versionId` (it's
       // already passed `ParseUUIDPipe` at the controller) must produce this same clean
@@ -74,20 +92,66 @@ export class AdminVenuesService {
         throw notFound;
       }
       const current = await this.venuesRepository.findRawForSnapshot(tx, venueId);
-      await tx.venueVersion.create({ data: { venueId, snapshot: current as unknown as Prisma.InputJsonValue, createdBy: null } });
+      await tx.venueVersion.create({ data: { venueId, snapshot: current as unknown as Prisma.InputJsonValue, createdBy: actorId } });
       // `version.snapshot` is a Prisma Json column -- its static type (Prisma.JsonValue) cannot
       // carry the domain knowledge that THIS snapshot was produced by findRawForSnapshot's
       // AdminVenueRow shape. This is the one place that knowledge is asserted; every field after
       // this cast flows through snapshotToUpdateInput's fully-typed signature.
       const restored = snapshotToUpdateInput(version.snapshot as unknown as AdminVenueRow);
-      return this.venuesRepository.updateWithLocation(tx, venueId, { ...restored, verifiedAt: new Date() });
+      const reverted = await this.venuesRepository.updateWithLocation(tx, venueId, { ...restored, verifiedAt: new Date() });
+      await this.audit.record(tx, { actorId, action: "VENUE_REVERTED", targetType: "Venue", targetId: venueId, meta: { versionId } });
+      return reverted;
     });
+  }
+
+  // CSV import is NOT atomic (row-by-row partial success is the product's behaviour), so its audit trail
+  // cannot be "same transaction as the action". Intent-before-effect instead (ADR 006 v2):
+  //   1. CSV_IMPORT_STARTED is written FIRST and fail-closed -- if it cannot be recorded, nothing is imported.
+  //   2. the import runs;
+  //   3. CSV_IMPORTED (counts + created venue ids, never row content) is written best-effort: the import has
+  //      already happened, so a failure here is logged, not surfaced. The STARTED record still proves the attempt,
+  //      and STARTED-without-IMPORTED (same importId) is how an import that died half-way is found.
+  async importWithAudit(rows: CsvImportRow[], schemaErrorCount: number, actorId: string) {
+    // Nothing valid to import (e.g. a malformed file): there is no effect to record, so no audit noise either.
+    if (rows.length === 0) return { created: 0, skipped: 0, rowErrors: [], createdVenueIds: [] };
+    const importId = randomUUID();
+    await this.prisma.$transaction((tx: Prisma.TransactionClient) =>
+      this.audit.record(tx, {
+        actorId,
+        action: "CSV_IMPORT_STARTED",
+        targetType: "VenueImport",
+        meta: { importId, rowCount: rows.length + schemaErrorCount },
+      }),
+    );
+
+    const result = await this.importRows(rows);
+
+    try {
+      await this.prisma.$transaction((tx: Prisma.TransactionClient) =>
+        this.audit.record(tx, {
+          actorId,
+          action: "CSV_IMPORTED",
+          targetType: "VenueImport",
+          meta: {
+            importId,
+            created: result.created,
+            skipped: result.skipped,
+            errorCount: result.rowErrors.length + schemaErrorCount,
+            createdVenueIds: result.createdVenueIds,
+          },
+        }),
+      );
+    } catch (err) {
+      console.error(`CSV import ${importId}: import finished but the CSV_IMPORTED audit record could not be written:`, err);
+    }
+    return result;
   }
 
   async importRows(
     rows: CsvImportRow[],
-  ): Promise<{ created: number; skipped: number; rowErrors: { row: number; message: string }[] }> {
+  ): Promise<{ created: number; skipped: number; rowErrors: { row: number; message: string }[]; createdVenueIds: string[] }> {
     let created = 0;
+    const createdVenueIds: string[] = [];
     let skipped = 0;
     const rowErrors: { row: number; message: string }[] = [];
 
@@ -111,7 +175,7 @@ export class AdminVenuesService {
         // `.optional()` fields only apply when the schema is actually run through `.parse()`; this
         // object is constructed directly and passed to `create()`, which takes the already-typed
         // `AdminVenueCreateInput` shape, so every field `create()` needs must be set explicitly here.
-        await this.create({
+        const inserted = await this.insertVenue(this.prisma, {
           name: row.name,
           slug: row.slug,
           districtId: district.id,
@@ -127,6 +191,7 @@ export class AdminVenuesService {
           address: row.address,
         });
         created++;
+        createdVenueIds.push(inserted.id);
       } catch (err) {
         // The findUnique-by-slug check above is a pre-check, not a lock — two concurrent imports of
         // the same new slug can both pass it and both attempt to insert, so the DB's unique
@@ -145,6 +210,6 @@ export class AdminVenuesService {
       }
     }
 
-    return { created, skipped, rowErrors };
+    return { created, skipped, rowErrors, createdVenueIds };
   }
 }
