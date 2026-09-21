@@ -86,6 +86,7 @@ describe("venue detail page", () => {
 
     const result = await VenueDetailPage({ params: Promise.resolve({ slug: "test-cafe" }) });
 
+    expect(getVenueBySlug).toHaveBeenCalledWith("test-cafe");
     expect(notFound).not.toHaveBeenCalled();
     expect(result.type).toBeDefined();
     expect(result.props.venue).toEqual(venue);
@@ -100,6 +101,7 @@ describe("venue detail page metadata", () => {
     vi.mocked(getVenueBySlug).mockResolvedValue(venue as never);
 
     const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
+    expect(getVenueBySlug).toHaveBeenCalledWith("test-cafe");
 
     expect(meta.title).toBe("Test Cafe — Kadıköy | GurmeGo");
   });

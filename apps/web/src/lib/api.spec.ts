@@ -204,13 +204,13 @@ describe("getVenues — new optional coords parameter sends a location header", 
   it("sends the exact X-User-Location header derived from coords", async () => {
     mockGet.mockResolvedValueOnce({ data: [], meta: { next_cursor: null, has_more: false } });
     await getVenues({ districtId: "d1" }, { lat: 40.99, lng: 29.02 });
-    expect(mockGet.mock.calls[0][1]).toEqual({ headers: { "X-User-Location": "40.99,29.02" } });
+    expect(mockGet.mock.calls[0][1]).toEqual({ headers: { "X-User-Location": "40.99,29.02" }, next: { revalidate: 60 } });
   });
 
   it("sends no location header when coords is omitted", async () => {
     mockGet.mockResolvedValueOnce({ data: [], meta: { next_cursor: null, has_more: false } });
     await getVenues({ districtId: "d1" });
-    expect(mockGet.mock.calls[0][1]).toEqual({ headers: {} });
+    expect(mockGet.mock.calls[0][1]).toEqual({ headers: {}, next: { revalidate: 60 } });
   });
 });
 
@@ -295,5 +295,32 @@ describe("reportVenue", () => {
     await expect(reportVenue("3fa85f64-5717-4562-b3fc-2c963f66afa6", "spam")).rejects.toThrow(
       "Report failed: 500",
     );
+  });
+});
+
+// Next 15+ stopped caching bare fetch(); the server-rendered list/district reads opt back into a short
+// TTL so a busy page doesn't send every view to the API (see DISTRICTS_REVALIDATE_S in api.ts).
+describe("server-rendered reads opt into a Next.js data-cache TTL", () => {
+  beforeEach(() => mockGet.mockReset());
+
+  it("getDistricts asks the data cache to revalidate every 300s", async () => {
+    mockGet.mockResolvedValue([]);
+    await getDistricts();
+    expect(mockGet).toHaveBeenCalledWith("/districts?city=istanbul", expect.objectContaining({ next: { revalidate: 300 } }));
+  });
+
+  it("getVenues asks the data cache to revalidate every 60s", async () => {
+    mockGet.mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+    await getVenues({ districtId: "d1" });
+    expect(mockGet).toHaveBeenCalledWith(
+      expect.stringContaining("/venues?"),
+      expect.objectContaining({ next: { revalidate: 60 } }),
+    );
+  });
+
+  it("does not add a TTL to per-user or venue-detail reads", async () => {
+    mockGet.mockResolvedValue([]);
+    await getFavoriteLists("tok");
+    expect(mockGet.mock.calls[0][1]).not.toHaveProperty("next");
   });
 });

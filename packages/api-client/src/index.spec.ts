@@ -24,6 +24,30 @@ describe("createApiClient().get — headers option", () => {
   });
 });
 
+describe("createApiClient().get — Next.js data-cache revalidate option", () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  });
+
+  // Next 15+ no longer caches a bare fetch(). Server-rendered callers opt back in per call so a busy
+  // page doesn't hit the API on every request (all SSR traffic shares one IP in the API's rate limit).
+  it("forwards next.revalidate to fetch so the Next.js data cache can honour it", async () => {
+    const client = createApiClient("http://api.test");
+    await client.get("/districts", { next: { revalidate: 300 } });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://api.test/districts",
+      expect.objectContaining({ next: { revalidate: 300 } }),
+    );
+  });
+
+  it("does not add a `next` key to fetch when the caller did not ask for one", async () => {
+    const client = createApiClient("http://api.test");
+    await client.get("/venues");
+    const init = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(init).not.toHaveProperty("next");
+  });
+});
+
 describe("createApiClient — non-ok responses throw ApiHttpError carrying the status code", () => {
   it("get() throws an ApiHttpError with the response's status on a 404", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, text: async () => "Not Found" });
