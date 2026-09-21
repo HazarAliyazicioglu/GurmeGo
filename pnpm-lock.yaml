@@ -119,7 +119,7 @@ importers:
         specifier: ^6.8.1
         version: 6.8.1
       fastify:
-        specifier: ^5.11.3
+        specifier: 5.11.3
         version: 5.11.3
       jose:
         specifier: ^5.10.0

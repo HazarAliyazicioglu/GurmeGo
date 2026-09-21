@@ -77,7 +77,11 @@ describe("buildCorsOptions", () => {
     const res = await app.inject({
       method: "OPTIONS",
       url: "/ping",
-      headers: { origin, "access-control-request-method": method },
+      headers: {
+        origin,
+        "access-control-request-method": method,
+        "access-control-request-headers": "authorization,content-type",
+      },
     });
     await app.close();
     return res;
@@ -85,7 +89,17 @@ describe("buildCorsOptions", () => {
 
   it.each(["GET", "POST", "PUT", "DELETE"])("allows a %s preflight from a configured origin", async (method) => {
     const res = await preflight("http://localhost:3002", method, "http://localhost:3002");
+    // Browsers require a 2xx preflight response; CORS headers on a failing status still block the call.
+    expect(res.statusCode).toBeGreaterThanOrEqual(200);
+    expect(res.statusCode).toBeLessThan(300);
     expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3002");
+    // Authenticated calls send Authorization + a JSON Content-Type -- both must be permitted.
+    expect(String(res.headers["access-control-allow-headers"]).toLowerCase()).toEqual(
+      expect.stringContaining("authorization"),
+    );
+    expect(String(res.headers["access-control-allow-headers"]).toLowerCase()).toEqual(
+      expect.stringContaining("content-type"),
+    );
     expect(res.headers["access-control-allow-credentials"]).toBe("true");
     expect(String(res.headers["access-control-allow-methods"]).split(/,\s*/)).toContain(method);
   });
