@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from "@nestjs/common";
-import { FastifyRequest } from "fastify";
 import { AdminVenueCreateSchema, AdminVenueUpdateSchema } from "@gurmego/shared";
+import { AuthenticatedRequest } from "../../auth/jwt-auth.guard";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
 import { RateLimit, RateLimitGuard } from "../../common/rate-limit.guard";
@@ -17,24 +17,30 @@ export class AdminVenuesController {
   constructor(private venues: AdminVenuesService, private csvImport: CsvImportService) {}
 
   @Post("venues")
-  create(@Body(new ZodValidationPipe(AdminVenueCreateSchema)) body: ReturnType<(typeof AdminVenueCreateSchema)["parse"]>) {
-    return this.venues.create(body);
+  create(
+    @Body(new ZodValidationPipe(AdminVenueCreateSchema)) body: ReturnType<(typeof AdminVenueCreateSchema)["parse"]>,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    // `RolesGuard` already rejected the request with 401 if `req.user` were missing (same for update/revert).
+    return this.venues.create(body, req.user!.id);
   }
 
   @Put("venues/:id")
   update(
     @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
     @Body(new ZodValidationPipe(AdminVenueUpdateSchema)) body: ReturnType<(typeof AdminVenueUpdateSchema)["parse"]>,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.venues.update(id, body);
+    return this.venues.update(id, body, req.user!.id);
   }
 
   @Post("venues/:id/revert/:versionId")
   revert(
     @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
     @Param("versionId", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) versionId: string,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.venues.revert(id, versionId);
+    return this.venues.revert(id, versionId, req.user!.id);
   }
 
   // Fastify app (see apps/api/src/main.ts) — `@fastify/multipart` is registered globally there, which
@@ -44,14 +50,14 @@ export class AdminVenuesController {
   // an import spends only this budget (CSV parse + N inserts is by far the heaviest admin operation).
   @RateLimit(RATE_LIMITS.adminImport.limit, RATE_LIMITS.adminImport.windowSeconds, { bucket: "admin-import" })
   @Post("import")
-  async importCsv(@Req() req: FastifyRequest) {
+  async importCsv(@Req() req: AuthenticatedRequest) {
     const data = await req.file();
     if (!data) {
       throw new BadRequestException({ error: { code: "VALIDATION_ERROR", message: "file zorunlu" } });
     }
     const buffer = await data.toBuffer();
     const { valid, errors } = await this.csvImport.parseRows(buffer.toString("utf-8"));
-    const { created, skipped, rowErrors } = await this.venues.importRows(valid);
+    const { created, skipped, rowErrors } = await this.venues.importWithAudit(valid, errors.length, req.user!.id);
     return { created, skipped, errors: [...errors, ...rowErrors] };
   }
 }

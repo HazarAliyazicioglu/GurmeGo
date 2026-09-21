@@ -1,5 +1,6 @@
-import { Body, Controller, Param, ParseUUIDPipe, Put, UseGuards } from "@nestjs/common";
+import { Body, Controller, Param, ParseUUIDPipe, Put, Req, UseGuards } from "@nestjs/common";
 import { AssignRoleSchema, type AssignRoleInput } from "@gurmego/shared";
+import { AuthenticatedRequest } from "../../auth/jwt-auth.guard";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
 import { RateLimit, RateLimitGuard } from "../../common/rate-limit.guard";
@@ -18,7 +19,9 @@ export class AdminUsersController {
   assignRole(
     @Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
     @Body(new ZodValidationPipe(AssignRoleSchema)) body: AssignRoleInput,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.users.assignRole(id, body.role);
+    // `RolesGuard` already rejected the request with 401 if `req.user` were missing.
+    return this.users.assignRole(id, body.role, req.user!.id);
   }
 }

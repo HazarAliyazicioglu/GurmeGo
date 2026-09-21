@@ -1,3 +1,4 @@
+import { AuditService } from "../src/audit/audit.service";
 import { PrismaClient } from "@prisma/client";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { VenuesRepository } from "../src/venues/venues.repository";
@@ -20,7 +21,7 @@ describe("AdminVenuesService.update — concurrent partial updates do not lose e
   beforeAll(() => {
     prisma = new PrismaService();
     venuesRepository = new VenuesRepository(prisma as unknown as PrismaService);
-    adminVenuesService = new AdminVenuesService(prisma as unknown as PrismaService, new BoutiqueService(), venuesRepository);
+    adminVenuesService = new AdminVenuesService(prisma as unknown as PrismaService, new BoutiqueService(), venuesRepository, new AuditService());
   });
 
   afterEach(async () => {
@@ -57,8 +58,8 @@ describe("AdminVenuesService.update — concurrent partial updates do not lose e
     // overwrite isBoutique with a value computed from data that was already stale by the time it
     // wrote.
     await Promise.all([
-      adminVenuesService.update(venue.id, { editorialNote: "A tarafından güncellendi" }),
-      adminVenuesService.update(venue.id, { transportNote: "B tarafından eklendi: Kadıköy iskelesi" }),
+      adminVenuesService.update(venue.id, { editorialNote: "A tarafından güncellendi" }, "e2e-actor"),
+      adminVenuesService.update(venue.id, { transportNote: "B tarafından eklendi: Kadıköy iskelesi" }, "e2e-actor"),
     ]);
 
     const final = await prisma.venue.findUniqueOrThrow({ where: { id: venue.id } });
@@ -87,8 +88,8 @@ describe("AdminVenuesService.update — concurrent partial updates do not lose e
     // still 5, taken before A committed) instead of blocking until A's write lands, B would
     // recompute isBoutique=false from stale data and could clobber A's isBoutique=true.
     await Promise.all([
-      adminVenuesService.update(venue.id, { branchCount: 1 }),
-      adminVenuesService.update(venue.id, { transportNote: "Metro çıkışı 2 dk" }),
+      adminVenuesService.update(venue.id, { branchCount: 1 }, "e2e-actor"),
+      adminVenuesService.update(venue.id, { transportNote: "Metro çıkışı 2 dk" }, "e2e-actor"),
     ]);
 
     const final = await prisma.venue.findUniqueOrThrow({ where: { id: venue.id } });

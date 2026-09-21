@@ -34,10 +34,9 @@ Seçenek 1, şu sözleşmeyle:
 
 ## Erken uyarı sinyalleri (ölçüm kaynağı ve sıklığı dahil)
 - **Boyut:** ayda bir `SELECT reltuples::bigint FROM pg_class WHERE relname='audit_log'` > 1.000.000 ⇒ partition/arşiv kararı aç.
-- **Gecikme:** B2 PR'ında admin yazma uçları için baseline p95 ölçülür (e2e zamanlama betiği; sonuç PR açıklamasında). Sonraki her çeyrekte aynı betik
-  baseline'ın +25 ms üstüne çıkarsa ⇒ yazım yolunu gözden geçir.
-- **Yarım import:** haftalık `SELECT count(*) FROM audit_log s WHERE action='CSV_IMPORT_STARTED' AND NOT EXISTS (eşleşen CSV_IMPORTED aynı actor, sonraki 1 saat)`
-  > 0 ise incele (STARTED/IMPORTED eşleşme oranı < %100 ⇒ import akışı sessizce yarım kalıyor).
+- **Gecikme:** baseline (2026-09-21, B2 PR'ında ölçüldü, gerçek Postgres, `AdminVenuesService.update()` 200 çalıştırma): audit'siz p50 3.88 ms / p95 6.08 ms,
+  audit'li p50 4.59 ms / p95 10.32 ms (fark p95 +4.2 ms, gürültülü). Her çeyrekte aynı ölçüm tekrarlanır; audit'li p95 baseline'ın (10.32 ms) +25 ms üstüne (≈35 ms) çıkarsa ⇒ yazım yolunu gözden geçir.
+- **Yarım import:** haftalık `SELECT s.meta->>'importId' FROM audit_log s WHERE s.action='CSV_IMPORT_STARTED' AND s.createdAt < now() - interval '1 hour' AND NOT EXISTS (SELECT 1 FROM audit_log f WHERE f.action='CSV_IMPORTED' AND f.meta->>'importId' = s.meta->>'importId')` sonucu boş değilse incele. STARTED ve IMPORTED kayıtları ortak `importId` (uuid) taşır; eşleşme oranı < %100 ⇒ import sessizce yarım kalmış.
 - **Rol/yetki (Plan 4e):** prod DB rolü `audit_log` üzerinde INSERT+SELECT'e indirilir (trigger'a ek katman). Bu bir *eylem maddesi*, ADR varsayımı ihlali değildir;
   yapılmadan canlıya çıkılmaz.
 - **Tetik (post-hoc):** ilk gerçek güvenlik soruşturmasında kaydın cevaplayamadığı bir soru çıkarsa (örn. "kim sildi") ⇒ imzalı/harici (append-only obje deposu)

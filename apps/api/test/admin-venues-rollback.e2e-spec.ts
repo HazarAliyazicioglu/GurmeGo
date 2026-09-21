@@ -1,3 +1,4 @@
+import { AuditService } from "../src/audit/audit.service";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { VenuesRepository } from "../src/venues/venues.repository";
@@ -13,7 +14,7 @@ describe("AdminVenuesService.update — real rollback", () => {
   beforeAll(() => {
     prisma = new PrismaService();
     venuesRepository = new VenuesRepository(prisma as unknown as PrismaService);
-    adminVenuesService = new AdminVenuesService(prisma as unknown as PrismaService, new BoutiqueService(), venuesRepository);
+    adminVenuesService = new AdminVenuesService(prisma as unknown as PrismaService, new BoutiqueService(), venuesRepository, new AuditService());
   });
 
   afterEach(async () => {
@@ -49,7 +50,7 @@ describe("AdminVenuesService.update — real rollback", () => {
     // underlying Postgres error code nested in `meta.code` -- `23503` (foreign_key_violation) here
     // instead of `23505`. Verified empirically against the local Postgres stack.
     let caught: unknown;
-    await adminVenuesService.update(venue.id, { districtId: "00000000-0000-0000-0000-000000000000" }).catch((err) => {
+    await adminVenuesService.update(venue.id, { districtId: "00000000-0000-0000-0000-000000000000" }, "e2e-actor").catch((err) => {
       caught = err;
     });
     expect(caught).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);

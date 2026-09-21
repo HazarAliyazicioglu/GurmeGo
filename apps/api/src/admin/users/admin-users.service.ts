@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { Prisma, type UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuditService } from "../../audit/audit.service";
 
 const MVP_ASSIGNABLE_ROLES = ["curator"];
 
@@ -10,11 +11,17 @@ function isRecordNotFound(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025";
 }
 
+function userNotFound() {
+  const notFound = new NotFoundException({ error: { code: "USER_NOT_FOUND", message: "Kullanıcı bulunamadı" } });
+  notFound.message = "Kullanıcı bulunamadı";
+  return notFound;
+}
+
 @Injectable()
 export class AdminUsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
-  async assignRole(userId: string, role: string) {
+  async assignRole(userId: string, role: string, actorId: string) {
     if (!MVP_ASSIGNABLE_ROLES.includes(role)) {
       // The HTTP response body must stay exactly `{ error: { code, message } }` per
       // docs/api-spec.md (no top-level `message`), but NestJS's HttpException only
@@ -28,13 +35,25 @@ export class AdminUsersService {
       throw ex;
     }
     try {
-      return await this.prisma.user.update({ where: { id: userId }, data: { role: role.toUpperCase() as any } });
+      // Role change and its audit row commit together or not at all (ADR 006): if the audit write
+      // fails, the role is NOT changed (fail-closed).
+      return await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const existing = await tx.user.findUnique({ where: { id: userId }, select: { role: true } });
+        if (!existing) throw userNotFound();
+        const updated = await tx.user.update({ where: { id: userId }, data: { role: role.toUpperCase() as UserRole } });
+        await this.audit.record(tx, {
+          actorId,
+          action: "ROLE_ASSIGNED",
+          targetType: "User",
+          targetId: userId,
+          before: { role: existing.role },
+          after: { role: updated.role },
+        });
+        return updated;
+      });
     } catch (err) {
-      if (isRecordNotFound(err)) {
-        const notFound = new NotFoundException({ error: { code: "USER_NOT_FOUND", message: "Kullanıcı bulunamadı" } });
-        notFound.message = "Kullanıcı bulunamadı";
-        throw notFound;
-      }
+      // Race: the row vanished between findUnique and update.
+      if (isRecordNotFound(err)) throw userNotFound();
       throw err;
     }
   }

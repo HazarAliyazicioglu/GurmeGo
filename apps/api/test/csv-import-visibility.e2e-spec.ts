@@ -1,3 +1,4 @@
+import { AuditService } from "../src/audit/audit.service";
 import { PrismaClient } from "@prisma/client";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { VenuesRepository } from "../src/venues/venues.repository";
@@ -12,7 +13,7 @@ describe("CSV import -> GET /venues visibility", () => {
   beforeAll(() => {
     prisma = new PrismaService();
     const venuesRepository = new VenuesRepository(prisma as unknown as PrismaService);
-    adminVenuesService = new AdminVenuesService(prisma as unknown as PrismaService, new BoutiqueService(), venuesRepository);
+    adminVenuesService = new AdminVenuesService(prisma as unknown as PrismaService, new BoutiqueService(), venuesRepository, new AuditService());
   });
 
   afterEach(async () => {

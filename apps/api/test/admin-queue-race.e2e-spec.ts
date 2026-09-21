@@ -1,3 +1,4 @@
+import { AuditService } from "../src/audit/audit.service";
 import { PrismaClient } from "@prisma/client";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { VenuesRepository } from "../src/venues/venues.repository";
@@ -17,7 +18,7 @@ describe("AdminQueueService.approve/reject — concurrent calls on the same row"
   beforeAll(() => {
     prisma = new PrismaService();
     const venuesRepository = new VenuesRepository(prisma as unknown as PrismaService);
-    service = new AdminQueueService(prisma as unknown as PrismaService, venuesRepository);
+    service = new AdminQueueService(prisma as unknown as PrismaService, venuesRepository, new AuditService());
   });
 
   afterEach(async () => {

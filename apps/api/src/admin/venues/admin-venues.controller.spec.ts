@@ -26,11 +26,11 @@ const VALID_CREATE_PAYLOAD = {
 
 describe("AdminVenuesController (e2e) — RolesGuard", () => {
   let app: NestFastifyApplication;
-  let venues: { create: jest.Mock; update: jest.Mock; revert: jest.Mock; importRows: jest.Mock };
+  let venues: { create: jest.Mock; update: jest.Mock; revert: jest.Mock; importRows: jest.Mock; importWithAudit: jest.Mock };
   let csvImport: { parseRows: jest.Mock };
 
   beforeAll(async () => {
-    venues = { create: jest.fn(), update: jest.fn(), revert: jest.fn(), importRows: jest.fn() };
+    venues = { create: jest.fn(), update: jest.fn(), revert: jest.fn(), importRows: jest.fn(), importWithAudit: jest.fn() };
     csvImport = { parseRows: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
@@ -65,6 +65,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
     venues.update.mockReset();
     venues.revert.mockReset();
     venues.importRows.mockReset();
+    venues.importWithAudit.mockReset();
     csvImport.parseRows.mockReset();
   });
 
@@ -79,7 +80,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(venues.create).toHaveBeenCalledWith(expect.objectContaining({ name: "A", lat: 41.0, lng: 29.0 }));
+    expect(venues.create).toHaveBeenCalledWith(expect.objectContaining({ name: "A", lat: 41.0, lng: 29.0 }), "test-user");
   });
 
   it("rejects an invalid create payload with 400 before reaching the service", async () => {
@@ -105,7 +106,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(venues.update).toHaveBeenCalledWith(VENUE_ID, expect.objectContaining({ branchCount: 2 }));
+    expect(venues.update).toHaveBeenCalledWith(VENUE_ID, expect.objectContaining({ branchCount: 2 }), "test-user");
   });
 
   // Final whole-branch review finding: a lat-only (or lng-only) update payload used to reach
@@ -167,9 +168,9 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
   });
 
   describe("POST /admin/import", () => {
-    it("parses a real multipart CSV upload via @fastify/multipart and persists via importRows", async () => {
+    it("parses a real multipart CSV upload via @fastify/multipart and imports via importWithAudit (attributed to the authenticated actor)", async () => {
       csvImport.parseRows.mockReturnValue({ valid: [{ name: "A" }], errors: [] });
-      venues.importRows.mockResolvedValue({ created: 1, skipped: 0, rowErrors: [] });
+      venues.importWithAudit.mockResolvedValue({ created: 1, skipped: 0, rowErrors: [], createdVenueIds: ["v1"] });
 
       const csvContent = "name,districtSlug,category,priceRange,branchCount\nA,kadikoy,cafe,MODERATE,1\n";
       const boundary = "----gurmegoTestBoundary";
@@ -192,7 +193,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
 
       expect(res.statusCode).toBe(201);
       expect(csvImport.parseRows).toHaveBeenCalledWith(csvContent);
-      expect(venues.importRows).toHaveBeenCalledWith([{ name: "A" }]);
+      expect(venues.importWithAudit).toHaveBeenCalledWith([{ name: "A" }], 0, "test-user");
       expect(JSON.parse(res.payload)).toEqual({ created: 1, skipped: 0, errors: [] });
     });
 
@@ -217,7 +218,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
 
       expect(res.statusCode).toBe(400);
       expect(JSON.parse(res.payload).error.code).toBe("CSV_TOO_MANY_ROWS");
-      expect(venues.importRows).not.toHaveBeenCalled();
+      expect(venues.importWithAudit).not.toHaveBeenCalled();
     });
 
     it("returns 400 when no file part is present", async () => {
@@ -236,7 +237,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
 
       expect(res.statusCode).toBe(400);
       expect(csvImport.parseRows).not.toHaveBeenCalled();
-      expect(venues.importRows).not.toHaveBeenCalled();
+      expect(venues.importWithAudit).not.toHaveBeenCalled();
     });
   });
 });

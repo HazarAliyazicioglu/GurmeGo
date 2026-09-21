@@ -50,7 +50,7 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(service.assignRole).toHaveBeenCalledWith(USER_ID, "curator");
+    expect(service.assignRole).toHaveBeenCalledWith(USER_ID, "curator", "test-user");
   });
 
   // Same ZodValidationPipe convention as every other admin endpoint: a malformed body is rejected at the
