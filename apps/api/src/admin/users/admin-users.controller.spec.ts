@@ -53,6 +53,24 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
     expect(service.assignRole).toHaveBeenCalledWith(USER_ID, "curator");
   });
 
+  // Same ZodValidationPipe convention as every other admin endpoint: a malformed body is rejected at the
+  // edge with the standard VALIDATION_ERROR envelope, before the service sees it.
+  it.each([{ payload: {} }, { payload: { role: 123 } }, { payload: { role: "" } }, { payload: { role: null } }])(
+    "rejects the malformed body $payload with 400 VALIDATION_ERROR before reaching the service",
+    async ({ payload }) => {
+      const res = await app.inject({
+        method: "PUT",
+        url: `/admin/users/${USER_ID}/roles`,
+        headers: { "x-test-role": "admin" },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+      expect(service.assignRole).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects a non-UUID id with 400 before reaching the service", async () => {
     const res = await app.inject({
       method: "PUT",
