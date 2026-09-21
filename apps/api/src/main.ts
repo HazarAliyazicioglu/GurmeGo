@@ -2,6 +2,8 @@ import { HttpAdapterHost, NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import fastifyMultipart from "@fastify/multipart";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyCompress from "@fastify/compress";
 import { writeFileSync } from "fs";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/all-exceptions.filter";
@@ -49,6 +51,9 @@ export function createAdapter(): FastifyAdapter {
   return new FastifyAdapter({ trustProxy: resolveTrustProxy(process.env.TRUST_PROXY_HOPS) });
 }
 
+// JSON smaller than this is not worth the CPU of compressing it.
+const COMPRESSION_THRESHOLD_BYTES = 1024;
+
 export async function configureApp(app: NestFastifyApplication): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
   // CSV import (`POST /admin/import`) is the only multipart consumer -- a curator-uploaded venue
@@ -56,6 +61,15 @@ export async function configureApp(app: NestFastifyApplication): Promise<void> {
   // arbitrarily large upload entirely in memory before any Zod validation runs. 10 MB comfortably
   // covers this MVP's CSV use case (tens of thousands of rows) with headroom.
   await app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+  // Baseline security headers (nosniff, frame-ancestors, HSTS, referrer-policy, ...). CSP only in
+  // production: Swagger UI (dev-only) needs inline scripts. CORP is `cross-origin` on purpose -- the web
+  // and admin apps live on other origins and read this JSON via CORS; helmet's default `same-origin`
+  // would be wrong for an API.
+  await app.register(fastifyHelmet, {
+    contentSecurityPolicy: process.env.NODE_ENV === "production",
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  });
+  await app.register(fastifyCompress, { threshold: COMPRESSION_THRESHOLD_BYTES });
   app.setGlobalPrefix("v1", { exclude: ["health"] });
 
   if (process.env.NODE_ENV === "production" && (!process.env.RATE_LIMIT_READ_PER_MINUTE || !process.env.RATE_LIMIT_REPORT_PER_DAY)) {

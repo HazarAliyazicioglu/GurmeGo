@@ -2,6 +2,8 @@ describe("RATE_LIMITS — env override", () => {
   const original = process.env.RATE_LIMIT_READ_PER_MINUTE;
   const originalReport = process.env.RATE_LIMIT_REPORT_PER_DAY;
   const originalWrite = process.env.RATE_LIMIT_WRITE_PER_MINUTE;
+  const originalAdmin = process.env.RATE_LIMIT_ADMIN_PER_MINUTE;
+  const originalAdminImport = process.env.RATE_LIMIT_ADMIN_IMPORT_PER_HOUR;
 
   afterEach(() => {
     // `process.env.X = undefined` stores the literal string "undefined", not an absent var --
@@ -15,6 +17,10 @@ describe("RATE_LIMITS — env override", () => {
     else process.env.RATE_LIMIT_REPORT_PER_DAY = originalReport;
     if (originalWrite === undefined) delete process.env.RATE_LIMIT_WRITE_PER_MINUTE;
     else process.env.RATE_LIMIT_WRITE_PER_MINUTE = originalWrite;
+    if (originalAdmin === undefined) delete process.env.RATE_LIMIT_ADMIN_PER_MINUTE;
+    else process.env.RATE_LIMIT_ADMIN_PER_MINUTE = originalAdmin;
+    if (originalAdminImport === undefined) delete process.env.RATE_LIMIT_ADMIN_IMPORT_PER_HOUR;
+    else process.env.RATE_LIMIT_ADMIN_IMPORT_PER_HOUR = originalAdminImport;
     jest.resetModules();
   });
 
@@ -89,5 +95,42 @@ describe("RATE_LIMITS — env override", () => {
     jest.resetModules();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     expect(require("./rate-limit.config").RATE_LIMITS.write.limit).toBe(7);
+  });
+
+  // docs/DENETIM-RAPORU.md Orta: admin endpoints had no rate limit (a hijacked curator account or a
+  // UI bug that keeps firing requests had nothing to stop it).
+  it("has an admin tier: 60 per minute, shared across the admin API, when unset", () => {
+    delete process.env.RATE_LIMIT_ADMIN_PER_MINUTE;
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { RATE_LIMITS } = require("./rate-limit.config");
+    expect(RATE_LIMITS.admin.limit).toBe(60);
+    expect(RATE_LIMITS.admin.windowSeconds).toBe(60);
+  });
+
+  it("has a much stricter admin-import tier: 5 per hour when unset", () => {
+    delete process.env.RATE_LIMIT_ADMIN_IMPORT_PER_HOUR;
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { RATE_LIMITS } = require("./rate-limit.config");
+    expect(RATE_LIMITS.adminImport.limit).toBe(5);
+    expect(RATE_LIMITS.adminImport.windowSeconds).toBe(3600);
+  });
+
+  it("uses env values for the admin tiers when set", () => {
+    process.env.RATE_LIMIT_ADMIN_PER_MINUTE = "30";
+    process.env.RATE_LIMIT_ADMIN_IMPORT_PER_HOUR = "2";
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { RATE_LIMITS } = require("./rate-limit.config");
+    expect(RATE_LIMITS.admin.limit).toBe(30);
+    expect(RATE_LIMITS.adminImport.limit).toBe(2);
+  });
+
+  it("throws at module load for an invalid admin limit (a NaN limit would silently disable the guard)", () => {
+    process.env.RATE_LIMIT_ADMIN_PER_MINUTE = "lots";
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    expect(() => require("./rate-limit.config")).toThrow(/RATE_LIMIT_ADMIN_PER_MINUTE/);
   });
 });

@@ -25,10 +25,13 @@ describe("real application setup (createAdapter + configureApp)", () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(createAdapter());
     await configureApp(app);
-    // Must be registered before init(): Fastify refuses hooks once the instance is ready.
-    app.getHttpAdapter().getInstance().addHook("onRequest", async (req) => {
+    // Must be registered before init(): Fastify refuses hooks/routes once the instance is ready.
+    const fastify = app.getHttpAdapter().getInstance();
+    fastify.addHook("onRequest", async (req) => {
       seenIps.push(req.ip);
     });
+    // A response big enough to cross the compression threshold, independent of what is in the DB.
+    fastify.get("/__probe/big", async () => ({ items: Array.from({ length: 400 }, (_, i) => ({ id: i, name: `venue-${i}` })) }));
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   }
@@ -71,5 +74,58 @@ describe("real application setup (createAdapter + configureApp)", () => {
       headers: { "x-forwarded-for": "9.9.9.9, 1.2.3.4" },
     });
     expect(seenIps).toEqual(["1.2.3.4"]);
+  });
+
+  it("sends baseline security headers on every response (helmet)", async () => {
+    await boot(undefined);
+    const res = await app.inject({ method: "GET", url: "/v1/districts" });
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["x-frame-options"]).toBeDefined();
+    expect(res.headers["referrer-policy"]).toBeDefined();
+    expect(res.headers["strict-transport-security"]).toBeDefined();
+    // Web and admin live on other origins and read this JSON via CORS; the default `same-origin` CORP would be wrong here.
+    expect(res.headers["cross-origin-resource-policy"]).toBe("cross-origin");
+    expect(res.headers["x-powered-by"]).toBeUndefined();
+  });
+
+  it("keeps CORS working end-to-end alongside helmet and compression (real preflight)", async () => {
+    await boot(undefined);
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/v1/favorites-probe",
+      headers: { origin: "http://localhost:3000", "access-control-request-method": "DELETE" },
+    });
+    expect(res.statusCode).toBeGreaterThanOrEqual(200);
+    expect(res.statusCode).toBeLessThan(300);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    expect(String(res.headers["access-control-allow-methods"])).toContain("DELETE");
+  });
+
+  it("gzips a large response when the client accepts it, and the body round-trips to identical JSON", async () => {
+    await boot(undefined);
+    const plain = await app.inject({ method: "GET", url: "/__probe/big", headers: { "accept-encoding": "identity" } });
+    const gz = await app.inject({ method: "GET", url: "/__probe/big", headers: { "accept-encoding": "gzip" } });
+    expect(gz.headers["content-encoding"]).toBe("gzip");
+    expect(String(gz.headers["vary"]).toLowerCase()).toContain("accept-encoding");
+    expect(Buffer.byteLength(gz.rawPayload)).toBeLessThan(Buffer.byteLength(plain.rawPayload));
+    expect(JSON.parse(require("zlib").gunzipSync(gz.rawPayload).toString("utf-8"))).toEqual(plain.json());
+  });
+
+  it("does not compress a small response", async () => {
+    await boot(undefined);
+    const res = await app.inject({ method: "GET", url: "/health", headers: { "accept-encoding": "gzip" } });
+    expect(res.headers["content-encoding"]).toBeUndefined();
+  });
+
+  it("keeps helmet and CORS headers on a compressed response", async () => {
+    await boot(undefined);
+    const res = await app.inject({
+      method: "GET",
+      url: "/__probe/big",
+      headers: { "accept-encoding": "gzip", origin: "http://localhost:3000" },
+    });
+    expect(res.headers["content-encoding"]).toBe("gzip");
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
   });
 });

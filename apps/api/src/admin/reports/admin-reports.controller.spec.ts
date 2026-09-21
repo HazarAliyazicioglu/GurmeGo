@@ -2,6 +2,7 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AdminReportsController } from "./admin-reports.controller";
 import { AdminReportsService } from "./admin-reports.service";
+import { CACHE_STORE } from "../../common/cache-store.interface";
 
 describe("AdminReportsController (e2e) — RolesGuard", () => {
   let app: NestFastifyApplication;
@@ -12,7 +13,7 @@ describe("AdminReportsController (e2e) — RolesGuard", () => {
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminReportsController],
-      providers: [{ provide: AdminReportsService, useValue: service }],
+      providers: [{ provide: AdminReportsService, useValue: service }, { provide: CACHE_STORE, useValue: { increment: jest.fn().mockResolvedValue(1) } }],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());

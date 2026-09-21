@@ -2,6 +2,7 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AdminUsersController } from "./admin-users.controller";
 import { AdminUsersService } from "./admin-users.service";
+import { CACHE_STORE } from "../../common/cache-store.interface";
 
 const USER_ID = "d290f1ee-6c54-4b01-90e6-d701748f0853";
 
@@ -14,7 +15,7 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminUsersController],
-      providers: [{ provide: AdminUsersService, useValue: service }],
+      providers: [{ provide: AdminUsersService, useValue: service }, { provide: CACHE_STORE, useValue: { increment: jest.fn().mockResolvedValue(1) } }],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());

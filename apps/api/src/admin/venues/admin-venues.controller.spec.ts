@@ -1,9 +1,11 @@
+import { BadRequestException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import fastifyMultipart from "@fastify/multipart";
 import { AdminVenuesController } from "./admin-venues.controller";
 import { AdminVenuesService } from "./admin-venues.service";
 import { CsvImportService } from "./csv-import.service";
+import { CACHE_STORE } from "../../common/cache-store.interface";
 
 const VENUE_ID = "d290f1ee-6c54-4b01-90e6-d701748f0851";
 const VERSION_ID = "d290f1ee-6c54-4b01-90e6-d701748f0852";
@@ -34,6 +36,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminVenuesController],
       providers: [
+        { provide: CACHE_STORE, useValue: { increment: jest.fn().mockResolvedValue(1) } },
         { provide: AdminVenuesService, useValue: venues },
         { provide: CsvImportService, useValue: csvImport },
       ],
@@ -191,6 +194,30 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
       expect(csvImport.parseRows).toHaveBeenCalledWith(csvContent);
       expect(venues.importRows).toHaveBeenCalledWith([{ name: "A" }]);
       expect(JSON.parse(res.payload)).toEqual({ created: 1, skipped: 0, errors: [] });
+    });
+
+    it("answers 400 CSV_TOO_MANY_ROWS and performs ZERO writes when the file is over the row cap", async () => {
+      csvImport.parseRows.mockRejectedValue(
+        new BadRequestException({ error: { code: "CSV_TOO_MANY_ROWS", message: "En fazla 2000 satır" } }),
+      );
+      const boundary = "----gurmegoTestBoundaryBig";
+      const body =
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="big.csv"\r\n` +
+        `Content-Type: text/csv\r\n\r\n` +
+        `name\r\n` +
+        `--${boundary}--\r\n`;
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/admin/import",
+        headers: { "x-test-role": "curator", "content-type": `multipart/form-data; boundary=${boundary}` },
+        payload: body,
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.payload).error.code).toBe("CSV_TOO_MANY_ROWS");
+      expect(venues.importRows).not.toHaveBeenCalled();
     });
 
     it("returns 400 when no file part is present", async () => {

@@ -3,6 +3,7 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AdminQueueController } from "./admin-queue.controller";
 import { AdminQueueService } from "./admin-queue.service";
+import { CACHE_STORE } from "../../common/cache-store.interface";
 
 const QUEUE_ITEM_ID = "d290f1ee-6c54-4b01-90e6-d701748f0854";
 
@@ -32,7 +33,7 @@ describe("AdminQueueController (e2e) — RolesGuard", () => {
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminQueueController],
-      providers: [{ provide: AdminQueueService, useValue: service }],
+      providers: [{ provide: AdminQueueService, useValue: service }, { provide: CACHE_STORE, useValue: { increment: jest.fn().mockResolvedValue(1) } }],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());

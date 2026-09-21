@@ -11,6 +11,8 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@fastify/compress": "^9.2.0",
+    "@fastify/helmet": "^13.1.1",
     "@fastify/multipart": "^10.1.1",
     "@fastify/static": "^10.1.4",
     "@gurmego/shared": "workspace:*",

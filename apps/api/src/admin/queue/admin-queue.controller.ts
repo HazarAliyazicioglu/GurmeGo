@@ -3,11 +3,14 @@ import { AdminQueueListQuerySchema } from "@gurmego/shared";
 import { AuthenticatedRequest } from "../../auth/jwt-auth.guard";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
+import { RateLimit, RateLimitGuard } from "../../common/rate-limit.guard";
+import { RATE_LIMITS } from "../../common/rate-limit.config";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { AdminQueueService } from "./admin-queue.service";
 
 @Controller("admin/queue")
-@UseGuards(RolesGuard)
+@UseGuards(RolesGuard, RateLimitGuard)
+@RateLimit(RATE_LIMITS.admin.limit, RATE_LIMITS.admin.windowSeconds, { bucket: "admin" })
 @Roles("curator", "admin")
 export class AdminQueueController {
   constructor(private queue: AdminQueueService) {}

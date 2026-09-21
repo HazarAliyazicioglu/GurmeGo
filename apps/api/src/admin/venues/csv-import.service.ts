@@ -1,6 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { parse } from "csv-parse";
 import { CsvVenueImportRowSchema, type CsvVenueImportRow } from "@gurmego/shared";
+import { CSV_IMPORT_LIMITS } from "./csv-import.config";
 
 export type CsvRow = CsvVenueImportRow;
 
@@ -26,7 +27,9 @@ export class CsvImportService {
         // export commonly prepends one; without this option the first column's key becomes the literal
         // "﻿name" instead of "name", so every row in an otherwise-valid Excel export fails
         // validation with a spurious "name zorunlu" error.
-        parse(csv, { columns: true, skip_empty_lines: true, bom: true }, (err, result: Record<string, string>[]) => {
+        // `to: maxRows + 1` makes the parser stop after one row past the cap instead of walking the whole
+        // file: a giant upload is rejected almost instantly, not after being fully parsed.
+        parse(csv, { columns: true, skip_empty_lines: true, bom: true, to: CSV_IMPORT_LIMITS.maxRows + 1 }, (err, result: Record<string, string>[]) => {
           if (err) reject(err);
           else resolve(result);
         });
@@ -40,6 +43,18 @@ export class CsvImportService {
       // message.
       console.error("CSV parse failed:", err);
       return { valid: [], errors: [{ row: 0, message: "CSV dosyası ayrıştırılamadı: dosya biçimi geçersiz" }] };
+    }
+
+    // The cap check is deliberately OUTSIDE the try/catch above (which converts parser failures to a
+    // file-level row error) -- exceeding the cap must reject the whole file with a 400, and by throwing
+    // here, before anything is validated or written, a rejected file causes zero DB writes.
+    if (records.length > CSV_IMPORT_LIMITS.maxRows) {
+      throw new BadRequestException({
+        error: {
+          code: "CSV_TOO_MANY_ROWS",
+          message: `CSV en fazla ${CSV_IMPORT_LIMITS.maxRows} satır içerebilir; dosyayı bölüp tekrar yükleyin`,
+        },
+      });
     }
 
     const valid: CsvImportRow[] = [];
