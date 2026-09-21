@@ -73,6 +73,18 @@ gerekçe bu plana not düşülür. Sonuç tablosu PR açıklamasında.
 Rol atama ucu `ZodValidationPipe` kalıbına (`AssignRoleSchema` → `packages/shared`); `RateLimitGuard` ve `ZodValidationPipe` için izole birim testleri;
 `app.e2e-spec.ts` eski yorumu güncellenir (A1 ile aynı dosya, A1'de zaten yeniden yazılır).
 
+## PR A — uygulama notları (plandan sapmalar ve ölçümler)
+- **A1 kapsam eklemesi (kanıtla):** gerçek-kurulum e2e, framework'ün ürettiği hataların (eşleşmeyen rota 404, oversized gövde, Fastify 4xx — multipart "file too large" **500'e düşüyordu**)
+  `{ error: { code, message } }` zarfında olmadığını yakaladı. `AllExceptionsFilter` bunları sarar; bilerek fırlatılan zarflı hatalar dokunulmadan geçer. `docs/api-spec.md` güncellendi.
+- **Test ortamı notu:** jest 29, `@fastify/static` zincirindeki ESM-only bir transitive'i ayrıştıramıyor (Nest `require` hatasını yutup "package is missing" diyor). Gerçek-kurulum e2e bu yüzden
+  production konfigürasyonuyla (Swagger kapalı) koşar; dev Swagger yolu canlı boot probe'uyla kanıtlanır. **Nest 12 (ESM-only) kararı için kanıt:** test koşucusu göçü (Vitest) gerektirecek.
+- **A5:** `RolesGuard` → `RateLimitGuard` sırası; yansıtma testi `AdminModule` grafiğini gezer (yeni admin controller limitsiz çıkamaz). Ortak `RateLimitModule` eklendi; `parsePositiveIntEnv` → `common/env.util.ts` (2 kopya kaldırıldı).
+- **A7 ölçüm sonucu (rolled-back transaction, test DB):** 5k satır: Q1 0.605→0.036 ms, Q2 0.401→0.045 ms, Q3 0.244→0.302 ms (gürültü). **50k satır:** Q1 7.703→0.072 ms, Q2 4.548→0.046 ms, Q3 2.919→0.175 ms.
+  **Eklendi:** `(status, districtId, createdAt DESC, id DESC)`. **Eklenmedi:** `(status, category)` — yalnız ilçesiz kategori sorgusunu iyileştiriyor (5.9→3.8 ms @50k), uygulama her zaman `districtId` gönderiyor.
+  **Tuzak:** `prisma migrate dev` PostGIS GiST `Venue_location_idx`'i "drift" sanıp `DROP INDEX` önerdi; migration'dan elle çıkarıldı, test ile korunuyor. `migration_lock.toml` ilk kez izlendi (Prisma standardı).
+  Kalan not: `Venue_status_idx`, bileşik indeksin öneki olduğundan artık gereksiz olabilir; kaldırma ayrı iş (yazma maliyeti/geri dönüş ölçülmeden dokunulmadı).
+- **A8:** `AssignRoleSchema` `packages/shared`'da; hangi rolün atanabildiği kuralı serviste kaldı.
+
 ---
 # PR B — `feat/api-audit-log` (PR A merge edildikten sonra; ADR 006 v2)
 

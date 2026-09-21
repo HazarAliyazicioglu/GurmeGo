@@ -31,6 +31,10 @@ bildirimi (§4) var.
 
 HTTP kodları: 400 validasyon, 401 auth yok, 403 rol yetersiz, 404, 409 çakışma (ör. çift puan), 422 iş kuralı ihlali, 429 rate limit.
 
+**Her** hata gövdesi bu zarftadır — uygulamanın bilerek fırlattığı hatalar da, framework'ün ürettikleri de (eşleşmeyen rota, çok büyük gövde, desteklenmeyen medya tipi, Fastify 4xx'leri). Framework hatalarında `code` durumdan türetilir: `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `UNPROCESSABLE_ENTITY`, `RATE_LIMITED`; karşılığı olmayan durum `HTTP_<status>` olur. Beklenmeyen sunucu hatası `INTERNAL_ERROR` (ayrıntı sızdırılmaz).
+
+Tüm yanıtlarda güvenlik başlıkları (`X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security`, `Referrer-Policy`, `Cross-Origin-Resource-Policy: cross-origin`) bulunur; CSP yalnız production'da. 1 KiB üstü yanıtlar `Accept-Encoding`'e göre gzip/br ile sıkıştırılır. CORS izinli metodlar: `GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS`.
+
 ### Sayfalama (cursor/keyset)
 
 İstek: `?limit=20&cursor=<opaque>` · Yanıt zarfı:
@@ -86,7 +90,7 @@ Tek NestJS app içinde; ayrı servis yok (MVP kararı).
 | POST | `/admin/queue/:id/approve` · `/reject` | Onay → Venue'ye uygula + VenueVersion + `verified_at` güncelle |
 | POST | `/admin/venues` · PUT `/admin/venues/:id` | Manuel kürasyon CRUD |
 | POST | `/admin/venues/:id/revert/:versionId` | Versiyon geri alma (FR-MV-05) |
-| POST | `/admin/import` | CSV toplu import (FR-AP-02); satır bazlı hata raporu döner |
+| POST | `/admin/import` | CSV toplu import (FR-AP-02); satır bazlı hata raporu döner. En fazla `CSV_IMPORT_MAX_ROWS` (varsayılan 2000) satır: aşımda dosya **tümden** reddedilir, `400 CSV_TOO_MANY_ROWS`, hiçbir kayıt yazılmaz. Ayrıca kendi kotası var (bkz. §6) |
 | GET | `/admin/reports/data-quality` | İlçe başına mekan, bayat kayıtlar (verified_at > N gün), kaynak dağılımı (FR-AP-03) |
 | GET | `/admin/reports/rating-anomalies` | **Faz 2, MVP'de yok.** Şüpheli puanlama desenleri (NFR-10, [rule-engine.md](rule-engine.md)) |
 | PUT | `/admin/users/:id/roles` | Rol atama: `curator` (MVP); `approved_rater` **Faz 2** (FR-AP-04) |
@@ -100,9 +104,14 @@ Değerler config'te (`RATE_LIMIT_*` env), başlangıç seti:
 |---|---|---|
 | Okuma uçları | 100 istek/dk | IP |
 | Bilgi yanlış bildirimi (MVP) | 10/gün | IP (kimlik gerektirmez) |
+| Favori yazma uçları (liste oluştur/mekan ekle-çıkar) | 20/dk | IP (`RATE_LIMIT_WRITE_PER_MINUTE`) |
+| **Tüm admin uçları** (`/admin/**`) | 60/dk, **tek ortak kova** | IP (`RATE_LIMIT_ADMIN_PER_MINUTE`) — uç başına değil, admin API genelinde toplam |
+| `POST /admin/import` | 5/saat, **ayrı kova** | IP (`RATE_LIMIT_ADMIN_IMPORT_PER_HOUR`) — genel admin kovasını harcamaz |
 | Yorum yazma (**Faz 2**) | 5/saat | kullanıcı |
 | Gurme Puanı (**Faz 2**) | 20/gün | kullanıcı |
 | Öneri/düzeltme (**Faz 2**) | 10/gün | kullanıcı |
 | NL arama (**Faz 2**, `/search`) | 30/gün | kullanıcı (anonim: 10/gün IP) — AI maliyet disiplini (NFR-05) |
 
 Aşımda `429` + `Retry-After` header. Kural gerekçeleri: [rule-engine.md](rule-engine.md).
+
+**Anahtar yalnız `req.ip`'dir.** `X-Forwarded-For` başlığı hiçbir koşulda doğrudan okunmaz; Fastify `req.ip`'yi `TRUST_PROXY_HOPS`'a göre türetir (yoksa proxy güvenilmez, başlık yok sayılır). Yetkisiz/yetkisiz-rol istekler admin kovasını harcamaz (rol kontrolü kotadan önce çalışır). Ek üst sınırlar: `FAVORITES_MAX_LISTS_PER_USER` (20), `FAVORITES_MAX_VENUES_PER_LIST` (200), `CSV_IMPORT_MAX_ROWS` (2000).
