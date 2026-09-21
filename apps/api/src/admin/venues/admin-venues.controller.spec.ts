@@ -221,6 +221,29 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
       expect(venues.importWithAudit).not.toHaveBeenCalled();
     });
 
+    it("counts only ROW-level parse errors towards the audited row count (a file-level error is row 0, not a row)", async () => {
+      csvImport.parseRows.mockReturnValue({
+        valid: [{ name: "A" }],
+        errors: [{ row: 0, message: "CSV dosyası ayrıştırılamadı" }, { row: 3, message: "name zorunlu" }],
+      });
+      venues.importWithAudit.mockResolvedValue({ created: 1, skipped: 0, rowErrors: [], createdVenueIds: ["v1"] });
+      const boundary = "----gurmegoTestBoundaryRow0";
+      const body =
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="v.csv"\r\n` +
+        `Content-Type: text/csv\r\n\r\n` +
+        `name\r\n` +
+        `--${boundary}--\r\n`;
+      const res = await app.inject({
+        method: "POST",
+        url: "/admin/import",
+        headers: { "x-test-role": "curator", "content-type": `multipart/form-data; boundary=${boundary}` },
+        payload: body,
+      });
+      expect(res.statusCode).toBe(201);
+      expect(venues.importWithAudit).toHaveBeenCalledWith([{ name: "A" }], 1, "test-user");
+    });
+
     it("returns 400 when no file part is present", async () => {
       const boundary = "----gurmegoTestBoundaryEmpty";
       const body = `--${boundary}--\r\n`;

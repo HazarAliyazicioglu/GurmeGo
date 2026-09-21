@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { AdminUsersService } from "./admin-users.service";
 
 // assignRole now runs in ONE transaction: read current role -> update -> audit row (ADR 006).
@@ -7,7 +6,9 @@ function harness(opts: { existing?: { role: string } | null; updateImpl?: jest.M
   const tx = {
     user: {
       findUnique: jest.fn().mockResolvedValue(existing),
-      update: opts.updateImpl ?? jest.fn().mockResolvedValue({ id: "u1", role: "CURATOR" }),
+      // conditional update ("only if the role is still what we read") -- the race guard, same pattern as the queue
+      updateMany: opts.updateImpl ?? jest.fn().mockResolvedValue({ count: 1 }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "u1", role: "CURATOR" }),
     },
   };
   const prisma = { $transaction: jest.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) } as any;
@@ -21,7 +22,7 @@ describe("AdminUsersService.assignRole", () => {
 
     const result = await service.assignRole("u1", "curator", "admin-1");
 
-    expect(tx.user.update).toHaveBeenCalledWith({ where: { id: "u1" }, data: { role: "CURATOR" } });
+    expect(tx.user.updateMany).toHaveBeenCalledWith({ where: { id: "u1", role: "USER" }, data: { role: "CURATOR" } });
     expect(result.role).toBe("CURATOR");
     expect(audit.record).toHaveBeenCalledTimes(1);
     expect(audit.record).toHaveBeenCalledWith(tx, {
@@ -52,21 +53,14 @@ describe("AdminUsersService.assignRole", () => {
       status: 404,
       message: "Kullanıcı bulunamadı",
     });
-    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
     expect(audit.record).not.toHaveBeenCalled();
   });
 
-  it("still maps a P2025 from update() (row deleted between read and write) to the same clean 404", async () => {
-    const p2025 = new Prisma.PrismaClientKnownRequestError("record not found", { code: "P2025", clientVersion: "5.22.0" });
-    const { service } = harness({ updateImpl: jest.fn().mockRejectedValue(p2025) });
-    try {
-      await service.assignRole("u1", "curator", "admin-1");
-      throw new Error("expected assignRole to throw");
-    } catch (err: any) {
-      expect(err.getResponse()).toEqual({ error: { code: "USER_NOT_FOUND", message: "Kullanıcı bulunamadı" } });
-      expect(err.getResponse().message).toBeUndefined();
-      expect(err.message).toBe("Kullanıcı bulunamadı");
-    }
+  it("answers a clean 409 and writes NO audit row when the role changed between read and write (lost the race)", async () => {
+    const { service, audit } = harness({ updateImpl: jest.fn().mockResolvedValue({ count: 0 }) });
+    await expect(service.assignRole("u1", "curator", "admin-1")).rejects.toMatchObject({ status: 409 });
+    expect(audit.record).not.toHaveBeenCalled();
   });
 
   it("is fail-closed: an audit failure propagates so the surrounding transaction rolls back", async () => {

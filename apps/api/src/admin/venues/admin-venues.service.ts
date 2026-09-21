@@ -112,6 +112,8 @@ export class AdminVenuesService {
   //      already happened, so a failure here is logged, not surfaced. The STARTED record still proves the attempt,
   //      and STARTED-without-IMPORTED (same importId) is how an import that died half-way is found.
   async importWithAudit(rows: CsvImportRow[], schemaErrorCount: number, actorId: string) {
+    // Nothing valid to import (e.g. a malformed file): there is no effect to record, so no audit noise either.
+    if (rows.length === 0) return { created: 0, skipped: 0, rowErrors: [], createdVenueIds: [] };
     const importId = randomUUID();
     await this.prisma.$transaction((tx: Prisma.TransactionClient) =>
       this.audit.record(tx, {

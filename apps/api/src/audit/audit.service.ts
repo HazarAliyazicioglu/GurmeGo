@@ -11,11 +11,12 @@ export type AuditEntry = {
   meta?: Prisma.InputJsonValue;
 };
 
-// The ONLY write path to `audit_log` (ADR 006 v2). It takes a `Prisma.TransactionClient` -- not the plain
-// PrismaService -- so that "the audit row is written in the same transaction as the action it records" is
-// enforced by the type system: callers cannot write a record outside a transaction by accident, and a
-// failure here rolls the whole admin action back (fail-closed). Append-only itself is enforced by a database
-// trigger, not by this class.
+// The ONLY write path to `audit_log` (ADR 006 v2). The parameter is typed `Prisma.TransactionClient` and every caller
+// passes the `tx` of the transaction that performs the audited action, so the row commits (or rolls back) together
+// with it, and a failure here rolls the whole admin action back (fail-closed). NOTE: this is a convention plus a
+// signal, not a compile-time guarantee -- `TransactionClient` is structurally a subset of the plain client, so a
+// PrismaService would also type-check. The e2e suite (test/admin-audit.e2e-spec.ts) is what proves atomicity.
+// Append-only itself is enforced by a database trigger, not by this class.
 //
 // PII boundary (ADR 006): only ids, role names, minimal field-level diffs and counters. Never e-mail, name,
 // user coordinates, free-text venue content or CSV row contents.

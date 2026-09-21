@@ -339,6 +339,16 @@ describe("AdminVenuesService.importWithAudit", () => {
     expect(JSON.stringify([started, finished])).not.toContain("Secret Cafe");
   });
 
+  // Codex review MINOR: a malformed file yields no valid rows; there is no effect to record and no real row
+  // count to report, so it must not leave STARTED/IMPORTED noise behind.
+  it("writes NO audit records and imports nothing when there are no valid rows", async () => {
+    const { service, record, prisma } = setup();
+    const result = await service.importWithAudit([], 1, "curator-1");
+    expect(result).toEqual({ created: 0, skipped: 0, rowErrors: [], createdVenueIds: [] });
+    expect(record).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("does not run the import at all when the STARTED record cannot be written (fail-closed)", async () => {
     const { service, calls, prisma } = setup({ auditImpl: jest.fn().mockRejectedValue(new Error("audit down")) });
     await expect(service.importWithAudit([row], 0, "curator-1")).rejects.toThrow("audit down");

@@ -16,7 +16,7 @@ büyük ölçekli üründe standart denetim beklentisi; ele geçirilmiş bir adm
 ## Karar
 Seçenek 1, şu sözleşmeyle:
 - **Atomiklik yalnız tek-kayıtlı işlemler için** (rol atama, mekan create/update/revert, kuyruk approve/reject): kayıt aynı `$transaction`'da; audit
-  INSERT'i başarısızsa ana işlem de geri alınır (**fail-closed**). `AuditService.record` yalnız `Prisma.TransactionClient` kabul eder.
+  INSERT'i başarısızsa ana işlem de geri alınır (**fail-closed**). `AuditService.record` parametresi `Prisma.TransactionClient`'tır ve tüm çağıranlar eylemi yapan `tx`'i geçirir (tip düzeyinde *zorunlu* değil: `TransactionClient` yapısal olarak düz istemcinin alt kümesidir; atomikliği e2e testleri kanıtlar).
 - **CSV import atomik DEĞİL** (satır-bazlı kısmi başarı mevcut ürün davranışı): *niyet-önce-etki* — işlemden önce `CSV_IMPORT_STARTED` (yazılamazsa import
   başlamaz), sonra `CSV_IMPORTED` özeti (yazılamazsa loglanır, girişim STARTED ile kanıtlı).
 - **Append-only DB'de zorlanır**: migration'daki `BEFORE UPDATE OR DELETE` + `BEFORE TRUNCATE` trigger'ı `RAISE EXCEPTION`. Uygulama koduna güvenilmez.
@@ -26,7 +26,7 @@ Seçenek 1, şu sözleşmeyle:
   saklanır, KVKK silme talebinde gerekçeli istisna olarak belgelenir — Plan 4d'de netleştirilir.)
 
 ## Kabul edilen bedel
-- **Tamper-evident değil:** DB süper-kullanıcısı trigger'ı kaldırıp kaydı değiştirebilir; imza/hash zinciri yok.
+- **Tamper-evident değil:** trigger'ı kapatabilenler kaydı değiştirebilir: süper-kullanıcı, **tablo sahibi** (`ALTER TABLE … DISABLE TRIGGER`, `DROP TRIGGER`) ve `session_replication_role = replica` ayarlayabilen roller. İmza/hash zinciri yok. Bu yüzden Plan 4e'de uygulamanın DB rolü tablonun sahibi OLMAMALI ve `audit_log` üzerinde yalnız INSERT+SELECT yetkisi taşımalı (bkz. sinyaller).
 - **Fail-closed:** audit yazılamıyorsa admin işlemi de başarısız olur (kullanılabilirlik pahasına hesap verebilirlik). Admin trafiği düşük olduğundan kabul.
 - Her tek-kayıtlı admin yazması +1 INSERT (aynı transaction; kilit süresi marjinal artar).
 - CSV audit'i atomik değil: STARTED var/IMPORTED yok durumu "yarım import"u temsil eder ve elle incelenmesi gerekir.
@@ -36,8 +36,8 @@ Seçenek 1, şu sözleşmeyle:
 - **Boyut:** ayda bir `SELECT reltuples::bigint FROM pg_class WHERE relname='audit_log'` > 1.000.000 ⇒ partition/arşiv kararı aç.
 - **Gecikme:** baseline (2026-09-21, B2 PR'ında ölçüldü, gerçek Postgres, `AdminVenuesService.update()` 200 çalıştırma): audit'siz p50 3.88 ms / p95 6.08 ms,
   audit'li p50 4.59 ms / p95 10.32 ms (fark p95 +4.2 ms, gürültülü). Her çeyrekte aynı ölçüm tekrarlanır; audit'li p95 baseline'ın (10.32 ms) +25 ms üstüne (≈35 ms) çıkarsa ⇒ yazım yolunu gözden geçir.
-- **Yarım import:** haftalık `SELECT s.meta->>'importId' FROM audit_log s WHERE s.action='CSV_IMPORT_STARTED' AND s.createdAt < now() - interval '1 hour' AND NOT EXISTS (SELECT 1 FROM audit_log f WHERE f.action='CSV_IMPORTED' AND f.meta->>'importId' = s.meta->>'importId')` sonucu boş değilse incele. STARTED ve IMPORTED kayıtları ortak `importId` (uuid) taşır; eşleşme oranı < %100 ⇒ import sessizce yarım kalmış.
-- **Rol/yetki (Plan 4e):** prod DB rolü `audit_log` üzerinde INSERT+SELECT'e indirilir (trigger'a ek katman). Bu bir *eylem maddesi*, ADR varsayımı ihlali değildir;
+- **Yarım import:** haftalık `SELECT s.meta->>'importId' FROM audit_log s WHERE s.action='CSV_IMPORT_STARTED' AND s."createdAt" < now() - interval '1 hour' AND NOT EXISTS (SELECT 1 FROM audit_log f WHERE f.action='CSV_IMPORTED' AND f.meta->>'importId' = s.meta->>'importId')` sonucu boş değilse incele. STARTED ve IMPORTED kayıtları ortak `importId` (uuid) taşır; eşleşme oranı < %100 ⇒ import sessizce yarım kalmış.
+- **Rol/yetki (Plan 4e):** prod DB rolü `audit_log`'un **sahibi olmaz**, yalnız INSERT+SELECT yetkisi taşır ve `session_replication_role` ayarlama yetkisi verilmez (trigger'a ek katman; sahip/superuser bypass'ını kapatır). Bu bir *eylem maddesi*, ADR varsayımı ihlali değildir;
   yapılmadan canlıya çıkılmaz.
 - **Tetik (post-hoc):** ilk gerçek güvenlik soruşturmasında kaydın cevaplayamadığı bir soru çıkarsa (örn. "kim sildi") ⇒ imzalı/harici (append-only obje deposu)
   sürüme geçiş ADR'si açılır. Bu erken uyarı değil, gerçekleşmiş başarısızlığın işaretidir; bilerek ayrı tutuldu.

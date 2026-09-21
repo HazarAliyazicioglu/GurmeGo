@@ -57,7 +57,9 @@ export class AdminVenuesController {
     }
     const buffer = await data.toBuffer();
     const { valid, errors } = await this.csvImport.parseRows(buffer.toString("utf-8"));
-    const { created, skipped, rowErrors } = await this.venues.importWithAudit(valid, errors.length, req.user!.id);
+    // A file-level parse failure is reported as row 0; it is not a data row, so it must not inflate the audited row count.
+    const rowLevelErrorCount = errors.filter((e) => e.row !== 0).length;
+    const { created, skipped, rowErrors } = await this.venues.importWithAudit(valid, rowLevelErrorCount, req.user!.id);
     return { created, skipped, errors: [...errors, ...rowErrors] };
   }
 }

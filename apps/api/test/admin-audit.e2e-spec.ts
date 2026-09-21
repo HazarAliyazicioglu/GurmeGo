@@ -83,6 +83,22 @@ describe("admin actions are audited atomically (real Postgres)", () => {
       expect(await rowsFor(missing)).toHaveLength(0);
     });
 
+    // Codex review MAJOR: an unlocked read-then-write let two concurrent assignments both record `before=USER`,
+    // although the second one actually changed CURATOR -> CURATOR. The recorded predecessor must be the truth.
+    it("never records the same predecessor twice under concurrent assignments", async () => {
+      const userId = await newUser();
+      const results = await Promise.allSettled([
+        users.assignRole(userId, "curator", "admin-a"),
+        users.assignRole(userId, "curator", "admin-b"),
+        users.assignRole(userId, "curator", "admin-c"),
+      ]);
+      expect(results.some((r) => r.status === "fulfilled")).toBe(true);
+      for (const r of results) if (r.status === "rejected") expect((r.reason as { status?: number }).status).toBe(409);
+      const rows = await rowsFor(userId);
+      expect(rows.filter((r) => (r.before as { role: string }).role === "USER")).toHaveLength(1);
+      expect(rows).toHaveLength(results.filter((r) => r.status === "fulfilled").length);
+    });
+
     it("is FAIL-CLOSED: if the audit write fails the role change is rolled back", async () => {
       const userId = await newUser();
       const failing = new AdminUsersService(prisma as unknown as PrismaService, new FailingAudit());
