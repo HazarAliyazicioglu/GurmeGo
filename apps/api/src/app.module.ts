@@ -1,5 +1,6 @@
 import { Module, Controller, Get } from "@nestjs/common";
 import { PrismaModule } from "./prisma/prisma.module";
+import { AuditModule } from "./audit/audit.module";
 import { DistrictsModule } from "./districts/districts.module";
 import { VenuesModule } from "./venues/venues.module";
 import { AuthModule } from "./auth/auth.module";
@@ -20,6 +21,7 @@ class HealthController {
 @Module({
   imports: [
     PrismaModule,
+    AuditModule,
     DistrictsModule,
     VenuesModule,
     AuthModule,

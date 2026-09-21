@@ -172,3 +172,35 @@ model RateLimitCounter {
 
   @@map("rate_limit_counters")
 }
+
+// ADR 006 (v2): append-only accountability log. Append-only is ENFORCED BY THE DATABASE (a trigger added in
+// the migration -- Prisma cannot model triggers), not by application code. `actorId` is deliberately a plain
+// string with NO foreign key: a FK with SET NULL would need an UPDATE (which the trigger forbids), and RESTRICT
+// would block user deletion.
+enum AuditAction {
+  ROLE_ASSIGNED
+  VENUE_CREATED
+  VENUE_UPDATED
+  VENUE_REVERTED
+  QUEUE_APPROVED
+  QUEUE_REJECTED
+  CSV_IMPORT_STARTED
+  CSV_IMPORTED
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  actorId    String?
+  action     AuditAction
+  targetType String
+  targetId   String?
+  before     Json?
+  after      Json?
+  meta       Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
