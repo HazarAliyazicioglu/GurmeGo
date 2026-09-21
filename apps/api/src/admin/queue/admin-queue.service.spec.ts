@@ -1,4 +1,4 @@
-import { auditStub } from "../../../test/support/audit-stub";
+import { auditStub } from "../../audit/audit-stub";
 import { AdminQueueService } from "./admin-queue.service";
 import { VenuesRepository } from "../../venues/venues.repository";
 import { PrismaService } from "../../prisma/prisma.service";

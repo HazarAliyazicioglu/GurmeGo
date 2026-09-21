@@ -1,4 +1,4 @@
-import { auditStub } from "../../../test/support/audit-stub";
+import { auditStub } from "../../audit/audit-stub";
 import { Prisma } from "@prisma/client";
 import { AdminVenuesService } from "./admin-venues.service";
 
