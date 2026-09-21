@@ -18,6 +18,22 @@ altyapısının satır satır incelenmesi sonucu ortaya çıkan **tüm bulgular�
 
 ---
 
+## Uygulama durumu (2026-09-21 güncel)
+
+**Kritik: 11/11 kapandı.** Son ikisi (Next.js ve Fastify güvenlik yükseltmesi) 2026-09-21'de PR #1 ve #2 ile
+birleşti. Prod bağımlılıklarında `pnpm audit`: 3 critical / 50 high → **0 critical / 0 high** (kalan 6 moderate).
+
+Bu rapordaki bir bulgu **yanlış** çıktı: "`@fastify/static` kullanılmıyor" (Genel §1.3). `@nestjs/swagger` 11, Swagger
+UI için onu peer olarak ister; kaldırılmadı, 10.x'e çıkarıldı. Yan kazanç: Next 15+ çıplak `fetch()`'i artık
+cache'lemediği için web §2 "`/[district]` süresiz cache" bilinen borcu da kapandı (yerine bilinçli TTL geldi).
+
+Yükseltme sırasında raporun öngörmediği bir regresyon bulundu ve düzeltildi: Fastify 5'in `@fastify/cors`
+varsayılanı `PUT/DELETE` preflight'ını düşürüyordu (web favori silme, admin rol atama kırılırdı).
+
+**Sıradaki:** Orta bulgular (28 madde) — paket paket: API sertleştirme → web → admin → mobil → altyapı.
+
+---
+
 ## Önce en can alıcı 5 şey (hızlı bakış)
 
 Aşağıdaki 5 madde, tüm rapordaki 50'den fazla bulgu arasında en çok dikkat gerektirenler. Detayları
