@@ -2,6 +2,7 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AdminUsersController } from "./admin-users.controller";
 import { AdminUsersService } from "./admin-users.service";
+import { CACHE_STORE } from "../../common/cache-store.interface";
 
 const USER_ID = "d290f1ee-6c54-4b01-90e6-d701748f0853";
 
@@ -14,7 +15,7 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminUsersController],
-      providers: [{ provide: AdminUsersService, useValue: service }],
+      providers: [{ provide: AdminUsersService, useValue: service }, { provide: CACHE_STORE, useValue: { increment: jest.fn().mockResolvedValue(1) } }],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -51,6 +52,24 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
     expect(res.statusCode).toBe(200);
     expect(service.assignRole).toHaveBeenCalledWith(USER_ID, "curator");
   });
+
+  // Same ZodValidationPipe convention as every other admin endpoint: a malformed body is rejected at the
+  // edge with the standard VALIDATION_ERROR envelope, before the service sees it.
+  it.each([{ payload: {} }, { payload: { role: 123 } }, { payload: { role: "" } }, { payload: { role: null } }])(
+    "rejects the malformed body $payload with 400 VALIDATION_ERROR before reaching the service",
+    async ({ payload }) => {
+      const res = await app.inject({
+        method: "PUT",
+        url: `/admin/users/${USER_ID}/roles`,
+        headers: { "x-test-role": "admin" },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+      expect(service.assignRole).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects a non-UUID id with 400 before reaching the service", async () => {
     const res = await app.inject({

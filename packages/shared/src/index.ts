@@ -7,3 +7,4 @@ export * from "./schemas/favorite-list.schema";
 export * from "./schemas/admin-queue.schema";
 export * from "./schemas/csv-venue-import.schema";
 export * from "./schemas/admin-export.schema";
+export * from "./schemas/admin-role.schema";

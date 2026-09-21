@@ -4,6 +4,7 @@ import { AdminQueueController } from "../src/admin/queue/admin-queue.controller"
 import { AdminQueueService } from "../src/admin/queue/admin-queue.service";
 import { PrismaModule } from "../src/prisma/prisma.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { CACHE_STORE } from "../src/common/cache-store.interface";
 
 // MINOR 2 fix (final whole-branch review): admin-queue.controller.spec.ts's existing e2e-style
 // tests bypass the REAL JwtAuthGuard entirely via an `x-test-role` header/hook -- they prove
@@ -66,7 +67,7 @@ describe("Real JwtAuthGuard + RolesGuard chain (e2e) — GET /admin/queue", () =
     const moduleRef = await Test.createTestingModule({
       imports: [PrismaModule, AuthModule],
       controllers: [AdminQueueController],
-      providers: [{ provide: AdminQueueService, useValue: service }],
+      providers: [{ provide: AdminQueueService, useValue: service }, { provide: CACHE_STORE, useValue: { increment: jest.fn().mockResolvedValue(1) } }],
     }).compile();
 
     prisma = moduleRef.get(PrismaService);

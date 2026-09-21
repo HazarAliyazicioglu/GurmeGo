@@ -98,6 +98,9 @@ model Venue {
 
   @@index([districtId])
   @@index([status])
+  // Serves the district list query (`status = 'PUBLISHED' AND districtId = ? ORDER BY createdAt DESC, id DESC`,
+  // keyset-paginated): the sort is satisfied by the index, so LIMIT stops early instead of sorting the district.
+  @@index([status, districtId, createdAt(sort: Desc), id(sort: Desc)])
 }
 
 model VenueVersion {

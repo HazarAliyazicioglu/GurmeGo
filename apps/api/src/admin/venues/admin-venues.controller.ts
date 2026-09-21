@@ -3,12 +3,15 @@ import { FastifyRequest } from "fastify";
 import { AdminVenueCreateSchema, AdminVenueUpdateSchema } from "@gurmego/shared";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
+import { RateLimit, RateLimitGuard } from "../../common/rate-limit.guard";
+import { RATE_LIMITS } from "../../common/rate-limit.config";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { AdminVenuesService } from "./admin-venues.service";
 import { CsvImportService } from "./csv-import.service";
 
 @Controller("admin")
-@UseGuards(RolesGuard)
+@UseGuards(RolesGuard, RateLimitGuard)
+@RateLimit(RATE_LIMITS.admin.limit, RATE_LIMITS.admin.windowSeconds, { bucket: "admin" })
 @Roles("curator", "admin")
 export class AdminVenuesController {
   constructor(private venues: AdminVenuesService, private csvImport: CsvImportService) {}
@@ -37,6 +40,9 @@ export class AdminVenuesController {
   // Fastify app (see apps/api/src/main.ts) — `@fastify/multipart` is registered globally there, which
   // adds `req.file()` to the raw Fastify request. `@nestjs/platform-express`'s `FileInterceptor` cannot
   // be used here: it expects an Express request/response and 415s on every real Fastify multipart POST.
+  // Its own, stricter bucket: a method-level @RateLimit overrides the controller-level shared admin one, so
+  // an import spends only this budget (CSV parse + N inserts is by far the heaviest admin operation).
+  @RateLimit(RATE_LIMITS.adminImport.limit, RATE_LIMITS.adminImport.windowSeconds, { bucket: "admin-import" })
   @Post("import")
   async importCsv(@Req() req: FastifyRequest) {
     const data = await req.file();

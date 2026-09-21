@@ -126,11 +126,12 @@ describe("AllExceptionsFilter wired globally (as bootstrap() does) — Retry-Aft
       headers: { "content-type": "application/json" },
     };
 
-    // NOTE: an `x-forwarded-for` header here would NOT isolate this test's counter -- Fastify's
-    // `req.ip` is always the real (truthy) socket address unless `trustProxy` is configured on the
-    // adapter (it isn't, anywhere in this codebase; see docs/STATE.md: "RateLimitGuard trustProxy
-    // yok"), so `RateLimitGuard`'s `req.ip ?? req.headers["x-forwarded-for"] ?? "unknown"` never
-    // falls through to the header -- it always resolves to the same socket IP. That means this
+    // NOTE: an `x-forwarded-for` header here would NOT isolate this test's counter. This suite builds its
+    // own app with a plain `new FastifyAdapter()` (no `trustProxy`), so Fastify's `req.ip` is always the
+    // real socket address; and even in production, where main.ts DOES configure `trustProxy` from
+    // TRUST_PROXY_HOPS, `RateLimitGuard` keys on `req.ip` only and never reads the header itself (that
+    // production wiring is covered by test/bootstrap.e2e-spec.ts, which boots the app through the real
+    // `createAdapter()` + `configureApp()`). That means this
     // test's rate-limit key (`ReportsController:submit:<ip>`) is shared with every other test that
     // hits this handler through a real (Postgres-backed) CacheStore, including the `not-a-uuid`
     // test above and any prior run of this same test in earlier CI executions. Isolation is
