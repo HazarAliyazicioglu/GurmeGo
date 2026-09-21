@@ -54,18 +54,18 @@ etiketlenir — karıştırılmasın diye teknik bulgulardan ayrı bir alt başl
 - [x] 1.4 — Rule engine (butik/re-verify/moderasyon)
 - [x] 1.5 — Auth/yetki, cache/rate-limit, kürasyon akışı
 - [x] 1.6 — Backend eksik/zayıf yönler
-- [ ] 2 — Web/PWA (`apps/web`) genel bakış
+- [x] 2 — Web/PWA (`apps/web`) genel bakış
 - [x] 2.1 — Route haritası
 - [x] 2.2 — Özellikler
 - [x] 2.3 — Görünüş/tasarım dili
 - [x] 2.4 — State ve race-guard'lar
 - [x] 2.5 — PWA/SEO
 - [x] 2.6 — Web eksik/zayıf yönler
-- [ ] 3 — Admin panel (`apps/admin`) genel bakış
+- [x] 3 — Admin panel (`apps/admin`) genel bakış
 - [x] 3.1 — Route ve özellikler
 - [x] 3.2 — Görünüş
 - [x] 3.3 — Admin eksik/zayıf yönler
-- [ ] 4 — Mobile app (`apps/mobile`) genel bakış
+- [x] 4 — Mobile app (`apps/mobile`) genel bakış
 - [x] 4.1 — Navigasyon ve ekranlar
 - [x] 4.2 — Görünüş/UI
 - [x] 4.3 — Native özellikler ve config

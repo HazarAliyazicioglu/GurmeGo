@@ -5,6 +5,30 @@ değiştirildi, neden. En yeni en üstte.
 
 ---
 
+## 2026-09-21
+### kritik-guvenlik-yukseltmesi (web+admin+API) — PR #1, #2
+- Web+admin Next.js 14 → 16.3.5 (Turbopack), React 18 → 19.3, react-leaflet 4 → 5; API NestJS 10 → 11.2.5, Fastify 4 → 5.11.3 (exact pin), swagger 11, multipart 10.
+  Prod bağımlılık taraması 3 critical/50 high → 0/0.
+- Yükseltmede yakalanan regresyon: `@fastify/cors` 10+ varsayılan preflight metodları `GET,HEAD,POST`'a düştü (web favori-silme `DELETE`, admin rol `PUT` kırılırdı) → `buildCorsOptions()` metodları açıkça listeler.
+- Next 15+ çıplak `fetch()`'i cache'lemiyor → SSR okumalarına bilinçli TTL (districts 300 sn, liste 60 sn; SSR tek IP'den gider, API rate-limit'ini topluca tüketmesin).
+- Neden: docs/DENETIM-RAPORU.md Kritik bulguları. Commit'ler: `ba13885`, `3de389a`.
+
+### api-sertlestirme-cekirdegi — PR #4 (`89e7763`)
+- Tüm hatalar `{ error: { code, message } }` zarfında (framework hataları dahil; multipart "dosya çok büyük" 500 dönüyordu).
+- Güvenlik başlıkları (helmet), gzip/br, tüm admin uçları için tek ortak 60/dk kotası + CSV import için ayrı 5/saat, rate-limit anahtarı yalnız `req.ip`.
+- CSV en fazla 2000 satır (aşımda dosya tümden reddedilir, sıfır yazma). Venue liste sorgusuna bileşik indeks (50k satırda 7.7 → 0.07 ms, ölçüldü).
+- Neden: DENETIM-RAPORU §1.2/1.3; plan: docs/superpowers/plans/2026-09-21-api-hardening.md (PR A).
+
+### admin-audit-log — PR #5 (`3994e89`)
+- Rol atama, mekan create/update/revert, kuyruk approve/reject ve CSV import için hesap verebilirlik kaydı; kayıt DB trigger'ıyla append-only, işlemle aynı transaction'da, audit yazılamazsa işlem geri alınır.
+- CSV import: önce niyet (`CSV_IMPORT_STARTED`), sonra etki, sonra sonuç (`CSV_IMPORTED`), ortak `importId`. Mekan serbest metni/CSV içeriği kayda girmez.
+- Neden: DENETIM-RAPORU §1.2; karar: docs/adr/006-audit-log-append-only-table.md (v2, `plan-red-team` sonrası).
+
+### ci-tek-types-react — PR (bu checkpoint ile)
+- Aynı commit'te bir koşuda `TS2742` veren kararsızlık giderildi: workspace'te tek `@types/react` sürümü + CI'da lockfile koruması.
+
+---
+
 ## 2026-09-05 — Task 27: Task 26'nın kendi review'ının bulduğu her şey, 11 Codex turunda TEMİZ
 
 ### Durum
