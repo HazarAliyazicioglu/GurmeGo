@@ -42,13 +42,16 @@ export function buildCorsOptions(raw: string | undefined) {
   return { origin, credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] };
 }
 
-export async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    new FastifyAdapter({ trustProxy: resolveTrustProxy(process.env.TRUST_PROXY_HOPS) }),
-  );
+// The one place the production HTTP stack is assembled. `bootstrap()` uses it, and so does the
+// real-setup e2e (test/bootstrap.e2e-spec.ts) -- otherwise the tests would build their own
+// different app and never prove this wiring.
+export function createAdapter(): FastifyAdapter {
+  return new FastifyAdapter({ trustProxy: resolveTrustProxy(process.env.TRUST_PROXY_HOPS) });
+}
+
+export async function configureApp(app: NestFastifyApplication): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
-  // CSV import (`POST /admin/import`) is the only multipart consumer — a curator-uploaded venue
+  // CSV import (`POST /admin/import`) is the only multipart consumer -- a curator-uploaded venue
   // list, not a general file-upload feature. Without a limit, `req.file()`/`toBuffer()` buffers an
   // arbitrarily large upload entirely in memory before any Zod validation runs. 10 MB comfortably
   // covers this MVP's CSV use case (tens of thousands of rows) with headroom.
@@ -62,7 +65,11 @@ export async function bootstrap() {
   app.enableCors(buildCorsOptions(process.env.CORS_ORIGIN));
 
   setupSwagger(app);
+}
 
+export async function bootstrap() {
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, createAdapter());
+  await configureApp(app);
   await app.listen(process.env.PORT ?? 3000, "0.0.0.0");
 }
 
