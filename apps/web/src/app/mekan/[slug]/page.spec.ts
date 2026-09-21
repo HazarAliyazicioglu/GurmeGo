@@ -43,7 +43,7 @@ describe("venue detail page", () => {
     vi.mocked(getVenueBySlug).mockResolvedValue(null as never);
 
     await expect(
-      VenueDetailPage({ params: { slug: "missing-venue" } }),
+      VenueDetailPage({ params: Promise.resolve({ slug: "missing-venue" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
 
     expect(notFound).toHaveBeenCalled();
@@ -53,7 +53,7 @@ describe("venue detail page", () => {
     vi.mocked(getVenueBySlug).mockRejectedValue(new ApiHttpError(404, "Not Found"));
 
     await expect(
-      VenueDetailPage({ params: { slug: "missing-venue" } }),
+      VenueDetailPage({ params: Promise.resolve({ slug: "missing-venue" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
 
     expect(notFound).toHaveBeenCalled();
@@ -64,7 +64,7 @@ describe("venue detail page", () => {
     vi.mocked(getVenueBySlug).mockRejectedValue(serverError);
 
     await expect(
-      VenueDetailPage({ params: { slug: "kadikoy-kahvecisi" } }),
+      VenueDetailPage({ params: Promise.resolve({ slug: "kadikoy-kahvecisi" }) }),
     ).rejects.toBe(serverError);
 
     expect(notFound).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe("venue detail page", () => {
     vi.mocked(getVenueBySlug).mockRejectedValue(networkError);
 
     await expect(
-      VenueDetailPage({ params: { slug: "kadikoy-kahvecisi" } }),
+      VenueDetailPage({ params: Promise.resolve({ slug: "kadikoy-kahvecisi" }) }),
     ).rejects.toBe(networkError);
 
     expect(notFound).not.toHaveBeenCalled();
@@ -84,8 +84,9 @@ describe("venue detail page", () => {
   it("renders VenueDetail with the fetched venue and does not call notFound()", async () => {
     vi.mocked(getVenueBySlug).mockResolvedValue(venue as never);
 
-    const result = await VenueDetailPage({ params: { slug: "test-cafe" } });
+    const result = await VenueDetailPage({ params: Promise.resolve({ slug: "test-cafe" }) });
 
+    expect(getVenueBySlug).toHaveBeenCalledWith("test-cafe");
     expect(notFound).not.toHaveBeenCalled();
     expect(result.type).toBeDefined();
     expect(result.props.venue).toEqual(venue);
@@ -99,7 +100,8 @@ describe("venue detail page metadata", () => {
   it("titles the page with the venue's name and district", async () => {
     vi.mocked(getVenueBySlug).mockResolvedValue(venue as never);
 
-    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
+    expect(getVenueBySlug).toHaveBeenCalledWith("test-cafe");
 
     expect(meta.title).toBe("Test Cafe — Kadıköy | GurmeGo");
   });
@@ -109,7 +111,7 @@ describe("venue detail page metadata", () => {
       { ...venue, editorialNote: "Sessiz, çalışmaya uygun, gerçek filtre kahve." } as never,
     );
 
-    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
 
     expect(meta.description).toBe("Sessiz, çalışmaya uygun, gerçek filtre kahve.");
   });
@@ -117,7 +119,7 @@ describe("venue detail page metadata", () => {
   it("falls back to a generic description when there is no editorial note", async () => {
     vi.mocked(getVenueBySlug).mockResolvedValue({ ...venue, editorialNote: null } as never);
 
-    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
 
     expect(meta.description).toBe("Kadıköy'de GurmeGo tarafından kürasyonlu bir mekan: Test Cafe.");
   });
@@ -127,7 +129,7 @@ describe("venue detail page metadata", () => {
       { ...venue, photos: ["https://cdn.example.com/p1.jpg", "https://cdn.example.com/p2.jpg"] } as never,
     );
 
-    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
 
     expect(meta.openGraph?.images).toEqual(["https://cdn.example.com/p1.jpg"]);
   });
@@ -135,7 +137,7 @@ describe("venue detail page metadata", () => {
   it("omits the Open Graph image field when the venue has no photos", async () => {
     vi.mocked(getVenueBySlug).mockResolvedValue({ ...venue, photos: [] } as never);
 
-    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
 
     expect(meta.openGraph?.images).toBeUndefined();
   });
@@ -143,7 +145,7 @@ describe("venue detail page metadata", () => {
   it("returns empty metadata when the venue can't be found, letting Next.js inherit the root layout's generic title/description instead of overriding with something wrong", async () => {
     vi.mocked(getVenueBySlug).mockResolvedValue(null as never);
 
-    const meta = await generateMetadata({ params: { slug: "missing-venue" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "missing-venue" }) });
 
     expect(meta).toEqual({});
   });
@@ -151,7 +153,7 @@ describe("venue detail page metadata", () => {
   it("returns empty metadata (same fallback) when the venue lookup itself throws", async () => {
     vi.mocked(getVenueBySlug).mockRejectedValue(new Error("fetch failed"));
 
-    const meta = await generateMetadata({ params: { slug: "test-cafe" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
 
     expect(meta).toEqual({});
   });

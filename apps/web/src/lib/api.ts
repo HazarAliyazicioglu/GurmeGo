@@ -28,14 +28,25 @@ export function locationHeaders(coords?: Coords | null): Record<string, string> 
   return coords ? { "X-User-Location": `${coords.lat},${coords.lng}` } : {};
 }
 
+// Next 15+ no longer caches a bare fetch(). Server-rendered reads opt into a short TTL: without it every
+// page view hits the API, and since all SSR traffic shares the web server's single IP, the API's
+// per-IP read rate limit would throttle every user at once. Freshness cost: a newly approved venue can
+// take up to the TTL to show on the list (the detail page has its own hourly ISR).
+const DISTRICTS_REVALIDATE_S = 300;
+const VENUE_LIST_REVALIDATE_S = 60;
+
 async function fetchValidated<T>(
   path: string,
   schema: z.ZodType<T>,
   token?: string,
   headers?: Record<string, string>,
+  revalidate?: number,
 ): Promise<T> {
   const authedClient = token ? createApiClient(API_BASE, () => token) : client;
-  const raw = await authedClient.get<unknown>(path, { headers });
+  const raw = await authedClient.get<unknown>(path, {
+    headers,
+    ...(revalidate !== undefined ? { next: { revalidate } } : {}),
+  });
   const result = schema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(path, result.error.issues);
   return result.data;
@@ -43,7 +54,7 @@ async function fetchValidated<T>(
 
 export function getVenues(query: Record<string, string>, coords?: Coords | null) {
   const qs = new URLSearchParams(query).toString();
-  return fetchValidated(`/venues?${qs}`, VenueListResponseSchema, undefined, locationHeaders(coords));
+  return fetchValidated(`/venues?${qs}`, VenueListResponseSchema, undefined, locationHeaders(coords), VENUE_LIST_REVALIDATE_S);
 }
 
 export function getVenuesInBbox(bbox: [number, number, number, number]) {
@@ -55,7 +66,7 @@ export function getVenueBySlug(slug: string): Promise<VenueDetail> {
 }
 
 export function getDistricts(): Promise<District[]> {
-  return fetchValidated(`/districts?city=istanbul`, z.array(DistrictSchema));
+  return fetchValidated(`/districts?city=istanbul`, z.array(DistrictSchema), undefined, undefined, DISTRICTS_REVALIDATE_S);
 }
 
 export async function getNearestDistrict(coords: Coords): Promise<District> {

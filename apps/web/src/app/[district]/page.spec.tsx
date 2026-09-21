@@ -33,7 +33,7 @@ describe("DiscoveryPage", () => {
     vi.mocked(getVenues).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } } as never);
 
     await expect(
-      DiscoveryPage({ params: { district: "unknown-district" } }),
+      DiscoveryPage({ params: Promise.resolve({ district: "unknown-district" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
 
     expect(notFound).toHaveBeenCalled();
@@ -46,7 +46,7 @@ describe("DiscoveryPage", () => {
     ] as never);
     vi.mocked(getVenues).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } } as never);
 
-    await DiscoveryPage({ params: { district: "besiktas" } });
+    await DiscoveryPage({ params: Promise.resolve({ district: "besiktas" }) });
 
     expect(getVenues).toHaveBeenCalledWith({ districtId: "d2", sort: "newest" });
   });
@@ -67,7 +67,7 @@ describe("DiscoveryPage — forwards SSR pagination metadata to DiscoveryClient 
       meta: { next_cursor: "cursor-1", has_more: true },
     } as never);
 
-    const page = await DiscoveryPage({ params: { district: "kadikoy" } });
+    const page = await DiscoveryPage({ params: Promise.resolve({ district: "kadikoy" }) });
     render(page);
 
     // No further `getVenues` call should have been necessary for the button to show up.
@@ -82,7 +82,7 @@ describe("DiscoveryPage — forwards SSR pagination metadata to DiscoveryClient 
       meta: { next_cursor: null, has_more: false },
     } as never);
 
-    const page = await DiscoveryPage({ params: { district: "kadikoy" } });
+    const page = await DiscoveryPage({ params: Promise.resolve({ district: "kadikoy" }) });
     render(page);
 
     expect(screen.queryByTestId("load-more")).not.toBeInTheDocument();
@@ -101,7 +101,7 @@ describe("DiscoveryPage metadata", () => {
       { id: "d1", slug: "kadikoy", name: "Kadıköy" },
     ] as never);
 
-    const meta = await generateMetadata({ params: { district: "kadikoy" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ district: "kadikoy" }) });
 
     expect(meta.title).toBe("Kadıköy'de butik mekanlar | GurmeGo");
   });
@@ -111,7 +111,7 @@ describe("DiscoveryPage metadata", () => {
       { id: "d1", slug: "kadikoy", name: "Kadıköy" },
     ] as never);
 
-    const meta = await generateMetadata({ params: { district: "unknown-district" } });
+    const meta = await generateMetadata({ params: Promise.resolve({ district: "unknown-district" }) });
 
     expect(meta).toEqual({});
   });

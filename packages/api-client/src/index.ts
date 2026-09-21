@@ -14,11 +14,18 @@ export class ApiHttpError extends Error {
 
 export function createApiClient(baseUrl: string, getToken?: () => string | undefined) {
   return {
-    async get<T>(path: string, options?: { headers?: Record<string, string> }): Promise<T> {
+    // `next` is Next.js's fetch extension (data cache). It is inert in browsers and Node, so this
+    // package stays framework-agnostic; server-rendered callers opt into a TTL per call because
+    // Next 15+ no longer caches a bare fetch().
+    async get<T>(
+      path: string,
+      options?: { headers?: Record<string, string>; next?: { revalidate?: number | false } },
+    ): Promise<T> {
       const token = getToken?.();
       const res = await fetch(`${baseUrl}${path}`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options?.headers },
-      });
+        ...(options?.next ? { next: options.next } : {}),
+      } as RequestInit);
       // Reading the error body can itself fail (rare, but possible with a malformed/truncated
       // response) -- fall back to an empty string body rather than losing the known `res.status`
       // to a generic, uncategorized error.
