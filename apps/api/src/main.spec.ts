@@ -1,6 +1,8 @@
 import { SwaggerModule } from "@nestjs/swagger";
-import { NestFastifyApplication } from "@nestjs/platform-fastify";
-import { setupSwagger, resolveTrustProxy } from "./main";
+import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
+import { Test } from "@nestjs/testing";
+import { Controller, Get } from "@nestjs/common";
+import { setupSwagger, resolveTrustProxy, buildCorsOptions } from "./main";
 
 // Security/ops finding: Fastify's `req.ip` is the raw socket address unless `trustProxy` is
 // configured -- behind any reverse proxy, every request would appear to come from the proxy's
@@ -50,5 +52,69 @@ describe("setupSwagger — production guard", () => {
     const setupSpy = jest.spyOn(SwaggerModule, "setup").mockImplementation(() => undefined as unknown as NestFastifyApplication);
     setupSwagger({} as NestFastifyApplication);
     expect(setupSpy).toHaveBeenCalled();
+  });
+});
+
+// Fastify 5 / @fastify/cors 10+ narrowed the default preflight `methods` to GET,HEAD,POST. This API
+// exposes PUT (admin role assignment) and DELETE (favorites), so without an explicit list a browser
+// blocks those calls cross-origin at preflight -- and no controller-level test would notice, since
+// they never issue a cross-origin OPTIONS request.
+describe("buildCorsOptions", () => {
+  @Controller("ping")
+  class PingController {
+    @Get()
+    ping() {
+      return "ok";
+    }
+  }
+
+  async function preflight(origin: string, method: string, corsOrigin?: string) {
+    const moduleRef = await Test.createTestingModule({ controllers: [PingController] }).compile();
+    const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app.enableCors(buildCorsOptions(corsOrigin));
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/ping",
+      headers: {
+        origin,
+        "access-control-request-method": method,
+        "access-control-request-headers": "authorization,content-type",
+      },
+    });
+    await app.close();
+    return res;
+  }
+
+  it.each(["GET", "POST", "PUT", "DELETE"])("allows a %s preflight from a configured origin", async (method) => {
+    const res = await preflight("http://localhost:3002", method, "http://localhost:3002");
+    // Browsers require a 2xx preflight response; CORS headers on a failing status still block the call.
+    expect(res.statusCode).toBeGreaterThanOrEqual(200);
+    expect(res.statusCode).toBeLessThan(300);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3002");
+    // Authenticated calls send Authorization + a JSON Content-Type -- both must be permitted.
+    expect(String(res.headers["access-control-allow-headers"]).toLowerCase()).toEqual(
+      expect.stringContaining("authorization"),
+    );
+    expect(String(res.headers["access-control-allow-headers"]).toLowerCase()).toEqual(
+      expect.stringContaining("content-type"),
+    );
+    expect(res.headers["access-control-allow-credentials"]).toBe("true");
+    expect(String(res.headers["access-control-allow-methods"]).split(/,\s*/)).toContain(method);
+  });
+
+  it("does not grant an unlisted origin", async () => {
+    const res = await preflight("http://evil.example", "DELETE", "http://localhost:3002");
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("defaults to the four local dev origins when CORS_ORIGIN is unset", () => {
+    expect(buildCorsOptions(undefined).origin).toEqual([
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:3002",
+      "http://localhost:3003",
+    ]);
   });
 });
