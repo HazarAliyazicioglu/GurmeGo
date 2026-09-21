@@ -27,6 +27,21 @@ export function resolveTrustProxy(raw: string | undefined): number | boolean {
   return hops === 0 ? false : hops;
 }
 
+// Browser clients (Plan 2's Next.js web/PWA app, Plan 3's admin panel) need CORS to call this API
+// cross-origin. No production origin exists yet -- Plan 4 (infra) will set the real value via
+// CORS_ORIGIN. Never use origin:true/"*" here: this API carries authenticated (credentialed) requests.
+//
+// `methods` is spelled out on purpose: @fastify/cors 10+ (Fastify 5) narrowed its default to
+// GET,HEAD,POST, which would make browsers reject this API's PUT (admin role assignment) and
+// DELETE (favorites) calls at preflight.
+export function buildCorsOptions(raw: string | undefined) {
+  const origin = (raw ?? "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+  return { origin, credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] };
+}
+
 export async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
@@ -44,17 +59,7 @@ export async function bootstrap() {
     console.warn("RATE_LIMIT_* env vars not set in production -- using defaults (100/min, 10/day)");
   }
 
-  // Browser clients (Plan 2's Next.js web/PWA app, Plan 3's admin panel) need CORS to call this API
-  // cross-origin. No production origin exists yet — Plan 4 (infra) will set the real value via
-  // CORS_ORIGIN. Never use origin:true/"*" here: this API carries authenticated (credentialed) requests.
-  const corsOrigins = (
-    process.env.CORS_ORIGIN ??
-    "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003"
-  )
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  app.enableCors({ origin: corsOrigins, credentials: true });
+  app.enableCors(buildCorsOptions(process.env.CORS_ORIGIN));
 
   setupSwagger(app);
 

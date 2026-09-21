@@ -1,4 +1,5 @@
 import { Test } from "@nestjs/testing";
+import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { SchedulerRegistry, ScheduleModule } from "@nestjs/schedule";
 import { ReVerifyService } from "./re-verify.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -28,7 +29,7 @@ describe("ReVerifyService.enqueueStale", () => {
 describe("ReVerifyService — cron registration", () => {
   it("registers a named daily cron job", async () => {
     const moduleRef = await Test.createTestingModule({ imports: [ScheduleModule.forRoot()], providers: [ReVerifyService, { provide: PrismaService, useValue: {} }] }).compile();
-    const app = moduleRef.createNestApplication();
+    const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     await app.init();
     expect(app.get(SchedulerRegistry).getCronJob("re-verify-stale")).toBeDefined();
     await app.close();
