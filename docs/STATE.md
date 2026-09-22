@@ -7,14 +7,14 @@ Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo).
 Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Marka: sıcak/editöryel kimlik. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık** (PR #13 ✓) → **3) altyapı/borç temizliği** (PR #14 ✓, kalanı bilinçli ertelendi) → **4) canlıya çıkış hazırlığı** (PR #28 ✓, kısmi — aşağıya bkz). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
+2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık** (PR #13 ✓) → **3) altyapı/borç temizliği** (PR #14 ✓, kalanı bilinçli ertelendi) → **4) canlıya çıkış hazırlığı** (PR #28 ✓ + PR #29 ✓, DB rol script'i 3 cross-model-review turundan geçti, TEMİZ). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
 
 Önceki tamamlananlar: Kritik 11/11 + Orta paket A (PR #4-#7) + venue-card kapak fotoğrafı (PR #8) + admin paketi 3/3 (PR #9-#11) — hepsi `master`'da.
 
 ## Şu an ne yapıyoruz
-**Alt proje 4/4 (canlıya çıkış hazırlığı) kısmen TAMAMLANDI (PR #28, 2026-09-22).** ADR 006'nın DB rol kısıtlaması için `scripts/production-db-role-setup.sql` hazırlandı ve yerel test DB'de gerçekten doğrulandı (HENÜZ gerçek Supabase'e uygulanmadı — erişim yok). `SUPABASE_JWT_ISSUER`/`AUDIENCE` kod tarafı zaten hazırmış, doğrulandı. Deploy hattının hangi kısmının gerçekten kurulu olduğu (sadece CI kalite kontrolü) dokümana işlendi. **Bu PR'da Codex kotası doldu** — çapraz-model review çalışmadı, kendi (tek-model) review'ımla ilerlendi, kullanıcı onayladı.
+**Alt proje 4/4 (canlıya çıkış hazırlığı) TAMAMLANDI (PR #28 + PR #29, 2026-09-22).** `scripts/production-db-role-setup.sql` 3 cross-model-review turundan geçti: (1) atomiklik/session_replication_role/extensions şeması, (2) search_path eksikliği (MAJOR) + extension adı + yanlış doğrulama kataloğu, (3) TEMİZ verdikt. Yerel Docker test DB'de uçtan uca doğrulandı: search_path role'e yazıldı, audit_log INSERT+SELECT çalıştı, UPDATE+DELETE reddedildi, rolsuper/createdb/createrole false. HENÜZ gerçek Supabase'e uygulanmadı (erişim yok, ADR 006'da eylem maddesi olarak duruyor). Not: PR #28'de Codex kotası bir kez doldu, o tur kendi (tek-model) review'ımla ilerlendi (kullanıcı onayıyla); PR #29'un review'ı gerçek çapraz-model (Codex, yüksek efor) oldu.
 
-Dependabot (PR #14'ün eklediği config) hemen 13 PR açtı (#15-27) — çoğu majör versiyon atlaması, henüz TRİYAJ EDİLMEDİ, hiçbiri merge edilmedi (STATE.md'nin "majör yükseltmeyi testler yeşil ile kapatma" dersi geçerli).
+Dependabot (PR #14'ün eklediği config) 13 PR açtı (#15-27) — çoğu majör versiyon atlaması, henüz TRİYAJ EDİLMEDİ, hiçbiri merge edilmedi (STATE.md'nin "majör yükseltmeyi testler yeşil ile kapatma" dersi geçerli).
 
 ## Sıradaki adım
 Kullanıcıdan yön bekleniyor: (a) Dependabot PR'larını (#15-27) tek tek triyaj et, (b) AK-02/AK-03 açık ürün kararlarını netleştir, (c) gerçek Supabase projesi kurulduğunda `scripts/production-db-role-setup.sql`'i uygula.
