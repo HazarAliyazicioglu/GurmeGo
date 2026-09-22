@@ -41,6 +41,28 @@ describe("DiscoveryScreen", () => {
     ]);
   });
 
+  // Denetim raporu §4.2 "Filtreye uyan mekan yoksa kullanıcı bunu anlayamıyor".
+  it("shows a 'no results' message once the (empty) response has actually loaded, not before", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+
+    await render(<DiscoveryScreen />);
+
+    await waitFor(() => expect(screen.getByText(/bu kriterlere uygun mekan bulunamadı/i)).toBeTruthy(), { timeout: 5000 });
+  });
+
+  it("does NOT show the 'no results' message while venues are still loading", async () => {
+    let resolveVenues!: (v: unknown) => void;
+    (getVenues as jest.Mock).mockReturnValue(new Promise((resolve) => { resolveVenues = resolve; }));
+
+    await render(<DiscoveryScreen />);
+
+    expect(screen.queryByText(/bu kriterlere uygun mekan bulunamadı/i)).toBeFalsy();
+    await act(async () => {
+      resolveVenues({ data: [], meta: { next_cursor: null, has_more: false } });
+      await Promise.resolve();
+    });
+  });
+
   it("lists venues returned by getVenues and navigates to detail on press", async () => {
     (getVenues as jest.Mock).mockResolvedValue({
       data: [
