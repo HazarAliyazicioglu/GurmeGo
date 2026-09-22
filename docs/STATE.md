@@ -7,26 +7,26 @@ Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo).
 Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Marka: sıcak/editöryel kimlik. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık** (PR #13 ✓) → **3) altyapı/borç temizliği** (PR #14 ✓, kalanı bilinçli ertelendi) → 4) canlıya çıkış operasyonel hazırlığı (Plan 4e). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
+2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık** (PR #13 ✓) → **3) altyapı/borç temizliği** (PR #14 ✓, kalanı bilinçli ertelendi) → **4) canlıya çıkış hazırlığı** (PR #28 ✓, kısmi — aşağıya bkz). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
 
 Önceki tamamlananlar: Kritik 11/11 + Orta paket A (PR #4-#7) + venue-card kapak fotoğrafı (PR #8) + admin paketi 3/3 (PR #9-#11) — hepsi `master`'da.
 
 ## Şu an ne yapıyoruz
-**Alt proje 3/4 (altyapı borcu) kısmen TAMAMLANDI (PR #14, 2026-09-22).** Dependabot eklendi, `packages/api-client`'ın yanıltıcı "tip güvenli istemci" iddiası düzeltildi. **Bilinçli ertelenenler** (aşağıya bkz): `venues.repository.ts`'in 487 satırlık dosya-boyutu bulgusu (bölmek risk/getiri dengesi net değil, kanıtlanmış bir bakım maliyeti gösterilmedi) ve test izolasyonu borcu (denetim raporunun kendisi "test sayısı önemli artmadıkça dokunmaya gerek yok" diyor).
+**Alt proje 4/4 (canlıya çıkış hazırlığı) kısmen TAMAMLANDI (PR #28, 2026-09-22).** ADR 006'nın DB rol kısıtlaması için `scripts/production-db-role-setup.sql` hazırlandı ve yerel test DB'de gerçekten doğrulandı (HENÜZ gerçek Supabase'e uygulanmadı — erişim yok). `SUPABASE_JWT_ISSUER`/`AUDIENCE` kod tarafı zaten hazırmış, doğrulandı. Deploy hattının hangi kısmının gerçekten kurulu olduğu (sadece CI kalite kontrolü) dokümana işlendi. **Bu PR'da Codex kotası doldu** — çapraz-model review çalışmadı, kendi (tek-model) review'ımla ilerlendi, kullanıcı onayladı.
+
+Dependabot (PR #14'ün eklediği config) hemen 13 PR açtı (#15-27) — çoğu majör versiyon atlaması, henüz TRİYAJ EDİLMEDİ, hiçbiri merge edilmedi (STATE.md'nin "majör yükseltmeyi testler yeşil ile kapatma" dersi geçerli).
 
 ## Sıradaki adım
-Alt proje 4/4: **canlıya çıkış operasyonel hazırlığı (Plan 4e)** — uygulamanın DB rolünün `audit_log`'a yalnız INSERT+SELECT ile sınırlanması (ADR 006), `SUPABASE_JWT_ISSUER`/`AUDIENCE` env değişkenlerinin set edilmesi, dokümante edilen deploy hattının gerçekte kurulup kurulmadığının netleştirilmesi.
+Kullanıcıdan yön bekleniyor: (a) Dependabot PR'larını (#15-27) tek tek triyaj et, (b) AK-02/AK-03 açık ürün kararlarını netleştir, (c) gerçek Supabase projesi kurulduğunda `scripts/production-db-role-setup.sql`'i uygula.
 
 ## Ertelenen/kapsam dışı bırakılan görevler (ayrı, gelecekte alınacak)
-- `venues.repository.ts` dosya-boyutu bölme + backend test izolasyonu — bilinçli ertelendi, gerekçe yukarıda.
+- `venues.repository.ts` dosya-boyutu bölme + backend test izolasyonu — bilinçli ertelendi (risk/getiri net değil).
 - `next/image` gerçek optimizasyonu — admin'e dosya yükleme + bilinen tek domain'den (ör. Supabase Storage) SONRA.
-- Fraunces'ın gerçek uzun Türkçe mekan adlarıyla Playwright/tarayıcı doğrulaması (bu ortamda Playwright kurulu değil).
-- Mobil fotoğraf önbellekleme (expo-image), harita yüklenemezse uyarı (düşük öncelik, adres zaten metin olarak gösteriliyor).
-- Mobilde filtre değişiminde tek-kare "sonuç yok" mesajı titremesi, AuthScreen çift-tıklama yarışı — cihaz doğrulaması gerektirir.
+- Fraunces'ın gerçek uzun Türkçe mekan adlarıyla Playwright doğrulaması; mobil fotoğraf önbellekleme (expo-image); mobilde filtre-değişimi titremesi/çift-tıklama yarışı — hepsi cihaz/tarayıcı doğrulaması gerektirir.
 - `FavoriteList` aynı-isim yarış durumu (`@@unique([userId, name])`) — ürün kuralı değişikliği.
 
 ## Bloke olanlar
-- Yok. Supabase proje erişimi (env değişkenleri, DB rolü ayarı) gerekebilir — proje canlıya alınmadıysa bazı Plan 4e adımları sadece dokümantasyon/kod tarafında ilerletilebilir, gerçek Supabase panelinde uygulanması kullanıcı eylemi gerektirebilir.
+- Yok. Gerçek Supabase proje erişimi gerektiren adımlar (DB rolü script'ini uygulama, JWT env'lerini set etme) kod/doküman tarafında hazır, sadece uygulanmayı bekliyor.
 
 ## Yakın kararlar
 - ADR 006: aynı DB'de DB-trigger'lı append-only audit log, aynı transaction'da → docs/adr/006-audit-log-append-only-table.md
@@ -43,6 +43,6 @@ Alt proje 4/4: **canlıya çıkış operasyonel hazırlığı (Plan 4e)** — uy
 - JS regex `/i` ile Türkçe büyük "İ" ile başlayan kelime eşleştirmek: ELENDİ, KALICI — `/işlem/i`, "İşlem..."e uymaz. Alt-dizeyi büyük harfsiz kur.
 - Bir sayfada "seçili öğe" değişirken önceki seçimin async yanıtlarını guard'lamamak: ELENDİ, KALICI (mekan-geçmişi PR'ında 2 MAJOR bug) — arama/seçim değiştiğinde eski state'i hemen temizle + bir ref'te "hâlâ bu mu seçili" kontrolü yap, sadece request-id yetmez.
 - Mobile gerçek Expo dev server'da hiç elle denenmemiş; safe-area-context jest mock, Expo `EXPO_PUBLIC_*` dinamik erişim: ELENDİ, KALICI.
-- `apps/mobile` jest suite'inde ara sıra tek bir test 15sn timeout'la flake veriyor (`VenueDetailScreen`): KOŞULLU — CI'da görülürse önce yeniden çalıştır, PR diff'iyle ilgisizse gerçek regresyon değildir.
+- `apps/mobile`'da `VenueDetailScreen`'in İLK testi CI'da (meşgul paylaşımlı runner, jest-expo/react-native-maps soğuk-başlangıç maliyeti) global 15sn jest timeout'unu aşıyordu (2 ayrı PR'da görüldü): ELENDİ, KALICI — sadece o testin kendi timeout'u 20sn'ye çıkarıldı (`it(..., 20000)`), global'e dokunulmadı.
 - `gh pr merge --squash` sonrası yerel `master`'ın squash-öncesi commit'leri varsa (ör. docs commit'leri feature branch'e alınmadan önce master'a doğrudan işlenmişse) yerel checkout "fast-forward yapılamıyor" hatası verir: ELENDİ, KALICI — PR GitHub'da yine de merge olmuş olur (`gh pr view --json state,mergedAt` ile doğrula), yerel `master`'ı `git reset --hard origin/master` ile hizala (içerik kaybı yok, squash zaten üstünde).
 - `next.config.js`'de `images.remotePatterns: [{ hostname: "**" }]`: ELENDİ, KALICI — "sadece admin girdisi" savunması yanlış, `/_next/image?url=<keyfi>` endpoint'i herkese açık, bu bir açık proxy/kaynak-suistimali riski. Bilinen tek bir domain'e daraltılmadan next/image'a arbitrary-domain optimizasyonu ekleme.
