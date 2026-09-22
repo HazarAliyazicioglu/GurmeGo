@@ -1,4 +1,4 @@
-# Durum — 2026-09-21
+# Durum — 2026-09-22
 
 ## Veri sınırı
 Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo). Kaynak: 2026-09-08.
@@ -17,13 +17,16 @@ ADR 006 v2): helmet, gzip, ortak admin rate-limit, CSV 2000 satır sınırı, ö
 Son commit: CI kararsızlığı (aynı commit'te bir koşu TS2742 verdi) → workspace'te tek `@types/react` + CI'da lockfile koruması, PR #7 CI yeşil geçti ve `master`'a squash-merge edildi (2026-09-22).
 
 ## Vizyon cevabı (2026-09-22)
-Web `venue-card` fotoğraf eksikliği bilinçli editöryel tercih DEĞİL — eksik özellik. Fotoğraf gösterimi eklenecek. Web tasarım paketi kapsamına görsel ekleme girer (veri modeli/storage/lazy-load dahil, brainstorming ile netleştirilecek).
+Web `venue-card` fotoğraf eksikliği bilinçli editöryel tercih DEĞİL — eksik özellik. Fotoğraf gösterimi eklendi (aşağıya bkz).
+
+## Bu oturumda tamamlanan: venue-card kapak fotoğrafı (PR #8, 2026-09-22)
+Bounded görev (brainstorming onayı alındı, spec dosyası yok). `VenueListItemSchema`'ya `coverPhoto: string | null` eklendi (tam `photos` dizisi değil), API `searchPublished` SELECT'ine `v.photos[1] AS "coverPhoto"`, web `venue-card.tsx` düz `<img>` ile kapak fotoğrafı gösteriyor. TDD ile katman katman (shared→API→web), Codex cross-model review 5 minor bulgu (2 kabul, 1 red, 2 zaten temiz). CI kırmızıya düştü (`@gurmego/mobile#test` — mobile'ın kendi `api.spec.ts` fixture'ı da aynı şemayı runtime doğruluyordu, coverPhoto eksikti), düzeltildi, CI yeşil, `master`'a squash-merge.
 
 ## Sıradaki adım
-Web tasarım paketi için `superpowers:brainstorming` başlat (venue-card fotoğraf ekleme kapsamı). Paralelde admin paketine (rol/veri-kalitesi/geri-alma ekranları, nav, CSV hata listesi sınırı) başlanabilir.
+Admin paketine başla (rol/veri-kalitesi/geri-alma ekranları, nav, CSV hata listesi sınırı). Mobil liste ekranı (`DiscoveryScreen`) venue-card ile aynı fotoğraf eksikliğini taşıyor — kapsam dışı bırakıldı, istenirse ayrı bounded görev olarak alınabilir.
 
 ## Bloke olanlar
-- Yok (vizyon sorusu 2026-09-22'de cevaplandı). Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
+- Yok. Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
 
 ## Yakın kararlar
 - ADR 006: aynı DB'de DB-trigger'lı append-only audit log, aynı transaction'da → docs/adr/006-audit-log-append-only-table.md
@@ -40,3 +43,4 @@ Web tasarım paketi için `superpowers:brainstorming` başlat (venue-card fotoğ
 - `src/` dışından import (tsconfig include=[src]): ELENDİ — rootDir kayar, çıktı `dist/src/main.js`, CI smoke kırılır; yerel smoke'tan önce `rm -rf apps/api/dist`.
 - Workspace'te birden çok `@types/react` sürümü: ELENDİ, KALICI — pnpm hoist rastgele seçer, aynı commit'te flaky TS2742. CI'da scripts/check-single-types-react.mjs korur.
 - Kilitsiz okuma-sonra-yazma ile "önceki değeri" kaydetmek: ELENDİ — koşullu `updateMany` kalıbı. jest 29 ESM-only transitive'leri parse edemez: NestJS 12 (ESM-only) KOŞULLU — Vitest göçü yapılırsa yeniden bak.
+- Paylaşılan (`packages/shared`) bir zod şemasına zorunlu alan eklemek: sadece değiştirdiğin app'in testine bakıp "yeşil" saymak ELENDİ, KALICI — o şemayı runtime doğrulayan HER app'in kendi fixture'ı kırılır (web VE mobile'ın ayrı ayrı `lib/api.spec.ts`'i var, ikisi de aynı `VenueListItemSchema`'yı `safeParse` ediyor). Yeni alan eklerken `grep -rn "<benzer_alan_adı>"` ile tüm apps/ dizinini tara, sadece dokunduğun app'i değil.
