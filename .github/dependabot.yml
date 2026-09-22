@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # pnpm workspace: one lockfile at the repo root covers every app/package, so a single npm
+  # ecosystem entry rooted at "/" is enough -- Dependabot resolves the whole workspace from there,
+  # not per-app entries.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    # Grouped so a routine patch/minor bump across many packages doesn't open 10+ separate PRs a
+    # week for this MVP-stage, single-maintainer project -- a major bump still gets its own PR
+    # (excluded from the group) since those need a real look, not a rubber-stamp merge.
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
