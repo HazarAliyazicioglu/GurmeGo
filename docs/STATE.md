@@ -14,13 +14,16 @@ Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ma
 Kullanıcı 2026-09-21'de tüm yetkiyi devretti ("planlama, programlama, araştırma sende; vizyona uygun en üst seviye"); PR akışı/CI/Codex review kuralları aynen geçerli.
 Bu oturumda `master`'a girenler: **Kritik 11/11** (PR #1 Next 16/React 19, #2 NestJS 11+Fastify 5; prod audit 3 critical/50 high → 0/0) ve **Orta paket A** (PR #4 çekirdek, #5 audit log;
 ADR 006 v2): helmet, gzip, ortak admin rate-limit, CSV 2000 satır sınırı, ölçülmüş liste indeksi, hata zarfı normalizasyonu, DB-seviyesinde append-only `audit_log`. API 54 suite / 352 test.
-Son commit: CI kararsızlığı (aynı commit'te bir koşu TS2742 verdi) → workspace'te tek `@types/react` + CI'da lockfile koruması (`fix/single-types-react`, PR açıldığında/merge edildiğinde bu satırı güncelle).
+Son commit: CI kararsızlığı (aynı commit'te bir koşu TS2742 verdi) → workspace'te tek `@types/react` + CI'da lockfile koruması, PR #7 CI yeşil geçti ve `master`'a squash-merge edildi (2026-09-22).
+
+## Vizyon cevabı (2026-09-22)
+Web `venue-card` fotoğraf eksikliği bilinçli editöryel tercih DEĞİL — eksik özellik. Fotoğraf gösterimi eklenecek. Web tasarım paketi kapsamına görsel ekleme girer (veri modeli/storage/lazy-load dahil, brainstorming ile netleştirilecek).
 
 ## Sıradaki adım
-**Önce kullanıcıdan şu vizyon cevabını al: web `venue-card` fotoğraf göstermiyor — bilinçli editöryel tercih mi, eksik mi?** (cevap web tasarım paketini belirler); cevap gelmeden admin paketine (rol/veri-kalitesi/geri-alma ekranları, nav, CSV hata listesi sınırı) başlanabilir.
+Web tasarım paketi için `superpowers:brainstorming` başlat (venue-card fotoğraf ekleme kapsamı). Paralelde admin paketine (rol/veri-kalitesi/geri-alma ekranları, nav, CSV hata listesi sınırı) başlanabilir.
 
 ## Bloke olanlar
-- Yalnız yukarıdaki vizyon sorusu (web paketi için). Plan 4e (canlıya çıkış) eylem maddeleri: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
+- Yok (vizyon sorusu 2026-09-22'de cevaplandı). Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
 
 ## Yakın kararlar
 - ADR 006: aynı DB'de DB-trigger'lı append-only audit log, aynı transaction'da → docs/adr/006-audit-log-append-only-table.md
