@@ -1,4 +1,12 @@
-export * from "./generated-types";
+// `generated-types.ts` (openapi-typescript output, regenerated via `pnpm generate`) is
+// DELIBERATELY not re-exported here. docs/DENETIM-RAPORU.md §5.2 finding: nothing in apps/web or
+// apps/admin ever imported it -- the real safety net is hand-written zod schemas from
+// packages/shared, `safeParse`d in each app's own `lib/api.ts` (most GET/read calls do this; a
+// few void-returning mutations like admin's assignRole/revertVenue deliberately skip it and just
+// let a non-2xx throw, same as approveQueueItem/rejectQueueItem). Re-exporting unused generated
+// types here would keep advertising a "type-safe client" guarantee this package doesn't actually
+// provide. If real per-endpoint typed methods are ever built on top of `paths`/`components` from
+// generated-types.ts, re-export it then.
 
 // Carries the HTTP status code alongside the error so callers can distinguish a genuine 404
 // (not-found) from any other failure (5xx, network error, etc). Before this existed, every

@@ -22,7 +22,7 @@ GurmeGo, İstanbul'un butik/özel yemek mekanlarını (zincirler hariç) yapısa
 | Auth | Supabase Auth (JWT, NestJS guard JWKS ile doğrular) |
 | Mobil | React Native (Expo önerilir) |
 | Web/Admin | Next.js — web SSR/SSG (SEO), admin CSR (iç araç) |
-| API stili | REST + OpenAPI → `packages/api-client` tip üretimi |
+| API stili | REST; tip güvenliği `packages/shared` zod şemalarından (bkz. Mimari — büyük resim) |
 | Repo aracı | pnpm workspace + Turborepo, Node sürümü `.nvmrc` ile sabit |
 
 Beklenen komutlar (Turborepo üzerinden, `turbo.json` kurulunca):
@@ -41,9 +41,10 @@ apps/mobile/      # React Native
 apps/web/         # Next.js tüketici (SSR/SSG)
 apps/admin/       # Next.js kürasyon paneli
 packages/shared/  # zod şemaları, ortak tipler, sabitler (ilçe listesi, enum'lar)
-packages/api-client/  # OpenAPI'den üretilen tip güvenli istemci
+packages/api-client/  # fetch wrapper (get/post/put + ApiHttpError) — gerçek güvenlik katmanı DEĞİL,
+                       # o packages/shared'ın zod şemalarından gelir (aşağıya bkz)
 ```
-İstemciler (mobile/web/admin) iş mantığı içermez — yalnızca görüntüleme + istek katmanı. Aynı zod şemaları hem API validasyonunda hem istemci form validasyonunda kullanılır.
+İstemciler (mobile/web/admin) iş mantığı içermez — yalnızca görüntüleme + istek katmanı. Tip güvenliği `packages/api-client`'ten DEĞİL, her app'in kendi `lib/api.ts`'inde `packages/shared`'ın zod şemalarıyla `safeParse` etmesinden gelir — aynı şemalar API validasyonunda da kullanılır. `packages/api-client/src/generated-types.ts` (OpenAPI'den `pnpm generate` ile üretilir) hiçbir yerde import edilmiyor, kasıtlı olarak re-export edilmiyor (docs/DENETIM-RAPORU.md §5.2).
 
 **Arama iki parçalı** ([architecture.md](docs/architecture.md) §6):
 1. Yapısal filtreler (kategori, fiyat, ilçe, mesafe) → doğrudan SQL + PostGIS (`ST_DWithin`/`ST_Distance`), keyset pagination, hedef <300ms.
