@@ -52,6 +52,17 @@ describe("ProtectedLayout", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("renders nav links to kuyruk, import, and veri-kalitesi when authenticated", async () => {
+    vi.doMock("@/lib/auth-context", () => ({
+      useAuth: () => ({ user: { id: "u1" }, role: "curator", loading: false, signOut: vi.fn() }),
+    }));
+    const { default: Layout } = await import("./layout");
+    render(<Layout><div>içerik</div></Layout>);
+    expect(await screen.findByRole("link", { name: /kuyruk/i })).toHaveAttribute("href", "/kuyruk");
+    expect(screen.getByRole("link", { name: /import/i })).toHaveAttribute("href", "/import");
+    expect(screen.getByRole("link", { name: /veri kalitesi/i })).toHaveAttribute("href", "/veri-kalitesi");
+  });
+
   it("renders a sign-out control that calls signOut() when authenticated", async () => {
     const signOut = vi.fn().mockResolvedValue({ error: null });
     vi.doMock("@/lib/auth-context", () => ({

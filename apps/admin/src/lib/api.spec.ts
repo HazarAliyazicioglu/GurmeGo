@@ -10,7 +10,7 @@ vi.mock("@gurmego/api-client", async (importOriginal) => {
   return { ...actual, createApiClient: () => ({ get, post }) };
 });
 
-import { getQueue, approveQueueItem, rejectQueueItem, importCsv, ApiValidationError } from "./api";
+import { getQueue, approveQueueItem, rejectQueueItem, importCsv, getDataQualityReport, ApiValidationError } from "./api";
 import { ApiHttpError } from "@gurmego/api-client";
 
 const VALID_ITEM = {
@@ -114,5 +114,20 @@ describe("importCsv", () => {
   it("throws ApiValidationError when the 2xx response body doesn't match CsvImportResultSchema", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ nonsense: true }) }) as unknown as typeof fetch;
     await expect(importCsv("tok", file)).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("getDataQualityReport", () => {
+  it("returns the validated report", async () => {
+    const report = { perDistrict: [{ name: "Kadıköy", count: 12 }], staleCount: 3, bySource: [{ source: "MANUAL", count: 12 }] };
+    get.mockResolvedValue(report);
+    const result = await getDataQualityReport("tok");
+    expect(result).toEqual(report);
+    expect(get).toHaveBeenCalledWith("/admin/reports/data-quality");
+  });
+
+  it("throws ApiValidationError when the response doesn't match DataQualityReportSchema", async () => {
+    get.mockResolvedValue({ nonsense: true });
+    await expect(getDataQualityReport("tok")).rejects.toThrow(ApiValidationError);
   });
 });
