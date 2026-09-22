@@ -7,21 +7,22 @@ Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo).
 Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Marka: sıcak/editöryel kimlik. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü (sıra kullanıcı onaylı): **1) tasarım sistemi** (PR #12, TAMAMLANDI) → 2) mobil dayanıklılık paketi → 3) kalan altyapı/borç temizliği → 4) canlıya çıkış operasyonel hazırlığı (Plan 4e). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
+2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık paketi** (PR #13 ✓) → 3) kalan altyapı/borç temizliği → 4) canlıya çıkış operasyonel hazırlığı (Plan 4e). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
 
 Önceki tamamlananlar: Kritik 11/11 + Orta paket A (PR #4-#7) + venue-card kapak fotoğrafı (PR #8) + admin paketi 3/3 (PR #9-#11) — hepsi `master`'da.
 
 ## Şu an ne yapıyoruz
-**Alt proje 1/4 (tasarım sistemi) TAMAMLANDI (PR #12, 2026-09-22).** Renk token'ları (`apps/web/src/lib/colors.ts`, 14 primitive + 4 semantic), Fraunces başlık fontu, WCAG kontrast düzeltmesi. İKİ tur cross-model review geçti: idea-red-team NO-GO verdi (kapsam web-only'e daraltıldı), implementasyon-sonrası review YENİ bir güvenlik bulgusu buldu (`next/image` + `remotePatterns: "**"` açık proxy'ydi) — **next/image bu turda hiç yapılmadı**, geri alındı. Detay: `docs/superpowers/specs/2026-09-22-design-system-design.md`.
+**Alt proje 2/4 (mobil dayanıklılık) TAMAMLANDI (PR #13, 2026-09-22).** Giriş/kayıt akışı geri bildirimi, favoriler/filtre boş durumları (yükleme/gerçek-boş ayrımıyla), yol tarifi hata uyarısı, paylaşım linki env'den. Codex review: 1 MAJOR (iki env şablon dosyasından biri unutulmuştu, düzeltildi).
 
 ## Sıradaki adım
-Alt proje 2/4: **mobil dayanıklılık paketi** — giriş sonrası hiçbir şey olmaması, e-posta onayı bildirimi yok, boş favoriler/filtre sonucu ekranları sessiz, "yol tarifi" sessizce başarısız olabiliyor, harita hatası uyarısız, paylaşım linki hep canlı siteyi gösteriyor (bkz. docs/DENETIM-RAPORU.md §4.2).
+Alt proje 3/4: **kalan altyapı/borç temizliği** — Dependabot yok, `packages/api-client`'ın "tip güvenli" iddiası zayıf, `venues.repository.ts` 487 satır (dosya boyutu kuralını aşmış), test izolasyonu borcu (bkz. docs/DENETIM-RAPORU.md §5.2/§5.4).
 
 ## Ertelenen/kapsam dışı bırakılan görevler (ayrı, gelecekte alınacak)
 - `next/image` gerçek optimizasyonu — admin'e dosya yükleme + bilinen tek domain'den (ör. Supabase Storage) SONRA.
 - Fraunces'ın gerçek uzun Türkçe mekan adlarıyla Playwright/tarayıcı doğrulaması (bu ortamda Playwright kurulu değil).
-- Mobil renk/font tutarlılığı (RN, kendi cihaz doğrulaması gerektirir) — muhtemelen alt proje 2'yle birleşir.
-- `FavoriteList` aynı-isim yarış durumu (`@@unique([userId, name])`) — ürün kuralı değişikliği, tasarım sisteminden kasıtlı ayrıldı.
+- Mobil fotoğraf önbellekleme (expo-image), harita yüklenemezse uyarı (düşük öncelik, adres zaten metin olarak gösteriliyor).
+- Mobilde filtre değişiminde tek-kare "sonuç yok" mesajı titremesi, AuthScreen çift-tıklama yarışı — cihaz doğrulaması gerektirir.
+- `FavoriteList` aynı-isim yarış durumu (`@@unique([userId, name])`) — ürün kuralı değişikliği.
 
 ## Bloke olanlar
 - Yok. Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
