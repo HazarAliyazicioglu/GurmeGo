@@ -4,6 +4,16 @@
 **Süreç:** her task TDD (test → kırmızı → kod) → Codex review → PR → CI → merge. **Ardışık, paralel değil** (tek uygulayıcı);
 her adım kendi başına yeşil bırakılır. v1 `plan-red-team`'den **YENİDEN BÖL** aldı (bkz. en alttaki bölüm).
 
+## Tamamlanma durumu (2026-09-21 — hepsi `master`'da, CI yeşil, Codex review'lı)
+**PR A** (#4, `89e7763`):
+- [x] A1 `configureApp`/`createAdapter` + gerçek-kurulum e2e (+ hata zarfı normalizasyonu)
+- [x] A2 `@fastify/helmet` · [x] A3 `@fastify/compress`
+- [x] A4 rate-limit anahtarı yalnız `req.ip` · [x] A5 admin ortak rate-limit kovası
+- [x] A6 `CSV_IMPORT_MAX_ROWS` · [x] A7 liste indeksi (ölçüm sonucu: yalnız bileşik indeks eklendi) · [x] A8 `AssignRoleSchema` + izole guard testleri
+**PR B** (#5, `3994e89`):
+- [x] B1 `audit_log` + DB trigger + `AuditService` · [x] B2 tek-kayıtlı işlemlere bağlama (atomik, fail-closed) · [x] B3 CSV niyet-önce-etki
+Sonraki paketler (web / admin / mobil / altyapı) için ayrı plan dosyası yazılacak; bu plan **kapandı**.
+
 ## Global Constraints
 - TS strict, `any` yasak (kaçınılmazsa gerekçeli disable). Servis katmanında raw SQL yok (ADR 002).
 - **Kullanıcı-ayarlı limitler** (rate limit, CSV satır sınırı) env'den okunur ve boot'ta doğrulanır (`parsePositiveIntEnv`).
