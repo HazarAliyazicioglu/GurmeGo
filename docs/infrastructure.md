@@ -40,19 +40,36 @@ ertelendi, pilot döneminde kurulmaz.
 - Extension'lar migration ile: `postgis`, `pgvector`, `pg_trgm`.
 - **Backup:** Supabase günlük otomatik yedek (Pro'da PITR). Ek güvence: haftalık `pg_dump` → obje depolama (cron).
 - **Export (NFR-06):** `pnpm export:venues` cron'u haftalık JSON/CSV snapshot üretir.
+- **Prod DB rolü (ADR 006 eylem maddesi, canlıya çıkmadan ÖNCE — CANLIYA ÇIKMADI):**
+  uygulamanın runtime `DATABASE_URL`'i, migration'ları çalıştıran ayrıcalıklı rolden (`postgres`)
+  AYRI, kısıtlı bir role (`gurmego_app`) bağlanmalı — bu rol `audit_log` üzerinde sadece
+  SELECT+INSERT taşır (append-only trigger'ın tablo sahibi/superuser tarafından bypass
+  edilememesi için ikinci bir katman). Kurulum script'i hazır ve yerel test DB'de doğrulandı:
+  `scripts/production-db-role-setup.sql` — gerçek Supabase projesi kurulduğunda bir kez
+  çalıştırılır, parola placeholder'ı doldurulur, sonra `DATABASE_URL` bu role işaret edecek
+  şekilde güncellenir. `prisma migrate deploy` her zaman ayrıcalıklı rolle çalışmaya devam eder.
 
 ## 4. CI/CD (GitHub Actions)
 
+**Durum notu (2026-09-22, docs/DENETIM-RAPORU.md §5.2 bulgusu):** aşağıdaki akışın sadece "PR açıldı"
+satırı **gerçekten kurulu** (`.github/workflows/ci.yml`, tek `quality` job'u). Geri kalanı —
+Vercel preview, staging deploy, prod deploy, tag onayı — **HENÜZ KURULMADI**, bilinçli bir MVP
+aşaması (ürün henüz canlıda değil). Aşağıdaki blokta ✓/✗ ile işaretlendi.
+
 ```
-PR açıldı:
-  lint + typecheck + test (Turborepo cache ile değişen paketler)
-  → Vercel preview (web/admin otomatik)
-main'e merge:
+PR açıldı:                                                                    [✓ KURULU]
+  lint + typecheck + test + build + smoke-test (tek `quality` job, Turborepo cache)
+  → Vercel preview (web/admin otomatik)                                       [✗ KURULMADI]
+main'e merge:                                                                 [✗ KURULMADI]
   migration'ları staging'e uygula → API'yi Railway staging'e deploy → smoke test
   → manuel onay (tag) → prod migration + deploy
-Mobil (Faz 2, MVP'de yok):
+Mobil (Faz 2, MVP'de yok):                                                    [✗ KURULMADI]
   EAS build — release branch'te; OTA update (Expo Updates) küçük düzeltmeler için
 ```
+
+Canlıya çıkmadan önce yapılacaklar listesi: Vercel/Railway (veya eşdeğeri) hesapları açılıp bu
+repoya bağlanmalı, staging+prod ortam değişkenleri (bkz. §2) her platformda ayrı ayrı girilmeli,
+prod DB rolü kısıtlaması (yukarıdaki §3 maddesi) uygulanmalı.
 
 - Prod deploy migration'dan **sonra** çalışır; geri alma = önceki container imajı + gerekiyorsa down migration.
 

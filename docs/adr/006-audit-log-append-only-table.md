@@ -38,7 +38,11 @@ Seçenek 1, şu sözleşmeyle:
   audit'li p50 4.59 ms / p95 10.32 ms (fark p95 +4.2 ms, gürültülü). Her çeyrekte aynı ölçüm tekrarlanır; audit'li p95 baseline'ın (10.32 ms) +25 ms üstüne (≈35 ms) çıkarsa ⇒ yazım yolunu gözden geçir.
 - **Yarım import:** haftalık `SELECT s.meta->>'importId' FROM audit_log s WHERE s.action='CSV_IMPORT_STARTED' AND s."createdAt" < now() - interval '1 hour' AND NOT EXISTS (SELECT 1 FROM audit_log f WHERE f.action='CSV_IMPORTED' AND f.meta->>'importId' = s.meta->>'importId')` sonucu boş değilse incele. STARTED ve IMPORTED kayıtları ortak `importId` (uuid) taşır; eşleşme oranı < %100 ⇒ import sessizce yarım kalmış.
 - **Rol/yetki (Plan 4e):** prod DB rolü `audit_log`'un **sahibi olmaz**, yalnız INSERT+SELECT yetkisi taşır ve `session_replication_role` ayarlama yetkisi verilmez (trigger'a ek katman; sahip/superuser bypass'ını kapatır). Bu bir *eylem maddesi*, ADR varsayımı ihlali değildir;
-  yapılmadan canlıya çıkılmaz.
+  yapılmadan canlıya çıkılmaz. **Kurulum script'i hazır** (2026-09-22): `scripts/production-db-role-setup.sql`
+  — kısıtlı `gurmego_app` rolünü oluşturur, yerel test DB'de gerçekten çalıştırılıp doğrulandı (UPDATE/DELETE
+  reddedildi, SELECT/INSERT çalıştı, `rolsuper`/`rolcreatedb`/`rolcreaterole` hepsi false). Gerçek Supabase
+  projesi kurulduğunda bir kez çalıştırılıp `DATABASE_URL` bu role yönlendirilecek — bu adım Supabase erişimi
+  gerektirdiği için henüz UYGULANMADI, sadece hazırlandı.
 - **Tetik (post-hoc):** ilk gerçek güvenlik soruşturmasında kaydın cevaplayamadığı bir soru çıkarsa (örn. "kim sildi") ⇒ imzalı/harici (append-only obje deposu)
   sürüme geçiş ADR'si açılır. Bu erken uyarı değil, gerçekleşmiş başarısızlığın işaretidir; bilerek ayrı tutuldu.
 
