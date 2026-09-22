@@ -7,13 +7,21 @@ Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo).
 Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Marka: sıcak/editöryel kimlik. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-`docs/DENETIM-RAPORU.md` (53 bulgu) uygulanıyor. Kritik 11/11 + Orta paket A (backend hardening, PR #4-#7) + venue-card kapak fotoğrafı (PR #8) + admin paketi 3/3 (PR #9-#11, veri kalitesi/rol atama/mekan geçmişi) hepsi `master`'da. Yeni plan dosyası yazılmadı — kullanıcı 2026-09-21'de tüm yetkiyi devretti, PR akışı/CI/Codex review kuralları aynen geçerli.
+2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü (sıra kullanıcı onaylı): **1) tasarım sistemi** (PR #12, TAMAMLANDI) → 2) mobil dayanıklılık paketi → 3) kalan altyapı/borç temizliği → 4) canlıya çıkış operasyonel hazırlığı (Plan 4e). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
+
+Önceki tamamlananlar: Kritik 11/11 + Orta paket A (PR #4-#7) + venue-card kapak fotoğrafı (PR #8) + admin paketi 3/3 (PR #9-#11) — hepsi `master`'da.
 
 ## Şu an ne yapıyoruz
-Admin paketi TAMAMLANDI (2026-09-22). API 54 suite / 366 test, admin 10 suite / 106 test, web 26 suite / 155 test, shared 9 suite / 75 test — hepsi yeşil.
+**Alt proje 1/4 (tasarım sistemi) TAMAMLANDI (PR #12, 2026-09-22).** Renk token'ları (`apps/web/src/lib/colors.ts`, 14 primitive + 4 semantic), Fraunces başlık fontu, WCAG kontrast düzeltmesi. İKİ tur cross-model review geçti: idea-red-team NO-GO verdi (kapsam web-only'e daraltıldı), implementasyon-sonrası review YENİ bir güvenlik bulgusu buldu (`next/image` + `remotePatterns: "**"` açık proxy'ydi) — **next/image bu turda hiç yapılmadı**, geri alındı. Detay: `docs/superpowers/specs/2026-09-22-design-system-design.md`.
 
 ## Sıradaki adım
-Kullanıcıdan yeni yön bekleniyor. Adaylar: (a) mobil `DiscoveryScreen`'e aynı venue-card fotoğraf eksikliğini taşımak (bounded görev), (b) `docs/DENETIM-RAPORU.md`'deki kalan Orta/Düşük bulgular, (c) Plan 4e canlıya çıkış hazırlığı (aşağıya bkz).
+Alt proje 2/4: **mobil dayanıklılık paketi** — giriş sonrası hiçbir şey olmaması, e-posta onayı bildirimi yok, boş favoriler/filtre sonucu ekranları sessiz, "yol tarifi" sessizce başarısız olabiliyor, harita hatası uyarısız, paylaşım linki hep canlı siteyi gösteriyor (bkz. docs/DENETIM-RAPORU.md §4.2).
+
+## Ertelenen/kapsam dışı bırakılan görevler (ayrı, gelecekte alınacak)
+- `next/image` gerçek optimizasyonu — admin'e dosya yükleme + bilinen tek domain'den (ör. Supabase Storage) SONRA.
+- Fraunces'ın gerçek uzun Türkçe mekan adlarıyla Playwright/tarayıcı doğrulaması (bu ortamda Playwright kurulu değil).
+- Mobil renk/font tutarlılığı (RN, kendi cihaz doğrulaması gerektirir) — muhtemelen alt proje 2'yle birleşir.
+- `FavoriteList` aynı-isim yarış durumu (`@@unique([userId, name])`) — ürün kuralı değişikliği, tasarım sisteminden kasıtlı ayrıldı.
 
 ## Bloke olanlar
 - Yok. Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
@@ -33,3 +41,6 @@ Kullanıcıdan yeni yön bekleniyor. Adaylar: (a) mobil `DiscoveryScreen`'e ayn�
 - JS regex `/i` ile Türkçe büyük "İ" ile başlayan kelime eşleştirmek: ELENDİ, KALICI — `/işlem/i`, "İşlem..."e uymaz. Alt-dizeyi büyük harfsiz kur.
 - Bir sayfada "seçili öğe" değişirken önceki seçimin async yanıtlarını guard'lamamak: ELENDİ, KALICI (mekan-geçmişi PR'ında 2 MAJOR bug) — arama/seçim değiştiğinde eski state'i hemen temizle + bir ref'te "hâlâ bu mu seçili" kontrolü yap, sadece request-id yetmez.
 - Mobile gerçek Expo dev server'da hiç elle denenmemiş; safe-area-context jest mock, Expo `EXPO_PUBLIC_*` dinamik erişim: ELENDİ, KALICI.
+- `apps/mobile` jest suite'inde ara sıra tek bir test 15sn timeout'la flake veriyor (`VenueDetailScreen`): KOŞULLU — CI'da görülürse önce yeniden çalıştır, PR diff'iyle ilgisizse gerçek regresyon değildir.
+- `gh pr merge --squash` sonrası yerel `master`'ın squash-öncesi commit'leri varsa (ör. docs commit'leri feature branch'e alınmadan önce master'a doğrudan işlenmişse) yerel checkout "fast-forward yapılamıyor" hatası verir: ELENDİ, KALICI — PR GitHub'da yine de merge olmuş olur (`gh pr view --json state,mergedAt` ile doğrula), yerel `master`'ı `git reset --hard origin/master` ile hizala (içerik kaybı yok, squash zaten üstünde).
+- `next.config.js`'de `images.remotePatterns: [{ hostname: "**" }]`: ELENDİ, KALICI — "sadece admin girdisi" savunması yanlış, `/_next/image?url=<keyfi>` endpoint'i herkese açık, bu bir açık proxy/kaynak-suistimali riski. Bilinen tek bir domain'e daraltılmadan next/image'a arbitrary-domain optimizasyonu ekleme.
