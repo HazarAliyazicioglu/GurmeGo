@@ -7,28 +7,13 @@ Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo).
 Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Marka: sıcak/editöryel kimlik. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-`docs/DENETIM-RAPORU.md` (53 bulgu) uygulanıyor. Biten plan: docs/superpowers/plans/2026-09-21-api-hardening.md — 11/11 task. Yeni plan (web/admin/mobil/altyapı) henüz yazılmadı.
-(2026-09-07-mobile-mvp.md checkbox'la izlenmiyor; 0/128 işaretsiz ama mobil master'da, ADR 005 sonrası eski sayılır.)
+`docs/DENETIM-RAPORU.md` (53 bulgu) uygulanıyor. Kritik 11/11 + Orta paket A (backend hardening, PR #4-#7) + venue-card kapak fotoğrafı (PR #8) + admin paketi 3/3 (PR #9-#11, veri kalitesi/rol atama/mekan geçmişi) hepsi `master`'da. Yeni plan dosyası yazılmadı — kullanıcı 2026-09-21'de tüm yetkiyi devretti, PR akışı/CI/Codex review kuralları aynen geçerli.
 
 ## Şu an ne yapıyoruz
-Kullanıcı 2026-09-21'de tüm yetkiyi devretti ("planlama, programlama, araştırma sende; vizyona uygun en üst seviye"); PR akışı/CI/Codex review kuralları aynen geçerli.
-Bu oturumda `master`'a girenler: **Kritik 11/11** (PR #1 Next 16/React 19, #2 NestJS 11+Fastify 5; prod audit 3 critical/50 high → 0/0) ve **Orta paket A** (PR #4 çekirdek, #5 audit log;
-ADR 006 v2): helmet, gzip, ortak admin rate-limit, CSV 2000 satır sınırı, ölçülmüş liste indeksi, hata zarfı normalizasyonu, DB-seviyesinde append-only `audit_log`. API 54 suite / 352 test.
-Son commit: CI kararsızlığı (aynı commit'te bir koşu TS2742 verdi) → workspace'te tek `@types/react` + CI'da lockfile koruması, PR #7 CI yeşil geçti ve `master`'a squash-merge edildi (2026-09-22).
-
-## Vizyon cevabı (2026-09-22)
-Web `venue-card` fotoğraf eksikliği bilinçli editöryel tercih DEĞİL — eksik özellik. Fotoğraf gösterimi eklendi (aşağıya bkz).
-
-## Bu oturumda tamamlanan: venue-card kapak fotoğrafı (PR #8, 2026-09-22)
-Bounded görev (brainstorming onayı alındı, spec dosyası yok). `VenueListItemSchema`'ya `coverPhoto: string | null` eklendi (tam `photos` dizisi değil), API `searchPublished` SELECT'ine `v.photos[1] AS "coverPhoto"`, web `venue-card.tsx` düz `<img>` ile kapak fotoğrafı gösteriyor. TDD ile katman katman (shared→API→web), Codex cross-model review 5 minor bulgu (2 kabul, 1 red, 2 zaten temiz). CI kırmızıya düştü (`@gurmego/mobile#test` — mobile'ın kendi `api.spec.ts` fixture'ı da aynı şemayı runtime doğruluyordu, coverPhoto eksikti), düzeltildi, CI yeşil, `master`'a squash-merge.
-
-## Admin paketi ilerlemesi (kullanıcı onaylı sıra: veri kalitesi → rol atama → mekan geri alma)
-2/3 tamam:
-- **veri kalitesi raporu** (PR #9, 2026-09-22) — `/veri-kalitesi` sayfası + nav, `DataQualityReportSchema`.
-- **rol atama** (PR #10, 2026-09-22) — `GET /admin/users?search=` (yeni), `packages/api-client`'a `put()` eklendi, `/roller` sayfası (email ara + curator ata).
+Admin paketi TAMAMLANDI (2026-09-22). API 54 suite / 366 test, admin 10 suite / 106 test, web 26 suite / 155 test, shared 9 suite / 75 test — hepsi yeşil.
 
 ## Sıradaki adım
-Admin alt görev 3/3: **mekan geri alma**. Backend'de `POST /admin/venues/:id/revert/:versionId` var ama versiyon listeleme endpoint'i YOK (`VenueVersion` tablosu zaten var, sadece bir `GET /admin/venues/:id/versions` eksik) — önce o eklenmeli, sonra admin sayfası (mekan seç → versiyon geçmişi → geri al). Mobil liste ekranı (`DiscoveryScreen`) venue-card ile aynı fotoğraf eksikliğini taşıyor — kapsam dışı bırakıldı, istenirse ayrı bounded görev olarak alınabilir.
+Kullanıcıdan yeni yön bekleniyor. Adaylar: (a) mobil `DiscoveryScreen`'e aynı venue-card fotoğraf eksikliğini taşımak (bounded görev), (b) `docs/DENETIM-RAPORU.md`'deki kalan Orta/Düşük bulgular, (c) Plan 4e canlıya çıkış hazırlığı (aşağıya bkz).
 
 ## Bloke olanlar
 - Yok. Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
@@ -38,15 +23,13 @@ Admin alt görev 3/3: **mekan geri alma**. Backend'de `POST /admin/venues/:id/re
 - ADR 005 native mobile · Plan 1: docs/adr/001-004 · Round 1-3 red-team: docs/CHANGELOG.md, prd.md §1+§5.
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar (KALICI dersler)
-- Tam menü/semantic search (MVP'de): Faz 2. KOŞULLU — Gurme Puanı/geniş katkı markanın uzun vadeli kimliği; öncelik yeniden bakılabilir.
-- Review/red-team'i tek turda bitirmeyi ummak · CI'nın "yazıldı = çalışıyor" varsayımı · cross-session guard'larda TEK sinyal: ELENDİ, KALICI (monotonic counter).
-- Expo `EXPO_PUBLIC_*` dinamik erişim; testte `new Date().getDay()` (CI UTC vs UTC+3); safe-area-context `jest/mock.js`: ELENDİ, KALICI. Mobile gerçek Expo dev server'da hiç elle denenmemiş.
-- Codex review'ı çıktısını görmeden "çalışıyor" saymak: ELENDİ, KALICI. Sessiz hatalar: eski CLI/model uyumsuzluğu VE Windows'ta ~32KB üstü prompt (`Argument list too long`).
-  Kural: `codex exec … - < dosya` (stdin), bitiş = çıktıda `tokens used` + `^ERROR` yok; "codex.exe var mı" ile bekleme.
-- Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ, KALICI (Fastify 5 cors metod regresyonunu yalnız canlı probe yakaladı). Framework'ün kendi bağımlılığını (fastify) `^` ile pinlemek: ELENDİ (exact pin).
-- `prisma migrate dev` çıktısını olduğu gibi uygulamak: ELENDİ, KALICI — PostGIS GiST `Venue_location_idx`'i "drift" sanıp DROP önerir; her migration'da elle çıkar (e2e koruması var).
-- `src/` dışından import (tsconfig include=[src]): ELENDİ — rootDir kayar, çıktı `dist/src/main.js`, CI smoke kırılır; yerel smoke'tan önce `rm -rf apps/api/dist`.
-- Workspace'te birden çok `@types/react` sürümü: ELENDİ, KALICI — pnpm hoist rastgele seçer, aynı commit'te flaky TS2742. CI'da scripts/check-single-types-react.mjs korur.
-- Kilitsiz okuma-sonra-yazma ile "önceki değeri" kaydetmek: ELENDİ — koşullu `updateMany` kalıbı. jest 29 ESM-only transitive'leri parse edemez: NestJS 12 (ESM-only) KOŞULLU — Vitest göçü yapılırsa yeniden bak.
-- Paylaşılan (`packages/shared`) bir zod şemasına zorunlu alan eklemek: sadece değiştirdiğin app'in testine bakıp "yeşil" saymak ELENDİ, KALICI — o şemayı runtime doğrulayan HER app'in kendi fixture'ı kırılır (web VE mobile'ın ayrı ayrı `lib/api.spec.ts`'i var, ikisi de aynı `VenueListItemSchema`'yı `safeParse` ediyor). Yeni alan eklerken `grep -rn "<benzer_alan_adı>"` ile tüm apps/ dizinini tara, sadece dokunduğun app'i değil.
-- JS regex `/i` bayrağıyla Türkçe metinde büyük "İ" ile başlayan bir kelimeyi küçük harfli pattern'le eşleştirmeye çalışmak: ELENDİ, KALICI — `/işlem/i`, cümle "İşlem..." ile başlıyorsa eşleşmez (İ/i Unicode case-fold'u locale-bağımsız JS regex'te doğru çalışmıyor). Pattern'i büyük harfle başlamayan bir alt-dizeyle kur (`/gerçekleştirilemedi/i` gibi) ya da tam string karşılaştır.
+- Tam menü/semantic search (MVP'de): Faz 2. KOŞULLU — öncelik yeniden bakılabilir.
+- Review/red-team'i tek turda bitirmeyi ummak · CI'nın "yazıldı = çalışıyor" varsayımı · cross-session guard'larda TEK sinyal: ELENDİ, KALICI.
+- Codex review çıktısını görmeden "çalışıyor" saymak: ELENDİ, KALICI. Kural: `codex exec … - < dosya` (stdin), bitiş = çıktıda `tokens used` var.
+- Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ, KALICI (canlı probe gerekir).
+- `prisma migrate dev` çıktısını olduğu gibi uygulamak: ELENDİ, KALICI — PostGIS GiST index'ini "drift" sanıp DROP önerir, elle çıkar.
+- Workspace'te birden çok `@types/react` sürümü: ELENDİ, KALICI — `scripts/check-single-types-react.mjs` korur.
+- Paylaşılan (`packages/shared`) bir zod şemasına zorunlu alan eklemek, sadece değiştirdiğin app'in testine bakıp "yeşil" saymak: ELENDİ, KALICI — o şemayı runtime doğrulayan HER app'in fixture'ı kırılır (web+mobile+admin ayrı `lib/api.spec.ts`'leri var). Yeni alan eklerken tüm `apps/`'i grep'le.
+- JS regex `/i` ile Türkçe büyük "İ" ile başlayan kelime eşleştirmek: ELENDİ, KALICI — `/işlem/i`, "İşlem..."e uymaz. Alt-dizeyi büyük harfsiz kur.
+- Bir sayfada "seçili öğe" değişirken önceki seçimin async yanıtlarını guard'lamamak: ELENDİ, KALICI (mekan-geçmişi PR'ında 2 MAJOR bug) — arama/seçim değiştiğinde eski state'i hemen temizle + bir ref'te "hâlâ bu mu seçili" kontrolü yap, sadece request-id yetmez.
+- Mobile gerçek Expo dev server'da hiç elle denenmemiş; safe-area-context jest mock, Expo `EXPO_PUBLIC_*` dinamik erişim: ELENDİ, KALICI.
