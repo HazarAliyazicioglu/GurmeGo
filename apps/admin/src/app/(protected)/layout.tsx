@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -66,7 +67,18 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
   return (
     <>
-      <header className="flex items-center justify-end gap-3 border-b border-slate-200 bg-white px-4 py-2 sm:px-6 lg:px-8">
+      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 sm:px-6 lg:px-8">
+        <nav className="flex items-center gap-4 text-xs font-semibold text-slate-600">
+          <Link href="/kuyruk" className="hover:text-slate-900 hover:underline">
+            Kuyruk
+          </Link>
+          <Link href="/import" className="hover:text-slate-900 hover:underline">
+            Import
+          </Link>
+          <Link href="/veri-kalitesi" className="hover:text-slate-900 hover:underline">
+            Veri Kalitesi
+          </Link>
+        </nav>
         {signOutError && (
           <p role="alert" className="text-xs font-semibold text-rose-700">
             {signOutError}

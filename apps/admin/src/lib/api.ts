@@ -3,8 +3,10 @@ import {
   AdminQueueListSchema,
   AdminQueueMutationResultSchema,
   CsvImportResultSchema,
+  DataQualityReportSchema,
   type AdminQueueItem,
   type CsvImportResult,
+  type DataQualityReport,
 } from "@gurmego/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1";
@@ -46,6 +48,14 @@ export async function rejectQueueItem(token: string, id: string): Promise<void> 
   const raw = await client.post<unknown>(`/admin/queue/${id}/reject`, {});
   const result = AdminQueueMutationResultSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(`/admin/queue/${id}/reject`, result.error.issues);
+}
+
+export async function getDataQualityReport(token: string): Promise<DataQualityReport> {
+  const client = createApiClient(API_BASE, () => token);
+  const raw = await client.get<unknown>("/admin/reports/data-quality");
+  const result = DataQualityReportSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError("/admin/reports/data-quality", result.error.issues);
+  return result.data;
 }
 
 export async function importCsv(token: string, file: File): Promise<CsvImportResult> {
