@@ -10,6 +10,7 @@ export interface VenueRow {
   slug: string;
   category: string;
   distance_m?: number;
+  coverPhoto: string | null;
 }
 
 // Internal-only row shape used while building a page: carries `created_at` (needed to encode a
@@ -301,7 +302,8 @@ export class VenuesRepository {
 
     const rows = await this.prisma.$queryRaw<VenueRowInternal[]>(Prisma.sql`
       SELECT v.id, v.name, v.slug, v.category, v."priceRange", v."isBoutique", v."editorialNote",
-             v."googleRating", v."googleRatingCount", v."createdAt" AS created_at${distanceSelect}
+             v."googleRating", v."googleRatingCount", v.photos[1] AS "coverPhoto",
+             v."createdAt" AS created_at${distanceSelect}
       FROM "Venue" v
       WHERE ${where} ${radiusFilter} ${cursorFilter}
       ${orderBy}
