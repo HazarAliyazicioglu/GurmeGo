@@ -7,17 +7,18 @@ Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo).
 Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Marka: sıcak/editöryel kimlik. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık paketi** (PR #13 ✓) → 3) kalan altyapı/borç temizliği → 4) canlıya çıkış operasyonel hazırlığı (Plan 4e). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
+2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık** (PR #13 ✓) → **3) altyapı/borç temizliği** (PR #14 ✓, kalanı bilinçli ertelendi) → 4) canlıya çıkış operasyonel hazırlığı (Plan 4e). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
 
 Önceki tamamlananlar: Kritik 11/11 + Orta paket A (PR #4-#7) + venue-card kapak fotoğrafı (PR #8) + admin paketi 3/3 (PR #9-#11) — hepsi `master`'da.
 
 ## Şu an ne yapıyoruz
-**Alt proje 2/4 (mobil dayanıklılık) TAMAMLANDI (PR #13, 2026-09-22).** Giriş/kayıt akışı geri bildirimi, favoriler/filtre boş durumları (yükleme/gerçek-boş ayrımıyla), yol tarifi hata uyarısı, paylaşım linki env'den. Codex review: 1 MAJOR (iki env şablon dosyasından biri unutulmuştu, düzeltildi).
+**Alt proje 3/4 (altyapı borcu) kısmen TAMAMLANDI (PR #14, 2026-09-22).** Dependabot eklendi, `packages/api-client`'ın yanıltıcı "tip güvenli istemci" iddiası düzeltildi. **Bilinçli ertelenenler** (aşağıya bkz): `venues.repository.ts`'in 487 satırlık dosya-boyutu bulgusu (bölmek risk/getiri dengesi net değil, kanıtlanmış bir bakım maliyeti gösterilmedi) ve test izolasyonu borcu (denetim raporunun kendisi "test sayısı önemli artmadıkça dokunmaya gerek yok" diyor).
 
 ## Sıradaki adım
-Alt proje 3/4: **kalan altyapı/borç temizliği** — Dependabot yok, `packages/api-client`'ın "tip güvenli" iddiası zayıf, `venues.repository.ts` 487 satır (dosya boyutu kuralını aşmış), test izolasyonu borcu (bkz. docs/DENETIM-RAPORU.md §5.2/§5.4).
+Alt proje 4/4: **canlıya çıkış operasyonel hazırlığı (Plan 4e)** — uygulamanın DB rolünün `audit_log`'a yalnız INSERT+SELECT ile sınırlanması (ADR 006), `SUPABASE_JWT_ISSUER`/`AUDIENCE` env değişkenlerinin set edilmesi, dokümante edilen deploy hattının gerçekte kurulup kurulmadığının netleştirilmesi.
 
 ## Ertelenen/kapsam dışı bırakılan görevler (ayrı, gelecekte alınacak)
+- `venues.repository.ts` dosya-boyutu bölme + backend test izolasyonu — bilinçli ertelendi, gerekçe yukarıda.
 - `next/image` gerçek optimizasyonu — admin'e dosya yükleme + bilinen tek domain'den (ör. Supabase Storage) SONRA.
 - Fraunces'ın gerçek uzun Türkçe mekan adlarıyla Playwright/tarayıcı doğrulaması (bu ortamda Playwright kurulu değil).
 - Mobil fotoğraf önbellekleme (expo-image), harita yüklenemezse uyarı (düşük öncelik, adres zaten metin olarak gösteriliyor).
@@ -25,7 +26,7 @@ Alt proje 3/4: **kalan altyapı/borç temizliği** — Dependabot yok, `packages
 - `FavoriteList` aynı-isim yarış durumu (`@@unique([userId, name])`) — ürün kuralı değişikliği.
 
 ## Bloke olanlar
-- Yok. Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
+- Yok. Supabase proje erişimi (env değişkenleri, DB rolü ayarı) gerekebilir — proje canlıya alınmadıysa bazı Plan 4e adımları sadece dokümantasyon/kod tarafında ilerletilebilir, gerçek Supabase panelinde uygulanması kullanıcı eylemi gerektirebilir.
 
 ## Yakın kararlar
 - ADR 006: aynı DB'de DB-trigger'lı append-only audit log, aynı transaction'da → docs/adr/006-audit-log-append-only-table.md
