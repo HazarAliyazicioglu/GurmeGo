@@ -10,3 +10,4 @@ export * from "./schemas/admin-export.schema";
 export * from "./schemas/admin-role.schema";
 export * from "./schemas/admin-report.schema";
 export * from "./schemas/admin-user-search.schema";
+export * from "./schemas/admin-venue-history.schema";

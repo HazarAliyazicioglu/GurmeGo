@@ -11,7 +11,7 @@ vi.mock("@gurmego/api-client", async (importOriginal) => {
   return { ...actual, createApiClient: () => ({ get, post, put }) };
 });
 
-import { getQueue, approveQueueItem, rejectQueueItem, importCsv, getDataQualityReport, searchUsers, assignRole, ApiValidationError } from "./api";
+import { getQueue, approveQueueItem, rejectQueueItem, importCsv, getDataQualityReport, searchUsers, assignRole, searchVenues, listVenueVersions, revertVenue, ApiValidationError } from "./api";
 import { ApiHttpError } from "@gurmego/api-client";
 
 const VALID_ITEM = {
@@ -154,5 +154,43 @@ describe("getDataQualityReport", () => {
   it("throws ApiValidationError when the response doesn't match DataQualityReportSchema", async () => {
     get.mockResolvedValue({ nonsense: true });
     await expect(getDataQualityReport("tok")).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("searchVenues", () => {
+  it("returns the validated search results", async () => {
+    const results = [{ id: "550e8400-e29b-41d4-a716-446655440000", name: "Kadıköy Kahvecisi", slug: "kadikoy-kahvecisi", status: "PUBLISHED" }];
+    get.mockResolvedValue(results);
+    const result = await searchVenues("tok", "kadikoy");
+    expect(result).toEqual(results);
+    expect(get).toHaveBeenCalledWith("/admin/venues?search=kadikoy");
+  });
+
+  it("throws ApiValidationError when the response doesn't match AdminVenueSearchResultSchema", async () => {
+    get.mockResolvedValue({ nonsense: true });
+    await expect(searchVenues("tok", "kadikoy")).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("listVenueVersions", () => {
+  it("returns the validated version list", async () => {
+    const versions = [{ id: "660e8400-e29b-41d4-a716-446655440000", createdAt: "2026-01-01T00:00:00.000Z", createdBy: "admin-1" }];
+    get.mockResolvedValue(versions);
+    const result = await listVenueVersions("tok", "550e8400-e29b-41d4-a716-446655440000");
+    expect(result).toEqual(versions);
+    expect(get).toHaveBeenCalledWith("/admin/venues/550e8400-e29b-41d4-a716-446655440000/versions");
+  });
+
+  it("throws ApiValidationError when the response doesn't match AdminVenueVersionListSchema", async () => {
+    get.mockResolvedValue({ nonsense: true });
+    await expect(listVenueVersions("tok", "v1")).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("revertVenue", () => {
+  it("POSTs to the revert endpoint", async () => {
+    post.mockResolvedValue({});
+    await revertVenue("tok", "v1", "ver1");
+    expect(post).toHaveBeenCalledWith("/admin/venues/v1/revert/ver1", {});
   });
 });
