@@ -1,130 +1,171 @@
 # Tasarım Sistemi / Marka Kimliği — Design Doc
 
 **Tarih:** 2026-09-22
-**Durum:** Onay bekliyor (idea-red-team öncesi taslak)
-**Kapsam:** Alt proje 1/4 (bkz. docs/STATE.md kararı: tasarım sistemi → mobil dayanıklılık → altyapı borcu → canlıya çıkış hazırlığı)
+**Durum:** idea-red-team NO-GO verdi (Codex, yüksek efor) — kapsam ciddi daraltıldı, aşağıdaki
+sürüm daraltılmış+düzeltilmiş halidir. Yeniden red-team'e sokulmadı (kapsam artık çok daha küçük
+ve her nokta somut bir Codex bulgusuna karşılık düzeltildi; ikinci bir tur orantısız olur).
+**Kapsam:** Alt proje 1/4 — SADECE web (admin/mobil bu turdan tamamen çıkarıldı, gerekçe aşağıda).
+
+## Red-team bulguları (Codex, yüksek efor, NO-GO) — hepsi işlendi
+
+- **`unoptimized` next/image hiçbir şeyi optimize etmez** (byte küçülmez, sadece prop değişir):
+  KABUL. Yaklaşım değişti — `unoptimized` yerine `remotePatterns: [{ hostname: "**" }]` (gerçek
+  sunucu-taraflı yeniden boyutlandırma). Maliyet: admin-girişli keyfi URL'leri sunucu tarafında
+  fetch etmek — sadece admin/curator girdisi (herkese açık form değil), MVP için kabul edilebilir
+  risk; büyürse allowlist'e daraltılır (ayrı, sonraki karar).
+- **Font değişimi (Georgia→Fraunces) gerçek bir görsel değişikliktir, birim test bunu kanıtlamaz**
+  (uzun Türkçe mekan adlarının satır kırılımı, kart yüksekliği): KABUL. Unit test iddiası
+  kaldırıldı; yerine **elle doğrulama zorunlu** — dev server'da gerçek uzun mekan adlarıyla
+  (`docs/prd.md`'deki örnekler) görsel kontrol, ekran görüntüsü.
+- **Font eklemenin "performans/gizlilik kazancı" iddiası abartılı** (bugünkü sistem fontu zaten
+  0 network isteği): KABUL, gerekçe düzeltildi — bu bir **marka tutarlılığı** kararı, küçük bir
+  performans MALİYETİ (bir font dosyası) karşılığında.
+- **Mobil tipografiyi açılış akışına bağlamak en riskli parça, tanımsız hata durumu, gerçek cihaz
+  doğrulaması yok:** KABUL — mobil ve admin bu turdan **tamamen çıkarıldı**. Admin zaten kendi
+  tutarlı nötr paletini kullanıyor, marka kimliği taşımıyor (Codex: "kendi kapsam gerekçesiyle
+  çelişiyor" — doğru, admin'e Fraunces yüklemek anlamsız). Mobil ayrı, kendi cihaz doğrulaması
+  olan bir görev olarak STATE.md'ye not edilir, bu pakette YOK.
+- **Favoriler `@@unique` migration'ı kapsam dışı, ürün kuralı değişikliği, limit-kontrolü sırası
+  sorunu var:** KABUL — bu pakete tamamen dahil değil, ayrı bir bounded görev olarak STATE.md'ye
+  not edilir.
+- **Primitive renk listesi eksik** (`#9e422b`, `#e8e1d5`, `#e67b5e` production kodunda var ama
+  listede yok): KABUL — aşağıdaki liste, gerçek `grep` çıktısındaki 14 tonun TAMAMI.
+  **Verilen anlamsal isimlendirme fazla iddialı** ("aynı hex farklı roller taşıyabilir, hepsini
+  `brand` yapmak yanlış birleşme riski"): KABUL — primitive katman tam, semantic katman
+  **minimal** tutuldu (sadece gerçekten tek-anlamlı olanlar isimlendirildi, geri kalanı primitive
+  ismiyle kullanılmaya devam eder).
+- **WCAG kontrast bulgusu** (terracotta zemin + beyaz metin varsayılan durumda 3.81:1, AA eşiği
+  4.5:1 — hesaplandı, doğru): KABUL, YENİ bulgu, düzeltiliyor — `bg-[#d75d3b]` → `bg-[#bd4c30]`
+  (4.95:1, AA geçer) varsayılan buton zemini, hover'da `#d75d3b`'ye açılır (ters çevrildi).
+- **Leaflet CSS'in component'e taşınması "haritasız sayfa hiç indirmez" garantisi vermez** (Next
+  global stylesheet birleştirme davranışı): KABUL, iddia yumuşatıldı — taşınır ama **build
+  çıktısıyla doğrulanır** (`next build`'in route bazlı "First Load JS/CSS" raporu), garanti değil
+  gözlem olarak yazılır.
 
 ## Neden
 
 `docs/DENETIM-RAPORU.md` §5.3'ün bulduğu gibi, markanın hedeflediği "sıcak, editöryel kimlik"
-(docs/product-overview.md) ile kodun görsel durumu arasında fark var. Ama kod taraması gösteriyor ki
+(docs/product-overview.md) ile kodun görsel durumu arasında fark var. Kod taraması gösteriyor ki
 bu fark iddia edildiği kadar büyük değil: web'de zaten tutarlı, kasıtlı bir sıcak palet kullanılıyor
 (`#d75d3b` terrakota 88 kez, `#201d18` mürekkep 177 kez, `#f4f0e7` krem 47 kez — 14 farklı ton, rastgele
-değil, aile halinde). Gerçek eksik üç yerde:
+değil, aile halinde). Gerçek eksik dört yerde:
 
-1. **Token'sızlık:** Renkler her yerde ham hex (`bg-[#f4f0e7]`) — tek bir yerden değiştirilemiyor,
-   admin'in operasyonel paleti (slate/blue) ile web'in marka paleti aynı sistemde tanımlı değil.
+1. **Token'sızlık:** Renkler her yerde ham hex (`bg-[#f4f0e7]`) — tek bir yerden değiştirilemiyor.
 2. **Tipografi hiç yüklenmiyor:** `font-serif`/`font-sans` Tailwind'in jenerik stack'i (Georgia,
-   system-ui) — cihaza göre değişiyor, markanın "tırnaklı editöryel" hissi rastgele.
-3. **Performans/temizlik borcu:** `next/image` hiç kullanılmıyor (fotoğraflar optimize edilmeden
-   gönderiliyor), Leaflet CSS'i tüm sayfalarda yükleniyor (haritasız sayfalarda bile).
+   system-ui) — cihaza göre değişiyor.
+3. **`next/image` hiç kullanılmıyor** — fotoğraflar gerçekten optimize edilmeden gönderiliyor.
+4. **WCAG kontrast bulgusu** (red-team'de bulundu): "Yol tarifi al" butonunun varsayılan
+   durumu (`#d75d3b` zemin + beyaz metin) 3.81:1 — AA eşiği 4.5:1'in altında.
 
 ## Kapsam
 
-**Dahil:** web (tüketici, marka kimliğinin göründüğü asıl yer) + admin (kendi nötr paleti, tutarlılık
-için token'lanır ama YENİDEN TASARLANMAZ — iç araç, marka kimliği taşımıyor) + mobil (aynı renk/font
-token'ları, RN'e uygun formatta).
+**Dahil:** SADECE web (tüketici, marka kimliğinin göründüğü asıl yer, red-team'in doğruladığı
+gibi ölçülebilir bir fayda gösterilebilecek tek yer).
 
-**Kapsam dışı:** Yeni bir görsel yön/renk paleti icat etmek (YAGNI — mevcut palet zaten iyi
-çalışıyor, kanıtlanmamış bir değişiklik riski almanın gerekçesi yok). Admin panelinin marka
-kimliğine "ısıtılması" (iç araç, önceliği yok).
+**Kapsam dışı (red-team sonrası):**
+- **Admin** — kendi tutarlı nötr paleti zaten var, marka kimliği taşımıyor, dokunulmuyor.
+- **Mobil tipografi/renk** — en riskli parça (açılış akışına bağımlılık, tanımsız hata durumu,
+  gerçek cihaz doğrulaması gerektirir); ayrı bir görev, STATE.md'ye not edilir.
+- **FavoriteList `@@unique` yarış durumu düzeltmesi** — ürün kuralı değişikliği, bu paketle
+  ilgisiz; ayrı bir bounded görev, STATE.md'ye not edilir.
+- Yeni bir görsel yön/renk paleti icat etmek (YAGNI — mevcut palet zaten iyi çalışıyor).
 
 ## Yaklaşım
 
-**Seçilen: mevcut paleti kanonikleştir + iki Google Font yükle + next/image'a geç.**
+**Seçilen: web'in mevcut paletini TAM ve doğru kanonikleştir + tek font (başlık) yükle + gerçek
+next/image optimizasyonu + kontrast düzeltmesi.**
 
-Alternatif 1 (yeni bir palet/tasarımcı işi baştan tasarlamak) reddedildi: mevcut palet zaten
-editöryel/sıcak hissi veriyor ve production kodunda 300+ yerde kullanılıyor; değiştirmek hem riskli
-hem gereksiz — sorun palet değil, palet'in *sistemleştirilmemiş* olması.
+Alternatif (yeni bir palet/tasarımcı işi baştan tasarlamak) reddedildi: mevcut palet zaten
+editöryel/sıcak hissi veriyor; değiştirmek riskli ve gereksiz.
 
-Alternatif 2 (CSS custom properties / `:root` değişkenleri) reddedildi: Tailwind zaten kurulu ve
-`theme.extend.colors` üzerinden token tanımlamak, mevcut `className` kalıplarıyla (`bg-[#f4f0e7]` →
-`bg-cream`) bire bir eşleşiyor, ek bir sistem kurmuyor.
+### 1. Renk token'ları (`apps/web/src/lib/colors.ts`)
 
-### 1. Renk token'ları (packages/shared)
-
-`packages/shared/src/design-tokens.ts`: iki katman.
+Gerçek `grep -rohE "#[0-9a-fA-F]{3,8}"` çıktısındaki **14 tonun TAMAMI**, primitive katman —
+red-team'in bulduğu eksik liste artık tam:
 
 ```ts
 export const PRIMITIVE_COLORS = {
-  ink: "#201d18", terracotta: "#d75d3b", terracottaDark: "#bd4c30",
-  terracottaLight: "#e77959", cream: "#f4f0e7", creamLight: "#faf7f0",
-  creamPale: "#fffdf8", sand: "#eadfce", sandLight: "#eee5d7", brown: "#75402f",
-} as const;
-
-export const SEMANTIC_COLORS = {
-  brand: PRIMITIVE_COLORS.terracotta,
-  brandHover: PRIMITIVE_COLORS.terracottaDark,
-  ink: PRIMITIVE_COLORS.ink,
-  surface: PRIMITIVE_COLORS.cream,
-  surfaceRaised: PRIMITIVE_COLORS.creamLight,
-  surfaceCard: PRIMITIVE_COLORS.creamPale,
-  accent: PRIMITIVE_COLORS.sand,
+  ink: "#201d18", inkSoft: "#2d2923",
+  terracotta: "#d75d3b", terracottaDark: "#bd4c30", terracottaDeep: "#9e422b",
+  terracottaLight: "#e77959", terracottaSoft: "#e67b5e",
+  cream: "#f4f0e7", creamLight: "#faf7f0", creamPale: "#fffdf8",
+  sand: "#eadfce", sandLight: "#e8e1d5", sandPale: "#eee5d7",
+  brown: "#75402f",
 } as const;
 ```
 
-`apps/web/tailwind.config.ts` ve `apps/admin/tailwind.config.ts`'nin (admin kendi nötr rengini
-korur, sadece token mekanizmasını paylaşır) `theme.extend.colors`'ına bu obje import edilip
-yayılır (`{ ...SEMANTIC_COLORS }`). Mevcut `bg-[#f4f0e7]` gibi ham kullanımlar **tek seferde**
-`bg-surface` gibi isimli sınıflara geçirilir (mekanik, GLM'e delege edilebilir bir iş —
-`delegating-bulk-work`).
+Semantic katman **minimal** tutuldu (red-team: "aynı hex farklı roller taşıyabilir, hepsini
+`brand` yapmak yanlış birleşme riski") — sadece gerçekten tek-anlamlı, kontrast kararı içeren
+4 token:
 
-Mobil (RN, Tailwind yok): aynı `SEMANTIC_COLORS` objesi doğrudan `StyleSheet.create()` içinde
-import edilip kullanılır — tek kaynak, iki tüketici.
+```ts
+export const SEMANTIC_COLORS = {
+  ink: PRIMITIVE_COLORS.ink,
+  surface: PRIMITIVE_COLORS.cream,
+  brand: PRIMITIVE_COLORS.terracotta,       // dekoratif kullanım: kenarlık, ikon, odak halkası
+  brandSolid: PRIMITIVE_COLORS.terracottaDark, // metin taşıyan dolu zemin (AA kontrast garantili — aşağıya bkz)
+} as const;
+```
 
-### 2. Tipografi
+`apps/web/tailwind.config.ts`'nin `theme.extend.colors`'ına yayılır. Mevcut ham hex kullanımları
+**mekanik olarak** (GLM'e delege edilebilir, `delegating-bulk-work`) karşılık gelen isimli
+class'lara geçirilir — value birebir aynı, sadece isimlendirme; davranış değişikliği yok (test
+gerektirmez, saf isim değişimi).
 
-**Seçim:** `next/font/google` ile **Fraunces** (başlıklar — mevcut "tırnaklı serif" hissini
-karşılayan, düşük-kontrast/sıcak bir serif, İstanbul/gurme yayıncılığında yaygın) + **Inter**
-(gövde metni — okunabilir, nötr, zaten yaygın kullanılan bir sans). İkisi de değişken font (variable
-font), tek dosya indirir, `next/font`'un kendi self-hosting'i CLS'i sıfırlar (harici Google Fonts
-isteği yok, gizlilik/performans kazancı).
+**İstisna — WCAG kontrast düzeltmesi (yeni bulgu):** `venue-detail.tsx`'teki "Yol tarifi al"
+butonu `bg-[#d75d3b] ... text-white` (varsayılan 3.81:1, AA eşiği 4.5:1'in altında) →
+`bg-brandSolid` (`#bd4c30`, 4.95:1, AA geçer) + hover `#d75d3b`'ye açılır (mevcut hover/rest
+davranışı ters çevrilir — daha koyu renk artık dinlenme durumu). Bu tek satırlık davranış
+değişikliği, isim geçişinden AYRI bir commit'te, testle kanıtlanır.
 
-`apps/web/src/app/layout.tsx`ve `apps/admin/src/app/layout.tsx`: `next/font/google`'dan
-`Fraunces`/`Inter` import edilip `--font-serif`/`--font-sans` CSS değişkeni olarak `<html>`'e
-uygulanır; Tailwind config bu değişkenleri `fontFamily.serif`/`fontFamily.sans`'a bağlar — mevcut
-`font-serif`/`font-sans` class kullanımları **hiç değişmeden** gerçek fontu almaya başlar (sıfır
-component değişikliği, sadece layout + config).
+### 2. Tipografi — SADECE başlık fontu, elle doğrulama zorunlu
 
-Mobil: Expo'nun `expo-font` + `@expo-google-fonts/fraunces` / `@expo-google-fonts/inter` paketleri
-ile `App.tsx`'te yüklenir, `useFonts()` hook'u splash screen'i hazır olana kadar bekletir.
+**Seçim:** `next/font/google`'dan **Fraunces** (değişken font, tek dosya) — SADECE
+`font-serif` (başlıklar). Gövde metni (`font-sans`) bu turda **dokunulmuyor** (red-team: ikinci
+bir font = ikinci bir risk yüzeyi, kapsamı büyütmenin gerekçesi yok; sistem sans zaten okunabilir).
 
-### 3. `next/image`'a geçiş
+`apps/web/src/app/layout.tsx`: `Fraunces` import edilip `--font-serif` CSS değişkeni `<html>`'e
+uygulanır; `tailwind.config.ts`'nin `fontFamily.serif`'i bu değişkene bağlanır — mevcut
+`font-serif` class kullanımları component değişmeden gerçek fontu alır.
 
-`venue-card.tsx` ve `venue-detail.tsx`'teki düz `<img>` → `next/image`. Sorun: fotoğraf URL'leri
-admin'in serbestçe girdiği keyfi dış domainler (`AdminVenueCreateSchema`'nın `photos: z.string().url()`
-kısıtı dışında bir doğrulama yok) — `next.config.js`'de sabit bir `remotePatterns` listesi
-tanımlanamaz. Çözüm: `unoptimized` prop'u ile next/image kullanmak — Vercel/Next'in görsel proxy
-optimizasyonunu (sunucu tarafı yeniden boyutlandırma) kaybederiz ama `next/image`'ın **client-side**
-kazanımlarını (otomatik `sizes`/lazy-load/no-CLS `width`+`height` zorunluluğu, modern tarayıcıda
-`loading="lazy"` zaten vardı) koruruz. İleride admin'e gerçek dosya yükleme (Supabase Storage)
-eklenirse `remotePatterns` tek bir bilinen domain'e daraltılıp `unoptimized` kaldırılabilir — bu
-şimdiden not edilir (design'ın kapsamı dışı, ADR gerektirmez, geri dönüşü kolay bir prop değişikliği).
+**Zorunlu elle doğrulama (red-team: birim test bunu kanıtlamaz):** Uygulamadan sonra dev server'da
+gerçek, uzun Türkçe mekan adlarıyla (ör. "Kadıköy'ün En Sakin Üçüncü Nesil Kahvecisi" gibi
+`docs/prd.md` §örneklerinden esinlenen uzun bir başlık) venue-card ve venue-detail'i tarayıcıda
+görüntüleyip satır kırılımı/taşma kontrolü yapılacak — birim testin kanıtlayamadığı tam da bu.
+
+### 3. `next/image`'a GERÇEK optimizasyonla geçiş
+
+`venue-card.tsx` ve `venue-detail.tsx`'teki düz `<img>` → `next/image`, **`unoptimized` DEĞİL**
+(red-team: `unoptimized` byte küçültmez, hiçbir şeyi çözmez). `next.config.js`'ye
+`images.remotePatterns: [{ protocol: "https", hostname: "**" }]` — gerçek sunucu-taraflı yeniden
+boyutlandırma/format dönüşümü. Maliyet: admin/curator'ın girdiği keyfi HTTPS URL'lerini Next'in
+görsel proxy'si sunucu tarafında fetch eder — girdi herkese açık değil (sadece admin/curator rolü,
+`AdminVenueCreateSchema`), MVP için kabul edilebilir; büyürse bilinen bir domain'e (ör. Supabase
+Storage) daraltılır (ayrı, sonraki karar).
+
+**Doğrulama:** dev server'da gerçek bir mekan fotoğrafının network sekmesinde `_next/image?url=...`
+üzerinden döndüğü ve orijinalden daha küçük boyutta geldiği gözlemlenir (yalnızca kod var
+demekle yetinilmez).
 
 ### 4. Leaflet CSS
 
 `apps/web/src/app/layout.tsx`'teki `import "leaflet/dist/leaflet.css"` silinip
-`venue-map-leaflet.tsx`'e (haritayı gerçekten render eden dosya) taşınır. Next.js CSS import'ları
-component-scope çalışır, harita olmayan sayfalar bu dosyayı hiç indirmez.
-
-### 5. Favoriler yarış durumu (bu pakette, çünkü aynı "cilalama" teması)
-
-`FavoriteList`'e `@@unique([userId, name])` eklenir (yeni migration). Servis katmanında
-`P2002` (unique violation) yakalanıp "zaten var" durumuna dönüştürülür (mevcut listeyi döndür,
-yeni oluşturma). Bu, denetim raporunun §2.2 bulgusunu kapatır ve tasarım sistemi işiyle aynı PR
-setinde, aynı "küçük ama gerçek cilalama" ruhunda.
+`venue-map-leaflet.tsx`'e taşınır. **İddia yumuşatıldı** (red-team: Next'in global stylesheet
+birleştirme davranışı "hiç indirmez" garantisi vermez) — `next build`'in route bazlı "First Load
+JS/CSS" raporuyla gerçek fark gözlemlenir, garanti olarak değil gözlem olarak yazılır.
 
 ## Test stratejisi
 
-- Renk/font token'ları: görsel regresyon testi yok (bu repoda hiç kurulu değil, YAGNI — kapsam
-  dışı bırakılıyor). Yerine: her Tailwind config'in derlendiğini (`tsc`/build) ve en az bir
-  bileşenin yeni token class'ını render ettiğini doğrulayan birim test.
-- `next/image` geçişi: `venue-card.spec.tsx`/`venue-detail.spec.tsx`'in mevcut testleri
-  (`getByRole("img")`, `alt` metni) `next/image`'ın render ettiği gerçek `<img>` üzerinde de
-  çalışır — testler değişmeden kırmızıya düşüp düşmediği TDD'de doğrulanır.
-- Leaflet CSS taşıma: davranışsal fark yok, test gerekmiyor (saf dosya taşıma).
-- Favori unique constraint: mevcut "aynı anda iki liste" testi zaten var mı kontrol edilecek,
-  yoksa yazılacak — `@@unique` + `P2002` yakalama önce testle kırmızıya düşürülüp sonra eklenir.
+- Renk isim geçişi: mekanik, davranış değişikliği yok, test gerektirmez (build+lint yeterli).
+- Kontrast düzeltmesi (`bg-brandSolid`): TDD — `venue-detail.spec.tsx`'e "Yol tarifi al"
+  butonunun `bg-[#bd4c30]` (veya token class'ı) taşıdığını doğrulayan test, RED→GREEN.
+- Font: elle doğrulama (yukarıda) + mevcut `venue-card.spec.tsx`/`venue-detail.spec.tsx`'in
+  kırılmadığı TDD'de doğrulanır (component değişmiyor, sadece layout+config).
+- `next/image` geçişi: mevcut `getByRole("img")`/`alt` testleri `next/image`'ın render ettiği
+  gerçek `<img>` üzerinde de çalışır — RED→GREEN ile kanıtlanır; ayrıca yukarıdaki elle
+  network-doğrulaması.
+- Leaflet CSS taşıma: davranışsal fark yok, test gerekmiyor; build çıktısı elle gözlemlenir.
 
-## Red-team bulguları — reddedilenler
-*(idea-red-team çalıştıktan sonra doldurulacak)*
+## Kapsam dışı bırakılan, STATE.md'ye not edilecek ayrı görevler
+- Mobil renk/font tutarlılığı (RN, kendi cihaz doğrulaması gerektirir).
+- `FavoriteList` aynı-isim yarış durumu (`@@unique([userId, name])`) — ürün kuralı değişikliği.
