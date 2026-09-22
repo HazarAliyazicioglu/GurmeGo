@@ -41,7 +41,13 @@ describe("VenueDetailScreen", () => {
     await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
     expect(screen.getByText("Sakin bir köşe.")).toBeTruthy();
     expect(getVenueBySlug).toHaveBeenCalledWith("test-cafe");
-  });
+    // Seen twice in CI (PR #12, PR #28): this specific test -- the FIRST one in the file, so it
+    // pays the cold-start cost of jest-expo/react-native-maps module init on a busy shared
+    // runner -- exceeded jest's global 15s test timeout (package.json's `testTimeout: 15000`)
+    // even though the `waitFor` above resolved well within its own 5s budget. Bumping just this
+    // test's own timeout (jest's 3rd `it()` arg overrides the global default) rather than raising
+    // the global, since no other test in this suite has shown the same symptom.
+  }, 20000);
 
   it("shows cuisine type, transport note, and address when present", async () => {
     (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
