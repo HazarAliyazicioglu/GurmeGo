@@ -7,7 +7,7 @@ Codex: izinli, GLM: izinli (kişisel proje — repo HazarAliyazicioglu/GurmeGo).
 Hedef kitle: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Marka: sıcak/editöryel kimlik. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-2026-09-22'de kullanıcı "projeyi a'dan z'ye, büyük şirket kalitesinde canlıya hazırla" dedi, tam yetki verdi. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık** (PR #13 ✓) → **3) altyapı/borç temizliği** (PR #14 ✓, kalanı bilinçli ertelendi) → **4) canlıya çıkış hazırlığı** (PR #28 ✓ + PR #29 ✓, DB rol script'i 3 cross-model-review turundan geçti, TEMİZ). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
+**Yetki (2026-09-22, kullanıcı beyanı, hâlâ geçerli):** "a'dan z'ye ... yetki sende, durmana gerek yok ... tüm yetki sende artık" — planlama, tasarım, kod, PR, merge dahil A-Z yetki verildi; yalnız çok kritik noktalarda durulabilir (örn. gerçek Supabase/production erişimi gerektiren geri dönüşsüz adımlar). Soru sormadan ilerle. Kapsam 4 alt projeye bölündü: **1) tasarım sistemi** (PR #12 ✓) → **2) mobil dayanıklılık** (PR #13 ✓) → **3) altyapı/borç temizliği** (PR #14 ✓, kalanı bilinçli ertelendi) → **4) canlıya çıkış hazırlığı** (PR #28 ✓ + PR #29 ✓, DB rol script'i 3 cross-model-review turundan geçti, TEMİZ). 5) Açık ürün kararları (AK-02/AK-03) ayrı, kullanıcıya soru olarak duruyor.
 
 Önceki tamamlananlar: Kritik 11/11 + Orta paket A (PR #4-#7) + venue-card kapak fotoğrafı (PR #8) + admin paketi 3/3 (PR #9-#11) — hepsi `master`'da.
 
