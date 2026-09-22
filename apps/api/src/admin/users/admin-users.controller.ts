@@ -1,5 +1,5 @@
-import { Body, Controller, Param, ParseUUIDPipe, Put, Req, UseGuards } from "@nestjs/common";
-import { AssignRoleSchema, type AssignRoleInput } from "@gurmego/shared";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { AssignRoleSchema, AdminUserSearchQuerySchema, type AssignRoleInput, type AdminUserSearchQuery } from "@gurmego/shared";
 import { AuthenticatedRequest } from "../../auth/jwt-auth.guard";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
@@ -14,6 +14,11 @@ import { AdminUsersService } from "./admin-users.service";
 @Roles("admin")
 export class AdminUsersController {
   constructor(private users: AdminUsersService) {}
+
+  @Get()
+  search(@Query(new ZodValidationPipe(AdminUserSearchQuerySchema)) query: AdminUserSearchQuery) {
+    return this.users.search(query.search);
+  }
 
   @Put(":id/roles")
   assignRole(

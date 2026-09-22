@@ -45,5 +45,18 @@ export function createApiClient(baseUrl: string, getToken?: () => string | undef
       if (!res.ok) throw new ApiHttpError(res.status, `API error ${res.status}: ${await res.text().catch(() => "")}`);
       return res.json();
     },
+    async put<T>(path: string, body: unknown): Promise<T> {
+      const token = getToken?.();
+      const res = await fetch(`${baseUrl}${path}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new ApiHttpError(res.status, `API error ${res.status}: ${await res.text().catch(() => "")}`);
+      return res.json();
+    },
   };
 }

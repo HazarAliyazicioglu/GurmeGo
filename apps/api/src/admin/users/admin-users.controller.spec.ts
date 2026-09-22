@@ -8,10 +8,10 @@ const USER_ID = "d290f1ee-6c54-4b01-90e6-d701748f0853";
 
 describe("AdminUsersController (e2e) — RolesGuard", () => {
   let app: NestFastifyApplication;
-  let service: { assignRole: jest.Mock };
+  let service: { assignRole: jest.Mock; search: jest.Mock };
 
   beforeAll(async () => {
-    service = { assignRole: jest.fn() };
+    service = { assignRole: jest.fn(), search: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AdminUsersController],
@@ -37,6 +37,7 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
 
   beforeEach(() => {
     service.assignRole.mockReset();
+    service.search.mockReset();
   });
 
   it("allows an admin to assign a role", async () => {
@@ -138,5 +139,74 @@ describe("AdminUsersController (e2e) — RolesGuard", () => {
       error: { code: "ROLE_NOT_AVAILABLE", message: "Bu rol MVP'de kullanılamaz (Faz 2)" },
     });
     expect(body.message).toBeUndefined();
+  });
+});
+
+describe("AdminUsersController (e2e) — GET / search", () => {
+  let app: NestFastifyApplication;
+  let service: { assignRole: jest.Mock; search: jest.Mock };
+
+  beforeAll(async () => {
+    service = { assignRole: jest.fn(), search: jest.fn() };
+
+    const moduleRef = await Test.createTestingModule({
+      controllers: [AdminUsersController],
+      providers: [{ provide: AdminUsersService, useValue: service }, { provide: CACHE_STORE, useValue: { increment: jest.fn().mockResolvedValue(1) } }],
+    }).compile();
+
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app.getHttpAdapter()
+      .getInstance()
+      .addHook("onRequest", (req: any, _reply: any, done: () => void) => {
+        const role = req.headers["x-test-role"];
+        req.user = role ? { id: "test-user", role } : undefined;
+        done();
+      });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    service.search.mockReset();
+  });
+
+  it("allows an admin to search users by term", async () => {
+    service.search.mockResolvedValue([{ id: USER_ID, email: "hazar@example.com", role: "CURATOR" }]);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/users?search=hazar",
+      headers: { "x-test-role": "admin" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.search).toHaveBeenCalledWith("hazar");
+    expect(JSON.parse(res.body)).toEqual([{ id: USER_ID, email: "hazar@example.com", role: "CURATOR" }]);
+  });
+
+  it("rejects a search term shorter than 2 characters with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/users?search=h",
+      headers: { "x-test-role": "admin" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.search).not.toHaveBeenCalled();
+  });
+
+  it("blocks a curator from searching users (admin-only)", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/users?search=hazar",
+      headers: { "x-test-role": "curator" },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(service.search).not.toHaveBeenCalled();
   });
 });

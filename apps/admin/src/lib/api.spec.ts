@@ -2,15 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const get = vi.hoisted(() => vi.fn());
 const post = vi.hoisted(() => vi.fn());
+const put = vi.hoisted(() => vi.fn());
 // Preserve the real `ApiHttpError` export (via importOriginal) while only stubbing
 // `createApiClient` — api.ts's own `importCsv` constructs `ApiHttpError` directly, so a mock that
 // dropped this export would make that `new ApiHttpError(...)` call throw "not a constructor".
 vi.mock("@gurmego/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@gurmego/api-client")>();
-  return { ...actual, createApiClient: () => ({ get, post }) };
+  return { ...actual, createApiClient: () => ({ get, post, put }) };
 });
 
-import { getQueue, approveQueueItem, rejectQueueItem, importCsv, getDataQualityReport, ApiValidationError } from "./api";
+import { getQueue, approveQueueItem, rejectQueueItem, importCsv, getDataQualityReport, searchUsers, assignRole, ApiValidationError } from "./api";
 import { ApiHttpError } from "@gurmego/api-client";
 
 const VALID_ITEM = {
@@ -30,6 +31,7 @@ const VALID_ITEM = {
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  put.mockReset();
 });
 
 describe("getQueue", () => {
@@ -114,6 +116,29 @@ describe("importCsv", () => {
   it("throws ApiValidationError when the 2xx response body doesn't match CsvImportResultSchema", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ nonsense: true }) }) as unknown as typeof fetch;
     await expect(importCsv("tok", file)).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("searchUsers", () => {
+  it("returns the validated search results", async () => {
+    const users = [{ id: "550e8400-e29b-41d4-a716-446655440000", email: "hazar@example.com", role: "CURATOR" }];
+    get.mockResolvedValue(users);
+    const result = await searchUsers("tok", "hazar");
+    expect(result).toEqual(users);
+    expect(get).toHaveBeenCalledWith("/admin/users?search=hazar");
+  });
+
+  it("throws ApiValidationError when the response doesn't match AdminUserSearchResultSchema", async () => {
+    get.mockResolvedValue({ nonsense: true });
+    await expect(searchUsers("tok", "hazar")).rejects.toThrow(ApiValidationError);
+  });
+});
+
+describe("assignRole", () => {
+  it("PUTs the role", async () => {
+    put.mockResolvedValue({ id: "550e8400-e29b-41d4-a716-446655440000", role: "CURATOR" });
+    await assignRole("tok", "550e8400-e29b-41d4-a716-446655440000", "curator");
+    expect(put).toHaveBeenCalledWith("/admin/users/550e8400-e29b-41d4-a716-446655440000/roles", { role: "curator" });
   });
 });
 

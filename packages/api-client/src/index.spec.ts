@@ -96,4 +96,29 @@ describe("createApiClient — non-ok responses throw ApiHttpError carrying the s
     expect(error).toBeInstanceOf(ApiHttpError);
     expect((error as ApiHttpError).status).toBe(500);
   });
+
+  it("put() throws an ApiHttpError with the response's status", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 409, text: async () => "Conflict" });
+    const client = createApiClient("http://api.test");
+    const error = await client.put("/admin/users/u1/roles", { role: "curator" }).catch((e) => e);
+    expect(error).toBeInstanceOf(ApiHttpError);
+    expect((error as ApiHttpError).status).toBe(409);
+  });
+});
+
+describe("createApiClient().put", () => {
+  it("sends a JSON body with the Authorization header and returns the parsed response", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "u1", role: "CURATOR" }) });
+    const client = createApiClient("http://api.test", () => "tok123");
+    const result = await client.put("/admin/users/u1/roles", { role: "curator" });
+    expect(result).toEqual({ id: "u1", role: "CURATOR" });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://api.test/admin/users/u1/roles",
+      expect.objectContaining({
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer tok123" },
+        body: JSON.stringify({ role: "curator" }),
+      }),
+    );
+  });
 });
