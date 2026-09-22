@@ -22,8 +22,11 @@ Web `venue-card` fotoğraf eksikliği bilinçli editöryel tercih DEĞİL — ek
 ## Bu oturumda tamamlanan: venue-card kapak fotoğrafı (PR #8, 2026-09-22)
 Bounded görev (brainstorming onayı alındı, spec dosyası yok). `VenueListItemSchema`'ya `coverPhoto: string | null` eklendi (tam `photos` dizisi değil), API `searchPublished` SELECT'ine `v.photos[1] AS "coverPhoto"`, web `venue-card.tsx` düz `<img>` ile kapak fotoğrafı gösteriyor. TDD ile katman katman (shared→API→web), Codex cross-model review 5 minor bulgu (2 kabul, 1 red, 2 zaten temiz). CI kırmızıya düştü (`@gurmego/mobile#test` — mobile'ın kendi `api.spec.ts` fixture'ı da aynı şemayı runtime doğruluyordu, coverPhoto eksikti), düzeltildi, CI yeşil, `master`'a squash-merge.
 
+## Admin paketi ilerlemesi (kullanıcı onaylı sıra: veri kalitesi → rol atama → mekan geri alma → nav zaten 1'le birlikte gitti)
+1/3 tamam: **veri kalitesi raporu** (PR #9, 2026-09-22) — `/veri-kalitesi` sayfası + nav linkleri, `DataQualityReportSchema` eklendi.
+
 ## Sıradaki adım
-Admin paketine başla (rol/veri-kalitesi/geri-alma ekranları, nav, CSV hata listesi sınırı). Mobil liste ekranı (`DiscoveryScreen`) venue-card ile aynı fotoğraf eksikliğini taşıyor — kapsam dışı bırakıldı, istenirse ayrı bounded görev olarak alınabilir.
+Admin alt görev 2/3: **rol atama** ekranı. Backend'de `PUT /admin/users/:id/roles` var ama kullanıcı arama endpoint'i YOK — önce `GET /admin/users?search=` (email/isim) gibi bir arama endpoint'i eklenmeli, sonra admin sayfası. Ardından 3/3: **mekan geri alma** — `POST /admin/venues/:id/revert/:versionId` var ama versiyon listeleme endpoint'i yok, o da önce eklenmeli. Mobil liste ekranı (`DiscoveryScreen`) venue-card ile aynı fotoğraf eksikliğini taşıyor — kapsam dışı bırakıldı, istenirse ayrı bounded görev olarak alınabilir.
 
 ## Bloke olanlar
 - Yok. Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
