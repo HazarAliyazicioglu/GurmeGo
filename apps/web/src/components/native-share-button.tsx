@@ -20,7 +20,7 @@ export function NativeShareButton({ venue }: { venue: { name: string } }) {
     <button
       type="button"
       data-testid="native-share-button"
-      className="group inline-flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-[#201d18]/15 bg-[#f4f0e7] px-4 text-sm font-black text-[#201d18] transition-all hover:border-[#d75d3b]/45 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf7f0]"
+      className="group inline-flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-ink/15 bg-cream px-4 text-sm font-black text-ink transition-all hover:border-terracotta/45 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-creamLight"
       onClick={() => {
         // navigator.share() rejects when the user cancels the native share sheet -- that's a
         // normal, expected outcome, not an error to surface, so it's swallowed here rather than
@@ -29,7 +29,7 @@ export function NativeShareButton({ venue }: { venue: { name: string } }) {
       }}
     >
       <span className="flex items-center gap-2.5">
-        <span className="grid size-7 place-items-center rounded-full bg-[#201d18] text-[#f4f0e7] transition-colors group-hover:bg-[#d75d3b]" aria-hidden="true">
+        <span className="grid size-7 place-items-center rounded-full bg-ink text-cream transition-colors group-hover:bg-terracotta" aria-hidden="true">
           <svg viewBox="0 0 20 20" className="size-4 fill-none">
             <path d="M10 3v9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             <path d="M6.5 6.5 10 3l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -38,7 +38,7 @@ export function NativeShareButton({ venue }: { venue: { name: string } }) {
         </span>
         Paylaş
       </span>
-      <span className="text-[#201d18]/35 transition-transform group-hover:translate-x-0.5" aria-hidden="true">↗</span>
+      <span className="text-ink/35 transition-transform group-hover:translate-x-0.5" aria-hidden="true">↗</span>
     </button>
   );
 }

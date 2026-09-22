@@ -45,13 +45,13 @@ export function VenueFilters({
   }
 
   return (
-    <div data-testid="venue-filters" className="mt-7 border-y border-[#201d18]/10 py-4">
+    <div data-testid="venue-filters" className="mt-7 border-y border-ink/10 py-4">
       <div className="mb-3 flex items-center gap-2 px-1">
-        <svg viewBox="0 0 20 20" className="size-4 text-[#d75d3b]" aria-hidden="true">
+        <svg viewBox="0 0 20 20" className="size-4 text-terracotta" aria-hidden="true">
           <path d="M3 5h14M5.5 10h9M8 15h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
         </svg>
-        <span className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#201d18]/45">Seçkiyi daralt</span>
-        <span className="h-px flex-1 bg-[#201d18]/10" aria-hidden="true" />
+        <span className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-ink/45">Seçkiyi daralt</span>
+        <span className="h-px flex-1 bg-ink/10" aria-hidden="true" />
       </div>
 
       <div className="-mx-1 flex items-start gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -63,8 +63,8 @@ export function VenueFilters({
             onChange={(e) => update({ category: e.target.value || undefined })}
             className={[
               "min-h-11 cursor-pointer appearance-none rounded-full border py-2 pl-4 pr-9 text-sm font-bold transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]",
-              filters.category ? "border-[#201d18] bg-[#201d18] text-[#f4f0e7]" : "border-[#201d18]/15 bg-white/45 text-[#201d18]/65 hover:border-[#201d18]/30",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+              filters.category ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",
             ].join(" ")}
           >
             <option value="">Kategori</option>
@@ -86,8 +86,8 @@ export function VenueFilters({
             onChange={(e) => update({ priceRange: e.target.value || undefined })}
             className={[
               "min-h-11 cursor-pointer appearance-none rounded-full border py-2 pl-4 pr-9 text-sm font-bold transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]",
-              filters.priceRange ? "border-[#201d18] bg-[#201d18] text-[#f4f0e7]" : "border-[#201d18]/15 bg-white/45 text-[#201d18]/65 hover:border-[#201d18]/30",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+              filters.priceRange ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",
             ].join(" ")}
           >
             <option value="">Fiyat</option>
@@ -111,12 +111,12 @@ export function VenueFilters({
               onChange={(e) => update({ radiusM: e.target.value ? Number(e.target.value) : undefined })}
               className={[
                 "min-h-11 appearance-none rounded-full border py-2 pl-4 pr-9 text-sm font-bold transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
                 !coordsAvailable
-                  ? "cursor-not-allowed border-[#201d18]/8 bg-[#201d18]/5 text-[#201d18]/28"
+                  ? "cursor-not-allowed border-ink/8 bg-ink/5 text-ink/28"
                   : filters.radiusM
-                    ? "cursor-pointer border-[#201d18] bg-[#201d18] text-[#f4f0e7]"
-                    : "cursor-pointer border-[#201d18]/15 bg-white/45 text-[#201d18]/65 hover:border-[#201d18]/30",
+                    ? "cursor-pointer border-ink bg-ink text-cream"
+                    : "cursor-pointer border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",
               ].join(" ")}
             >
               <option value="">Mesafe</option>
@@ -129,13 +129,13 @@ export function VenueFilters({
                 <path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             ) : (
-              <svg viewBox="0 0 16 16" className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-[#201d18]/30" aria-hidden="true">
+              <svg viewBox="0 0 16 16" className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-ink/30" aria-hidden="true">
                 <rect x="3.5" y="7" width="9" height="6.5" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M5.5 7V5.5a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             )}
           </label>
-          {!coordsAvailable && <p className="mt-1.5 px-2 text-[0.6rem] font-semibold text-[#201d18]/38">Konum izni gerekli</p>}
+          {!coordsAvailable && <p className="mt-1.5 px-2 text-[0.6rem] font-semibold text-ink/38">Konum izni gerekli</p>}
         </div>
 
         <button
@@ -144,10 +144,10 @@ export function VenueFilters({
           aria-pressed={Boolean(filters.isBoutique)}
           className={[
             "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition-all",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
             filters.isBoutique
-              ? "border-[#d75d3b] bg-[#d75d3b] text-white shadow-[0_5px_14px_rgba(215,93,59,0.18)]"
-              : "border-[#201d18]/15 bg-white/45 text-[#201d18]/65 hover:border-[#201d18]/30",
+              ? "border-terracotta bg-terracotta text-white shadow-[0_5px_14px_rgba(215,93,59,0.18)]"
+              : "border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",
           ].join(" ")}
         >
           <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">
@@ -162,10 +162,10 @@ export function VenueFilters({
           aria-pressed={Boolean(filters.openNow)}
           className={[
             "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition-all",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
             filters.openNow
-              ? "border-[#d75d3b] bg-[#d75d3b] text-white shadow-[0_5px_14px_rgba(215,93,59,0.18)]"
-              : "border-[#201d18]/15 bg-white/45 text-[#201d18]/65 hover:border-[#201d18]/30",
+              ? "border-terracotta bg-terracotta text-white shadow-[0_5px_14px_rgba(215,93,59,0.18)]"
+              : "border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",
           ].join(" ")}
         >
           <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">

@@ -29,7 +29,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
       <div className="space-y-2">
         <label
           htmlFor="email"
-          className="block text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#201d18]/60"
+          className="block text-[0.68rem] font-black uppercase tracking-[0.16em] text-ink/60"
         >
           E-posta
         </label>
@@ -41,7 +41,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
           required
           placeholder="ornek@eposta.com"
           autoComplete="email"
-          className="min-h-12 w-full rounded-xl border border-[#201d18]/15 bg-[#fffdf8]/75 px-4 text-base font-medium text-[#201d18] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition placeholder:text-[#201d18]/30 hover:border-[#201d18]/30 focus:border-[#d75d3b] focus:bg-[#fffdf8] focus:ring-4 focus:ring-[#d75d3b]/10"
+          className="min-h-12 w-full rounded-xl border border-ink/15 bg-creamPale/75 px-4 text-base font-medium text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition placeholder:text-ink/30 hover:border-ink/30 focus:border-terracotta focus:bg-creamPale focus:ring-4 focus:ring-terracotta/10"
         />
       </div>
 
@@ -49,12 +49,12 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
         <div className="flex items-baseline justify-between gap-3">
           <label
             htmlFor="password"
-            className="block text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#201d18]/60"
+            className="block text-[0.68rem] font-black uppercase tracking-[0.16em] text-ink/60"
           >
             Şifre
           </label>
           {mode === "signup" && (
-            <span className="text-[0.68rem] font-semibold text-[#201d18]/40">En az 6 karakter</span>
+            <span className="text-[0.68rem] font-semibold text-ink/40">En az 6 karakter</span>
           )}
         </div>
         <input
@@ -66,17 +66,17 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
           required
           placeholder="••••••••"
           autoComplete={mode === "signin" ? "current-password" : "new-password"}
-          className="min-h-12 w-full rounded-xl border border-[#201d18]/15 bg-[#fffdf8]/75 px-4 text-base font-medium tracking-[0.08em] text-[#201d18] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition placeholder:tracking-[0.14em] placeholder:text-[#201d18]/25 hover:border-[#201d18]/30 focus:border-[#d75d3b] focus:bg-[#fffdf8] focus:ring-4 focus:ring-[#d75d3b]/10"
+          className="min-h-12 w-full rounded-xl border border-ink/15 bg-creamPale/75 px-4 text-base font-medium tracking-[0.08em] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition placeholder:tracking-[0.14em] placeholder:text-ink/25 hover:border-ink/30 focus:border-terracotta focus:bg-creamPale focus:ring-4 focus:ring-terracotta/10"
         />
       </div>
 
       {error && (
         <p
           role="alert"
-          className="flex items-start gap-2.5 rounded-xl border border-[#d75d3b]/20 bg-[#d75d3b]/[0.07] px-3.5 py-3 text-sm font-semibold leading-relaxed text-[#9e422b]"
+          className="flex items-start gap-2.5 rounded-xl border border-terracotta/20 bg-terracotta/[0.07] px-3.5 py-3 text-sm font-semibold leading-relaxed text-terracottaDeep"
         >
           <span
-            className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-[#d75d3b]/15 text-xs font-black"
+            className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-terracotta/15 text-xs font-black"
             aria-hidden="true"
           >
             !
@@ -88,7 +88,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
       <button
         type="submit"
         disabled={submitting}
-        className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#201d18] px-5 text-sm font-black text-[#f4f0e7] shadow-[0_8px_22px_rgba(32,29,24,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#2d2923] hover:shadow-[0_10px_26px_rgba(32,29,24,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4f0e7] active:translate-y-0 disabled:opacity-60 disabled:pointer-events-none"
+        className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-black text-cream shadow-[0_8px_22px_rgba(32,29,24,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-inkSoft hover:shadow-[0_10px_26px_rgba(32,29,24,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream active:translate-y-0 disabled:opacity-60 disabled:pointer-events-none"
       >
         {mode === "signin" ? "Giriş yap" : "Kayıt ol"}
         <svg
