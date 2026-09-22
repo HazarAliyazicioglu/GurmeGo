@@ -60,6 +60,11 @@ export default function DiscoveryScreen() {
   // succession near the threshold) before the first page-2 request resolves -- without this,
   // both calls pass the same hasMore/nextCursor check and fetch (and append) the same page twice.
   const loadingMore = useRef(false);
+  // Denetim raporu §4.2 "Filtreye uyan mekan yoksa kullanıcı bunu anlayamıyor": `venues.length
+  // === 0` is ALSO true before the very first fetch resolves, so gating the empty-state message
+  // on that alone would flash it briefly on every load. This tracks "the current filter set's
+  // request has actually settled" instead.
+  const [venuesLoaded, setVenuesLoaded] = useState(false);
 
   useEffect(() => {
     getDistricts().then(setDistricts).catch(() => setDistricts([]));
@@ -75,12 +80,14 @@ export default function DiscoveryScreen() {
 
   useEffect(() => {
     const requestId = ++latestVenuesRequest.current;
+    setVenuesLoaded(false);
     getVenues(buildQuery(), coords)
       .then((res) => {
         if (requestId === latestVenuesRequest.current) {
           setVenues(res.data);
           setNextCursor(res.meta.next_cursor);
           setHasMore(res.meta.has_more);
+          setVenuesLoaded(true);
         }
       })
       .catch(() => {
@@ -88,6 +95,7 @@ export default function DiscoveryScreen() {
           setVenues([]);
           setNextCursor(null);
           setHasMore(false);
+          setVenuesLoaded(true);
         }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,6 +161,7 @@ export default function DiscoveryScreen() {
         testID="venues-list"
         data={venues}
         keyExtractor={(v) => v.id}
+        ListEmptyComponent={venuesLoaded ? <Text>Bu kriterlere uygun mekan bulunamadı</Text> : null}
         renderItem={({ item }) => (
           <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
             <Text>{item.name}</Text>

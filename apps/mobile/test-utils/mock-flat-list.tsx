@@ -5,8 +5,11 @@ import { Fragment, createElement } from "react";
 // setTimeout -- on CI's shared runner that deferral was observed to blow past the whole test's
 // 15s budget (DiscoveryScreen.spec.tsx, VenueDetailScreen review round). Tests here only assert
 // on data/filter/navigation behavior, never on virtualization itself, so this is a safe swap.
-export function mockFlatList({ data, renderItem, keyExtractor, horizontal: _horizontal, ...rest }: any) {
+export function mockFlatList({ data, renderItem, keyExtractor, horizontal: _horizontal, ListEmptyComponent, ...rest }: any) {
   const { View } = require("react-native");
+  if ((data ?? []).length === 0 && ListEmptyComponent) {
+    return createElement(View, rest, ListEmptyComponent);
+  }
   return createElement(
     View,
     rest,

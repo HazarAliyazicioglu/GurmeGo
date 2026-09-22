@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import MapView, { Marker } from "react-native-maps";
 import { getVenueBySlug } from "../lib/api";
 import { directionsUrl } from "../lib/directions";
+import { SITE_URL } from "../lib/env";
 import ReportForm from "../components/ReportForm";
 import FavoriteButton from "../components/FavoriteButton";
 import type { VenueDetail } from "@gurmego/shared";
@@ -101,14 +102,25 @@ export default function VenueDetailScreen() {
           <Marker coordinate={{ latitude: venue.lat, longitude: venue.lng }} title={venue.name} />
         </MapView>
       </View>
-      <Pressable onPress={() => Linking.openURL(directionsUrl(venue.name, venue.district.name))}>
+      <Pressable
+        onPress={() =>
+          // Denetim raporu §4.2 "'Yol tarifi al' butonu bazen sessizce başarısız olabilir": no
+          // maps app installed (or any other Linking failure) previously left an unhandled
+          // rejection and no feedback at all.
+          Linking.openURL(directionsUrl(venue.name, venue.district.name)).catch(() => {
+            Alert.alert("Yol tarifi açılamadı", "Cihazında bir harita uygulaması bulunamadı.");
+          })
+        }
+      >
         <Text>Buraya nasıl giderim</Text>
       </Pressable>
       <FavoriteButton venueId={venue.id} />
       <Pressable
         onPress={() =>
           Share.share({
-            message: `${venue.name} — GurmeGo'da keşfet: https://gurmego.com/mekan/${venue.slug}`,
+            // Denetim raporu §4.2 "Paylaşım linki her zaman gerçek (canlı) siteyi gösteriyor" --
+            // was a literal `https://gurmego.com`, ignoring which environment is actually running.
+            message: `${venue.name} — GurmeGo'da keşfet: ${SITE_URL}/mekan/${venue.slug}`,
           })
         }
       >

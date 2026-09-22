@@ -5,6 +5,7 @@
 process.env.EXPO_PUBLIC_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3001/v1";
 process.env.EXPO_PUBLIC_SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || "http://127.0.0.1:54421";
 process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "test-anon-key";
+process.env.EXPO_PUBLIC_SITE_URL = process.env.EXPO_PUBLIC_SITE_URL || "https://gurmego.com";
 
 // The real native SafeAreaProvider renders its host component with NO children until a real
 // device/simulator fires a native onInsetsChange event, which never happens under Jest -- it

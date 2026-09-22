@@ -30,6 +30,11 @@ export default function FavoritesScreen() {
   // accounted for the status bar/notch on either of this screen's render branches.
   const insets = useSafeAreaInsets();
   const [favorites, setFavorites] = useState<FlatFavorite[]>([]);
+  // Codex cross-model-review finding: `favorites.length === 0` is ALSO true before the initial
+  // fetch resolves -- gating the empty-state message on that alone would flash it for a user who
+  // genuinely has favorites while getFavoriteLists() is still in flight. Same pattern as
+  // DiscoveryScreen's `venuesLoaded`.
+  const [loaded, setLoaded] = useState(false);
   // Guards against a stale request resolving after a newer one and clobbering the screen with
   // another user's data -- e.g. user A's slow getFavoriteLists() call resolving AFTER user B has
   // signed in on the same device while A's request was still in flight. Bumped unconditionally at
@@ -45,10 +50,16 @@ export default function FavoritesScreen() {
     if (!session?.access_token) return;
     getFavoriteLists(session.access_token)
       .then((lists) => {
-        if (requestId === latestRefetchRequest.current) setFavorites(flattenFavorites(lists));
+        if (requestId === latestRefetchRequest.current) {
+          setFavorites(flattenFavorites(lists));
+          setLoaded(true);
+        }
       })
       .catch(() => {
-        if (requestId === latestRefetchRequest.current) setFavorites([]);
+        if (requestId === latestRefetchRequest.current) {
+          setFavorites([]);
+          setLoaded(true);
+        }
       });
   }, [session?.access_token]);
 
@@ -83,6 +94,12 @@ export default function FavoritesScreen() {
       <FlatList
         data={favorites}
         keyExtractor={(item) => item.venueId}
+        // Denetim raporu §4.2 "Favoriler listesi boşsa hiçbir şey görünmüyor": a blank white area
+        // looked broken, not "no favorites yet". No in-page navigation button -- the bottom tab
+        // bar (with the "Mekanlar" tab) is always visible on this screen, so a second way to get
+        // there would be redundant, not worth the cross-navigator typing (Discovery isn't a route
+        // in this screen's own RootStackParamList, only in the sibling TabParamList).
+        ListEmptyComponent={loaded ? <Text>Henüz favorin yok, keşfetmeye başla</Text> : null}
         renderItem={({ item }) => (
           <View>
             <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>

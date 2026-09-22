@@ -14,6 +14,7 @@ jest.mock("react-native-maps", () => {
   const { View } = require("react-native");
   return { __esModule: true, default: View, Marker: View };
 });
+jest.mock("../lib/env", () => ({ SITE_URL: "https://staging.gurmego.com" }));
 
 const FULL_VENUE = {
   id: "v1", slug: "test-cafe", name: "Test Cafe", category: "cafe", cuisineType: "İtalyan",
@@ -107,6 +108,40 @@ describe("VenueDetailScreen", () => {
     fireEvent.press(screen.getByText("Paylaş"));
 
     expect(shareSpy).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Test Cafe") }));
+  });
+
+  // Denetim raporu §4.2 "Paylaşım linki her zaman gerçek (canlı) siteyi gösteriyor" -- was
+  // hardcoded to https://gurmego.com regardless of environment. `../lib/env` is mocked (top of
+  // file) to a DIFFERENT domain than the real default, so this only passes if the screen actually
+  // reads SITE_URL from that module rather than a literal string.
+  it("builds the share link from lib/env's SITE_URL, not a hardcoded domain", async () => {
+    (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
+    const { Share } = require("react-native");
+    const shareSpy = jest.spyOn(Share, "share").mockResolvedValue({ action: Share.sharedAction });
+
+    await render(<VenueDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
+    fireEvent.press(screen.getByText("Paylaş"));
+
+    expect(shareSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("https://staging.gurmego.com/mekan/test-cafe") }),
+    );
+  });
+
+  // Denetim raporu §4.2 "'Yol tarifi al' butonu bazen sessizce başarısız olabilir".
+  it("shows an alert when opening the directions URL fails, instead of failing silently", async () => {
+    (getVenueBySlug as jest.Mock).mockResolvedValue(FULL_VENUE);
+    const { Linking, Alert } = require("react-native");
+    jest.spyOn(Linking, "openURL").mockRejectedValue(new Error("no maps app"));
+    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+
+    await render(<VenueDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
+    fireEvent.press(screen.getByText("Buraya nasıl giderim"));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
   });
 });
 

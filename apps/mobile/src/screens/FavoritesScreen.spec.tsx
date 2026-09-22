@@ -92,6 +92,33 @@ describe("FavoritesScreen", () => {
     await waitFor(() => expect(screen.queryByText("Test Cafe")).toBeFalsy());
   });
 
+  // Denetim raporu §4.2 "Favoriler listesi boşsa hiçbir şey görünmüyor".
+  it("shows an empty-state message with a discovery prompt when the signed-in user has no favorites", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" } });
+    (getFavoriteLists as jest.Mock).mockResolvedValue([]);
+
+    await renderScreen();
+
+    await waitFor(() => expect(screen.getByText(/henüz favorin yok/i)).toBeTruthy(), { timeout: 5000 });
+  });
+
+  // Codex cross-model-review finding: the empty-state message was gated on `favorites.length ===
+  // 0` alone, which is ALSO true before the initial fetch resolves -- a user who genuinely HAS
+  // favorites would flash "henüz favorin yok" while getFavoriteLists() is still in flight.
+  it("does NOT show the empty-state message while favorites are still loading", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" } });
+    let resolveLists!: (v: unknown) => void;
+    (getFavoriteLists as jest.Mock).mockReturnValue(new Promise((resolve) => { resolveLists = resolve; }));
+
+    await renderScreen();
+
+    expect(screen.queryByText(/henüz favorin yok/i)).toBeFalsy();
+    await act(async () => {
+      resolveLists(ONE_LIST);
+      await Promise.resolve();
+    });
+  });
+
   it("does not apply a stale user's favorites after a session/user switch happens before the slow request resolves", async () => {
     let resolveA: (v: unknown) => void;
     const pendingA = new Promise((resolve) => {

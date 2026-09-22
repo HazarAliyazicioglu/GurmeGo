@@ -1,18 +1,35 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../lib/auth-context";
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();
+  const navigation = useNavigation();
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Denetim raporu §4.2 "Kayıt sonrası e-posta onayı gerektiği söylenmiyor": shown instead of
+  // navigating back, since a fresh sign-up isn't signed in yet (Supabase requires email
+  // confirmation first) -- returning to the previous screen here would look successful while the
+  // user still can't actually do whatever they came here to do.
+  const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
 
   async function handleSubmit() {
     setError(null);
-    const result = mode === "signIn" ? await signIn(email, password) : await signUp(email, password);
-    if (result.error) setError(result.error);
+    setConfirmationMessage(null);
+    if (mode === "signIn") {
+      const result = await signIn(email, password);
+      if (result.error) setError(result.error);
+      // Denetim raporu §4.2 "Giriş yaptıktan sonra hiçbir şey olmuyor": this screen is only ever
+      // reached BY navigating to it, so a successful sign-in returns to whatever screen led here.
+      else navigation.goBack();
+    } else {
+      const result = await signUp(email, password);
+      if (result.error) setError(result.error);
+      else setConfirmationMessage("Kayıt başarılı! Giriş yapabilmek için e-postanı onayla.");
+    }
   }
 
   return (
@@ -20,6 +37,7 @@ export default function AuthScreen() {
       <TextInput value={email} onChangeText={setEmail} placeholder="E-posta" autoCapitalize="none" />
       <TextInput value={password} onChangeText={setPassword} placeholder="Şifre" secureTextEntry />
       {error && <Text>{error}</Text>}
+      {confirmationMessage && <Text>{confirmationMessage}</Text>}
       <Pressable onPress={handleSubmit}>
         <Text>{mode === "signIn" ? "Giriş yap" : "Kayıt ol"}</Text>
       </Pressable>
