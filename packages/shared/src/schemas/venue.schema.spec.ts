@@ -119,8 +119,25 @@ describe("VenueListItemSchema", () => {
       editorialNote: null,
       googleRating: null,
       googleRatingCount: null,
+      coverPhoto: null,
     });
     expect(result.success).toBe(true);
+  });
+
+  it("round-trips coverPhoto (proves it's parsed, not silently stripped as an unknown key)", () => {
+    const result = VenueListItemSchema.parse({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Test Cafe",
+      slug: "test-cafe",
+      category: "cafe",
+      priceRange: "MODERATE",
+      isBoutique: true,
+      editorialNote: null,
+      googleRating: null,
+      googleRatingCount: null,
+      coverPhoto: "https://cdn.example.com/photo1.jpg",
+    });
+    expect(result.coverPhoto).toBe("https://cdn.example.com/photo1.jpg");
   });
 });
 

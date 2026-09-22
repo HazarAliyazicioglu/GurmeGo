@@ -69,7 +69,7 @@ describe("VenueMap — venue-count header reflects focusVenue, not venues.length
 describe("VenueMapCanvas — real keyboard accessibility for markers (C14)", () => {
   it("gives each marker's underlying element a tabindex/role/aria-label", async () => {
     getVenuesInBboxMock.mockResolvedValueOnce([{ id: "v1", name: "Cafe Test", category: "cafe", lat: 40.99, lng: 29.02 }]);
-    render(<VenueMapCanvas venues={[{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null }]} center={[40.99, 29.02]} />);
+    render(<VenueMapCanvas venues={[{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null }]} center={[40.99, 29.02]} />);
     const marker = await screen.findByTestId("circle-marker");
     expect(marker).toHaveAttribute("tabindex", "0");
     expect(marker).toHaveAttribute("role", "button");
@@ -78,7 +78,7 @@ describe("VenueMapCanvas — real keyboard accessibility for markers (C14)", () 
 
   it("opens the popup on both Enter and Space, proven via a real assertion on the hoisted openPopupMock", async () => {
     getVenuesInBboxMock.mockResolvedValueOnce([{ id: "v1", name: "Cafe Test", category: "cafe", lat: 40.99, lng: 29.02 }]);
-    render(<VenueMapCanvas venues={[{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null }]} center={[40.99, 29.02]} />);
+    render(<VenueMapCanvas venues={[{ id: "v1", name: "Cafe Test", slug: "cafe-test", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null }]} center={[40.99, 29.02]} />);
     const marker = await screen.findByTestId("circle-marker");
     fireEvent.keyDown(marker, { key: "Enter" });
     expect(openPopupMock).toHaveBeenCalledTimes(1);

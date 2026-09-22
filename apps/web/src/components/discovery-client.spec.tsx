@@ -90,8 +90,8 @@ describe("DiscoveryClient — loading, error, and stale-response discarding (C2)
 
   it("ignores a slow first response if a second request has already started", async () => {
     let resolveFirst: (v: unknown) => void;
-    const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null };
-    const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null };
+    const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null };
+    const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null };
     getVenues
       .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
       .mockResolvedValueOnce({ data: [venueB], meta: { next_cursor: null, has_more: false } });
@@ -140,9 +140,9 @@ describe("DiscoveryClient — pagination ('load more' from GET /venues's keyset 
     useLocationContext.mockReset().mockReturnValue(null);
   });
 
-  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
-  const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
-  const venueC = { id: "v3", name: "Third", slug: "third", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
+  const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
+  const venueC = { id: "v3", name: "Third", slug: "third", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
 
   it("does not render a 'load more' button when has_more is false", () => {
     render(<DiscoveryClient districtId="d1" initialVenues={[venueA]} center={[40.99, 29.02]} districtName="Kadıköy" />);
@@ -239,7 +239,7 @@ describe("DiscoveryClient — SSR initial pagination props (final-review Major 1
   });
 
   it("clicking 'load more' from SSR-provided pagination state uses the SSR-provided cursor", async () => {
-    const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+    const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
     getVenues.mockResolvedValueOnce({ data: [venueB], meta: { next_cursor: null, has_more: false } });
     render(
       <DiscoveryClient
@@ -267,8 +267,8 @@ describe("DiscoveryClient — loadMore freezes the coords context the cursor was
     useLocationContext.mockReset();
   });
 
-  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
-  const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
+  const venueB = { id: "v2", name: "Second", slug: "second", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
 
   it("uses null coords (page 1's context) for loadMore even if geolocation resolves and the component re-renders before the click", async () => {
     // Page 1 is fetched with no coords (matches the SSR fetch / no location yet).
@@ -360,8 +360,8 @@ describe("DiscoveryClient — filter change immediately resets stale pagination 
     useLocationContext.mockReset().mockReturnValue(null);
   });
 
-  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
-  const venueC = { id: "v3", name: "Third", slug: "third", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+  const venueA = { id: "v1", name: "First", slug: "first", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
+  const venueC = { id: "v3", name: "Third", slug: "third", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
 
   it("hides 'Load more' immediately (synchronously with the filter change) rather than leaving the stale cursor's button visible until the new fetch resolves", async () => {
     getVenues.mockResolvedValueOnce({ data: [venueA], meta: { next_cursor: "cursor-1", has_more: true } });
@@ -422,7 +422,7 @@ describe("DiscoveryClient — sortedByDistance reaches CategoryQuickRoute correc
   // satisfies VenueListItem here too (round-10 finding: this fixture was missed when the same fix
   // was applied to Step 2's fixture) -- prevents priceRange: "BUDGET" widening to string, which
   // would otherwise fail typecheck once passed into DiscoveryClient's initialVenues prop below.
-  const venue = { id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null } satisfies VenueListItem;
+  const venue = { id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: false, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null } satisfies VenueListItem;
 
   beforeEach(() => {
     getVenues.mockReset();

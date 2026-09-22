@@ -22,6 +22,7 @@ describe("getVenues", () => {
             editorialNote: null,
             googleRating: null,
             googleRatingCount: null,
+            coverPhoto: null,
           },
         ],
         meta: { next_cursor: null, has_more: false },

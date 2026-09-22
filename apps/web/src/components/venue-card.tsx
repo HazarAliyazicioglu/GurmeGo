@@ -25,6 +25,15 @@ export function VenueCard({ venue }: { venue: VenueListItem }) {
       />
 
       <article className="flex h-full min-h-48 flex-col">
+        {venue.coverPhoto ? (
+          <img
+            src={venue.coverPhoto}
+            alt={`${venue.name} fotoğrafı`}
+            loading="lazy"
+            className="-mx-5 -mt-5 mb-5 aspect-[4/3] w-[calc(100%+2.5rem)] rounded-t-[1.4rem] object-cover sm:-mx-6 sm:-mt-6 sm:mb-6 sm:w-[calc(100%+3rem)]"
+          />
+        ) : null}
+
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-[0.65rem] font-black uppercase tracking-[0.17em] text-[#9e422b]">

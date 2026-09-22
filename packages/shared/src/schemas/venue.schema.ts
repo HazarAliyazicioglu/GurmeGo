@@ -130,10 +130,10 @@ export const BboxQuerySchema = z.object({
 export type BboxQuery = z.infer<typeof BboxQuerySchema>;
 
 // `GET /venues` (apps/api's `VenuesRepository.searchPublished`) SELECTs only
-// `id, name, slug, category, priceRange, isBoutique, editorialNote, googleRating, googleRatingCount`
+// `id, name, slug, category, priceRange, isBoutique, editorialNote, googleRating, googleRatingCount, coverPhoto`
 // (+ `distance_m` when lat/lng given, not surfaced to clients) — a narrower projection than
 // `VenueSchema`, not merely "all fields optional". `id`/`name`/`slug`/`category`/`priceRange`/`isBoutique`
-// are always present; `editorialNote`/`googleRating`/`googleRatingCount` are genuinely
+// are always present; `editorialNote`/`googleRating`/`googleRatingCount`/`coverPhoto` are genuinely
 // DB-nullable columns (raw SQL returns `null`, not `undefined`), so those stay `.nullable()` here.
 export const VenueListItemSchema = z.object({
   id: VenueSchema.shape.id,
@@ -145,6 +145,10 @@ export const VenueListItemSchema = z.object({
   editorialNote: z.string().max(1000).nullable(),
   googleRating: z.number().min(0).max(5).nullable(),
   googleRatingCount: z.number().int().min(0).nullable(),
+  // Only the venue's first photo, not the full `photos` array -- the list endpoint returns many
+  // venues at once, so shipping every photo per venue here would bloat the payload for no reason
+  // (the detail endpoint already exposes the full array).
+  coverPhoto: z.string().nullable(),
 });
 export type VenueListItem = z.infer<typeof VenueListItemSchema>;
 

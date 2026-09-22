@@ -35,7 +35,7 @@ describe("CategoryQuickRoute", () => {
 // `satisfies VenueListItem[]` (not a bare array literal) prevents TypeScript from widening
 // `priceRange: "BUDGET"` to `string` — round-9 finding — which would otherwise fail to satisfy
 // this component's real, narrower `venues: VenueListItem[]` prop type.
-const venues = [{ id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null }] satisfies VenueListItem[];
+const venues = [{ id: "v1", name: "First Cafe", slug: "first-cafe", category: "cafe", priceRange: "BUDGET", isBoutique: true, editorialNote: null, googleRating: null, googleRatingCount: null, coverPhoto: null }] satisfies VenueListItem[];
 
 describe("CategoryQuickRoute — widened contract: venues, districtName, sortedByDistance, deselect", () => {
   it("calls onSelectCategory(category), then renders a directions link once re-rendered with the new activeCategory, labeled 'En yakın' when sortedByDistance is true", () => {

@@ -14,6 +14,7 @@ const baseVenue = {
   editorialNote: null,
   googleRating: 4.3,
   googleRatingCount: null,
+  coverPhoto: null,
 } satisfies VenueListItem;
 
 describe("VenueCard — Google rating badge attribution text", () => {
@@ -30,5 +31,18 @@ describe("VenueCard — Google rating badge attribution text", () => {
     render(<VenueCard venue={{ ...baseVenue, googleRatingCount: null }} />);
     expect(screen.getByText(/Google yorumu/)).toBeInTheDocument();
     expect(screen.queryByText(/\d+ Google yorumu/)).not.toBeInTheDocument();
+  });
+});
+
+describe("VenueCard — cover photo", () => {
+  it("renders the cover photo when coverPhoto is present", () => {
+    render(<VenueCard venue={{ ...baseVenue, coverPhoto: "https://cdn.example.com/photo1.jpg" }} />);
+    const img = screen.getByRole("img", { name: `${baseVenue.name} fotoğrafı` });
+    expect(img).toHaveAttribute("src", "https://cdn.example.com/photo1.jpg");
+  });
+
+  it("renders no image when coverPhoto is null (text-only layout preserved)", () => {
+    render(<VenueCard venue={{ ...baseVenue, coverPhoto: null }} />);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 });

@@ -51,6 +51,22 @@ describe("VenuesRepository.searchPublished — B11 zero-coordinate handling", ()
   });
 });
 
+describe("VenuesRepository.searchPublished — coverPhoto", () => {
+  it("selects only the venue's first photo, not the full photos array", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    await new VenuesRepository(prisma).searchPublished({ sort: "newest", limit: 20 } as any);
+    const sqlText = prisma.$queryRaw.mock.calls[0][0].strings.join("");
+    expect(sqlText).toMatch(/v\.photos\[1\] AS "coverPhoto"/);
+  });
+
+  it("passes coverPhoto through to the returned item, unlike the stripped internal created_at field", async () => {
+    const rows = [{ id: "v1", name: "A", slug: "a", category: "cafe", coverPhoto: "https://cdn.example.com/1.jpg", created_at: new Date() }];
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue(rows) } as any;
+    const result = await new VenuesRepository(prisma).searchPublished({ sort: "newest", limit: 20 } as any);
+    expect(result.items[0].coverPhoto).toBe("https://cdn.example.com/1.jpg");
+  });
+});
+
 describe("VenuesRepository.searchPublished — openNow", () => {
   it("adds a fail-open CASE barrier (PostgreSQL NOT(NULL) is NULL, not TRUE)", async () => {
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;

@@ -60,6 +60,7 @@ const VALID_VENUE_LIST_ITEM = {
   editorialNote: null,
   googleRating: 4.5,
   googleRatingCount: 100,
+  coverPhoto: null,
 };
 
 const VALID_DISTRICT = {
