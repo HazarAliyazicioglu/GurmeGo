@@ -99,7 +99,7 @@ export default function FavoritesScreen() {
         // bar (with the "Mekanlar" tab) is always visible on this screen, so a second way to get
         // there would be redundant, not worth the cross-navigator typing (Discovery isn't a route
         // in this screen's own RootStackParamList, only in the sibling TabParamList).
-        ListEmptyComponent={loaded ? <Text>Henüz favorin yok, keşfetmeye başla</Text> : null}
+        ListEmptyComponent={loaded ? <Text>Henüz favorin yok, keşfetmeye başla</Text> : undefined}
         renderItem={({ item }) => (
           <View>
             <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>

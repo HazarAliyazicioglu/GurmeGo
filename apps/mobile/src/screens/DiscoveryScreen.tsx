@@ -161,7 +161,7 @@ export default function DiscoveryScreen() {
         testID="venues-list"
         data={venues}
         keyExtractor={(v) => v.id}
-        ListEmptyComponent={venuesLoaded ? <Text>Bu kriterlere uygun mekan bulunamadı</Text> : null}
+        ListEmptyComponent={venuesLoaded ? <Text>Bu kriterlere uygun mekan bulunamadı</Text> : undefined}
         renderItem={({ item }) => (
           <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
             <Text>{item.name}</Text>
