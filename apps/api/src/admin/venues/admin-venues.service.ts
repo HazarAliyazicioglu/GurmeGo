@@ -68,6 +68,22 @@ export class AdminVenuesService {
     });
   }
 
+  async search(term: string) {
+    return this.prisma.venue.findMany({
+      where: { OR: [{ name: { contains: term, mode: "insensitive" } }, { slug: { contains: term, mode: "insensitive" } }] },
+      select: { id: true, name: true, slug: true, status: true },
+      take: 20,
+    });
+  }
+
+  async listVersions(venueId: string) {
+    return this.prisma.venueVersion.findMany({
+      where: { venueId },
+      select: { id: true, createdAt: true, createdBy: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   async revert(venueId: string, versionId: string, actorId: string) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // `findUnique` (not `findUniqueOrThrow`) -- a well-formed but non-existent `versionId` (it's

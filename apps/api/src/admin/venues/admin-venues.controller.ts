@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from "@nestjs/common";
-import { AdminVenueCreateSchema, AdminVenueUpdateSchema } from "@gurmego/shared";
+import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { AdminVenueCreateSchema, AdminVenueUpdateSchema, AdminVenueSearchQuerySchema, type AdminVenueSearchQuery } from "@gurmego/shared";
 import { AuthenticatedRequest } from "../../auth/jwt-auth.guard";
 import { Roles } from "../../auth/roles.decorator";
 import { RolesGuard } from "../../auth/roles.guard";
@@ -15,6 +15,16 @@ import { CsvImportService } from "./csv-import.service";
 @Roles("curator", "admin")
 export class AdminVenuesController {
   constructor(private venues: AdminVenuesService, private csvImport: CsvImportService) {}
+
+  @Get("venues")
+  search(@Query(new ZodValidationPipe(AdminVenueSearchQuerySchema)) query: AdminVenueSearchQuery) {
+    return this.venues.search(query.search);
+  }
+
+  @Get("venues/:id/versions")
+  listVersions(@Param("id", new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string) {
+    return this.venues.listVersions(id);
+  }
 
   @Post("venues")
   create(

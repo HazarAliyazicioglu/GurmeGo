@@ -366,3 +366,35 @@ describe("AdminVenuesService.importWithAudit", () => {
     errorSpy.mockRestore();
   });
 });
+
+describe("AdminVenuesService.search", () => {
+  it("matches venues whose name OR slug contains the search term, case-insensitively", async () => {
+    const prisma = { venue: { findMany: jest.fn().mockResolvedValue([{ id: "v1", name: "Kadıköy Kahvecisi", slug: "kadikoy-kahvecisi", status: "PUBLISHED" }]) } } as any;
+    const service = new AdminVenuesService(prisma, {} as any, {} as any, auditStub());
+    const result = await service.search("kadikoy");
+    expect(result).toEqual([{ id: "v1", name: "Kadıköy Kahvecisi", slug: "kadikoy-kahvecisi", status: "PUBLISHED" }]);
+    expect(prisma.venue.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { OR: [{ name: { contains: "kadikoy", mode: "insensitive" } }, { slug: { contains: "kadikoy", mode: "insensitive" } }] },
+        take: 20,
+      }),
+    );
+  });
+});
+
+describe("AdminVenuesService.listVersions", () => {
+  it("returns versions newest-first, without the snapshot field", async () => {
+    const prisma = { venueVersion: { findMany: jest.fn().mockResolvedValue([{ id: "ver1", createdAt: new Date("2026-01-02"), createdBy: "admin-1" }]) } } as any;
+    const service = new AdminVenuesService(prisma, {} as any, {} as any, auditStub());
+    const result = await service.listVersions("v1");
+    expect(result).toEqual([{ id: "ver1", createdAt: new Date("2026-01-02"), createdBy: "admin-1" }]);
+    expect(prisma.venueVersion.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { venueId: "v1" }, orderBy: { createdAt: "desc" } }),
+    );
+    // Codex MINOR finding: assert the `select` clause itself excludes `snapshot`, not just that
+    // the (mocked) return value happens to lack it -- a regression that widened the select to
+    // include the full snapshot JSON would still pass the assertion above.
+    const call = prisma.venueVersion.findMany.mock.calls[0][0];
+    expect(call.select).toEqual({ id: true, createdAt: true, createdBy: true });
+  });
+});

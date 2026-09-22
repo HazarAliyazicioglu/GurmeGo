@@ -81,6 +81,9 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
           <Link href="/roller" className="hover:text-slate-900 hover:underline">
             Roller
           </Link>
+          <Link href="/mekan-gecmisi" className="hover:text-slate-900 hover:underline">
+            Mekan Geçmişi
+          </Link>
         </nav>
         {signOutError && (
           <p role="alert" className="text-xs font-semibold text-rose-700">

@@ -264,3 +264,90 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
     });
   });
 });
+
+describe("AdminVenuesController (e2e) — GET search & versions", () => {
+  let app: NestFastifyApplication;
+  let venues: { search: jest.Mock; listVersions: jest.Mock };
+
+  beforeAll(async () => {
+    venues = { search: jest.fn(), listVersions: jest.fn() };
+
+    const moduleRef = await Test.createTestingModule({
+      controllers: [AdminVenuesController],
+      providers: [
+        { provide: CACHE_STORE, useValue: { increment: jest.fn().mockResolvedValue(1) } },
+        { provide: AdminVenuesService, useValue: venues },
+        { provide: CsvImportService, useValue: {} },
+      ],
+    }).compile();
+
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    await app.register(fastifyMultipart);
+    app.getHttpAdapter()
+      .getInstance()
+      .addHook("onRequest", (req: any, _reply: any, done: () => void) => {
+        const role = req.headers["x-test-role"];
+        req.user = role ? { id: "test-user", role } : undefined;
+        done();
+      });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    venues.search.mockReset();
+    venues.listVersions.mockReset();
+  });
+
+  it("allows a curator to search venues by term", async () => {
+    venues.search.mockResolvedValue([{ id: VENUE_ID, name: "A", slug: "a", status: "PUBLISHED" }]);
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/venues?search=kadikoy",
+      headers: { "x-test-role": "curator" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(venues.search).toHaveBeenCalledWith("kadikoy");
+  });
+
+  it("rejects a search term shorter than 2 characters with 400", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/venues?search=k",
+      headers: { "x-test-role": "curator" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(venues.search).not.toHaveBeenCalled();
+  });
+
+  it("allows a curator to list a venue's versions", async () => {
+    venues.listVersions.mockResolvedValue([{ id: VERSION_ID, createdAt: new Date(), createdBy: "admin-1" }]);
+    const res = await app.inject({
+      method: "GET",
+      url: `/admin/venues/${VENUE_ID}/versions`,
+      headers: { "x-test-role": "curator" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(venues.listVersions).toHaveBeenCalledWith(VENUE_ID);
+  });
+
+  it("rejects a non-UUID venue id with 400 before reaching the service", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/admin/venues/not-a-uuid/versions",
+      headers: { "x-test-role": "curator" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(venues.listVersions).not.toHaveBeenCalled();
+  });
+
+  it("blocks an unauthenticated request to search", async () => {
+    const res = await app.inject({ method: "GET", url: "/admin/venues?search=kadikoy" });
+    expect(res.statusCode).toBe(401);
+    expect(venues.search).not.toHaveBeenCalled();
+  });
+});

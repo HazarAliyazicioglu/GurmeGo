@@ -5,10 +5,14 @@ import {
   CsvImportResultSchema,
   DataQualityReportSchema,
   AdminUserSearchResultSchema,
+  AdminVenueSearchResultSchema,
+  AdminVenueVersionListSchema,
   type AdminQueueItem,
   type CsvImportResult,
   type DataQualityReport,
   type AdminUserSearchResult,
+  type AdminVenueSearchResult,
+  type AdminVenueVersionList,
 } from "@gurmego/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1";
@@ -66,6 +70,27 @@ export async function searchUsers(token: string, term: string): Promise<AdminUse
 export async function assignRole(token: string, userId: string, role: string): Promise<void> {
   const client = createApiClient(API_BASE, () => token);
   await client.put(`/admin/users/${userId}/roles`, { role });
+}
+
+export async function searchVenues(token: string, term: string): Promise<AdminVenueSearchResult> {
+  const client = createApiClient(API_BASE, () => token);
+  const raw = await client.get<unknown>(`/admin/venues?search=${encodeURIComponent(term)}`);
+  const result = AdminVenueSearchResultSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError("/admin/venues", result.error.issues);
+  return result.data;
+}
+
+export async function listVenueVersions(token: string, venueId: string): Promise<AdminVenueVersionList> {
+  const client = createApiClient(API_BASE, () => token);
+  const raw = await client.get<unknown>(`/admin/venues/${venueId}/versions`);
+  const result = AdminVenueVersionListSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError(`/admin/venues/${venueId}/versions`, result.error.issues);
+  return result.data;
+}
+
+export async function revertVenue(token: string, venueId: string, versionId: string): Promise<void> {
+  const client = createApiClient(API_BASE, () => token);
+  await client.post(`/admin/venues/${venueId}/revert/${versionId}`, {});
 }
 
 export async function getDataQualityReport(token: string): Promise<DataQualityReport> {
