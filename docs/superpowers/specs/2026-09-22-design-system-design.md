@@ -1,18 +1,19 @@
 # Tasarım Sistemi / Marka Kimliği — Design Doc
 
 **Tarih:** 2026-09-22
-**Durum:** idea-red-team NO-GO verdi (Codex, yüksek efor) — kapsam ciddi daraltıldı, aşağıdaki
-sürüm daraltılmış+düzeltilmiş halidir. Yeniden red-team'e sokulmadı (kapsam artık çok daha küçük
-ve her nokta somut bir Codex bulgusuna karşılık düzeltildi; ikinci bir tur orantısız olur).
+**Durum:** İKİ tur cross-model bulgusundan geçti: idea-red-team (Codex, yüksek efor, NO-GO →
+kapsam daraltıldı) + implementasyon sonrası cross-model-review (Codex, yüksek efor → next/image
+kısmı tamamen geri alındı, bir WCAG hover bug'ı düzeltildi). Nihai teslim edilen kapsam
+aşağıdadır; `next/image` GERÇEKLEŞMEDİ (gerekçe aşağıda).
 **Kapsam:** Alt proje 1/4 — SADECE web (admin/mobil bu turdan tamamen çıkarıldı, gerekçe aşağıda).
 
-## Red-team bulguları (Codex, yüksek efor, NO-GO) — hepsi işlendi
+## idea-red-team bulguları (tur 1, Codex, yüksek efor, NO-GO) — hepsi işlendi
 
 - **`unoptimized` next/image hiçbir şeyi optimize etmez** (byte küçülmez, sadece prop değişir):
-  KABUL. Yaklaşım değişti — `unoptimized` yerine `remotePatterns: [{ hostname: "**" }]` (gerçek
-  sunucu-taraflı yeniden boyutlandırma). Maliyet: admin-girişli keyfi URL'leri sunucu tarafında
-  fetch etmek — sadece admin/curator girdisi (herkese açık form değil), MVP için kabul edilebilir
-  risk; büyürse allowlist'e daraltılır (ayrı, sonraki karar).
+  KABUL — ilk düzeltme `remotePatterns: [{ hostname: "**" }]`e geçmekti, ama bu da cross-model-review'da
+  (tur 2) YENİ bir güvenlik bulgusuyla reddedildi (aşağıya bkz). **Sonuç: next/image bu pakette
+  hiç yapılmadı** — ne `unoptimized` (fayda yok) ne `remotePatterns: "**"` (güvenlik riski) kabul
+  edilebilir bir seçenekti; mevcut düz `<img loading="lazy">` aynen korundu.
 - **Font değişimi (Georgia→Fraunces) gerçek bir görsel değişikliktir, birim test bunu kanıtlamaz**
   (uzun Türkçe mekan adlarının satır kırılımı, kart yüksekliği): KABUL. Unit test iddiası
   kaldırıldı; yerine **elle doğrulama zorunlu** — dev server'da gerçek uzun mekan adlarıyla
@@ -37,10 +38,40 @@ ve her nokta somut bir Codex bulgusuna karşılık düzeltildi; ikinci bir tur o
 - **WCAG kontrast bulgusu** (terracotta zemin + beyaz metin varsayılan durumda 3.81:1, AA eşiği
   4.5:1 — hesaplandı, doğru): KABUL, YENİ bulgu, düzeltiliyor — `bg-[#d75d3b]` → `bg-[#bd4c30]`
   (4.95:1, AA geçer) varsayılan buton zemini, hover'da `#d75d3b`'ye açılır (ters çevrildi).
+  **Tur 2'de bu düzeltmenin kendisi hatalı çıktı — aşağıya bkz.**
 - **Leaflet CSS'in component'e taşınması "haritasız sayfa hiç indirmez" garantisi vermez** (Next
   global stylesheet birleştirme davranışı): KABUL, iddia yumuşatıldı — taşınır ama **build
   çıktısıyla doğrulanır** (`next build`'in route bazlı "First Load JS/CSS" raporu), garanti değil
   gözlem olarak yazılır.
+
+## cross-model-review bulguları (tur 2, implementasyon sonrası, Codex, yüksek efor)
+
+- **GÜVENLİK — MAJOR: `remotePatterns: [{ hostname: "**" }]` açık bir görsel proxy'dir.**
+  "Sadece admin girdisi" savunması yanlıştı — sorun DB'de hangi URL'nin kayıtlı olması değil,
+  **herkesin** `/_next/image?url=<KEYFİ-HTTPS-URL>` çağırabilmesi (admin hesabı gerekmez, hiçbir
+  yetkilendirme yok). Next 16.3.5'te yerel-IP erişimi varsayılan kapalı ve yanıt boyutu 50MB'la
+  sınırlı olsa da, bu bant genişliği/CPU tüketimi açık bir kaynak-suistimali yüzeyi. KABUL —
+  **next/image bu pakette TAMAMEN geri alındı**, mevcut `<img loading="lazy">` korundu. Gerçek
+  optimizasyon, bilinen bir domain'e (Supabase Storage gibi) geçişten SONRA, dar bir
+  `remotePatterns` ile ayrı bir görev olarak ele alınmalı.
+- **WCAG — MAJOR: tur 1'in düzeltmesi hover durumunu AA'nın ALTINA düşürmüş.** Rest state
+  `brandSolid` (#bd4c30, 4.95:1) doğruydu ama hover `bg-brand`e (#d75d3b, terracotta, 3.81:1)
+  açılıyordu — tam da düzeltilen hatayı hover'da geri getiriyordu. KABUL — hover artık
+  `terracottaDeep` (#9e422b, 6.43:1) — hem rest hem hover AA'yı rahatça geçiyor.
+- **TDD — MINOR: next/image testi "gerçek optimizasyon" kanıtlamıyordu**, sadece URL biçimini
+  kontrol ediyordu (endpoint gerçekten çalışıyor mu, byte küçülüyor mu — jsdom'da ölçülemez).
+  KABUL, ama next/image geri alındığı için bu test de kaldırıldı.
+- **MINOR: `AdminVenueCreateSchema.photos` `z.string().url()` HTTP'yi de kabul ediyor, ama
+  `remotePatterns` sadece HTTPS'e izin veriyordu** — mevcut bir HTTP kaydı optimizer tarafından
+  reddedilirdi. next/image geri alındığı için tartışmalı hale geldi, ama not edilir: ileride
+  next/image geri gelirse bu uyumsuzluk da çözülmeli.
+- **MINOR: doc'taki "font'tan bağımsız çalışır" iddiası yanlış** — satır kırılımı `ch` birimine
+  (karakter genişliğine) bağlıdır, farklı fontlar farklı genişliktedir. KABUL — iddia düzeltildi
+  (aşağıya bkz), gerçek doğrulama hâlâ ayrı bir görev olarak bekliyor.
+- Mekanik rename (17 dosya, ~300 class) spot-check edildi: **TEMİZ**, hiçbir yanlış hex↔isim
+  eşlemesi bulunmadı, bildirilen hover bug'ı dışında değer değişikliği yok.
+- Kapsam disiplini (sadece web, admin/mobil/favoriler-migration yok, `any` yok, istemci iş
+  mantığı yok): **TEMİZ**.
 
 ## Neden
 
@@ -112,11 +143,11 @@ export const SEMANTIC_COLORS = {
 class'lara geçirilir — value birebir aynı, sadece isimlendirme; davranış değişikliği yok (test
 gerektirmez, saf isim değişimi).
 
-**İstisna — WCAG kontrast düzeltmesi (yeni bulgu):** `venue-detail.tsx`'teki "Yol tarifi al"
-butonu `bg-[#d75d3b] ... text-white` (varsayılan 3.81:1, AA eşiği 4.5:1'in altında) →
-`bg-brandSolid` (`#bd4c30`, 4.95:1, AA geçer) + hover `#d75d3b`'ye açılır (mevcut hover/rest
-davranışı ters çevrilir — daha koyu renk artık dinlenme durumu). Bu tek satırlık davranış
-değişikliği, isim geçişinden AYRI bir commit'te, testle kanıtlanır.
+**İstisna — WCAG kontrast düzeltmesi (yeni bulgu, tur 2'de tekrar düzeltildi):** `venue-detail.tsx`'teki
+"Yol tarifi al" butonu `bg-[#d75d3b] ... text-white` (varsayılan 3.81:1, AA eşiği 4.5:1'in altında)
+→ rest: `bg-brandSolid` (`#bd4c30`, 4.95:1, AA geçer), hover: `hover:bg-terracottaDeep`
+(`#9e422b`, 6.43:1, AA rahatça geçer). İlk düzeltme hover'ı `#d75d3b`'ye (3.81:1, AA ALTI) açmıştı
+— cross-model-review bunu yakaladı, ikinci düzeltmede hem rest hem hover AA-güvenli.
 
 ### 2. Tipografi — SADECE başlık fontu, elle doğrulama zorunlu
 
@@ -128,24 +159,25 @@ bir font = ikinci bir risk yüzeyi, kapsamı büyütmenin gerekçesi yok; sistem
 uygulanır; `tailwind.config.ts`'nin `fontFamily.serif`'i bu değişkene bağlanır — mevcut
 `font-serif` class kullanımları component değişmeden gerçek fontu alır.
 
-**Zorunlu elle doğrulama (red-team: birim test bunu kanıtlamaz):** Uygulamadan sonra dev server'da
-gerçek, uzun Türkçe mekan adlarıyla (ör. "Kadıköy'ün En Sakin Üçüncü Nesil Kahvecisi" gibi
-`docs/prd.md` §örneklerinden esinlenen uzun bir başlık) venue-card ve venue-detail'i tarayıcıda
-görüntüleyip satır kırılımı/taşma kontrolü yapılacak — birim testin kanıtlayamadığı tam da bu.
+**Elle doğrulama (red-team: birim test bunu kanıtlamaz) — HENÜZ YAPILMADI:** Bu ortamda
+Playwright/tarayıcı kurulu değil ve tam yığını (Supabase+API+seed'li DB) ayağa kaldırmak bu
+değişikliğin kendisinden daha büyük bir iş olurdu. Doc'un ilk sürümü burada "font'tan bağımsız
+çalışır" diye yanlış bir güvence vermişti — cross-model-review (tur 2) haklı olarak düzeltti:
+satır kırılımı `ch` birimine (karakter genişliğine) bağlıdır, font değişince değişir. Gerçek
+doğrulama (Playwright kurulumu + gerçek uzun Türkçe adlarla ekran testi) **ayrı bir görev**
+olarak STATE.md'ye not edilir; bu commit'te font değişikliği düşük-ama-doğrulanmamış bir görsel
+riskle teslim ediliyor.
 
-### 3. `next/image`'a GERÇEK optimizasyonla geçiş
+### 3. `next/image` — YAPILMADI (güvenlik bulgusu nedeniyle geri alındı)
 
-`venue-card.tsx` ve `venue-detail.tsx`'teki düz `<img>` → `next/image`, **`unoptimized` DEĞİL**
-(red-team: `unoptimized` byte küçültmez, hiçbir şeyi çözmez). `next.config.js`'ye
-`images.remotePatterns: [{ protocol: "https", hostname: "**" }]` — gerçek sunucu-taraflı yeniden
-boyutlandırma/format dönüşümü. Maliyet: admin/curator'ın girdiği keyfi HTTPS URL'lerini Next'in
-görsel proxy'si sunucu tarafında fetch eder — girdi herkese açık değil (sadece admin/curator rolü,
-`AdminVenueCreateSchema`), MVP için kabul edilebilir; büyürse bilinen bir domain'e (ör. Supabase
-Storage) daraltılır (ayrı, sonraki karar).
-
-**Doğrulama:** dev server'da gerçek bir mekan fotoğrafının network sekmesinde `_next/image?url=...`
-üzerinden döndüğü ve orijinalden daha küçük boyutta geldiği gözlemlenir (yalnızca kod var
-demekle yetinilmez).
+İlk tasarım `unoptimized` next/image öneriyordu; idea-red-team bunun hiçbir byte küçültmediğini
+gösterdi. Düzeltme olarak `remotePatterns: [{ hostname: "**" }]` denendi (gerçek sunucu-taraflı
+yeniden boyutlandırma) — ama cross-model-review (tur 2) bunun **herkesin** `/_next/image?url=<keyfi>`
+çağırabildiği açık bir proxy olduğunu gösterdi, admin girdisiyle sınırlı değil. İki seçenek de
+(fayda yok / güvenlik riski) kabul edilemezdi. **Sonuç: next/image'a hiç geçilmedi**, mevcut
+düz `<img loading="lazy">` aynen korundu. Gerçek optimizasyon, admin'e dosya yükleme eklenip
+fotoğraflar bilinen tek bir domain'e (ör. Supabase Storage) taşındıktan SONRA, dar bir
+`remotePatterns` ile ayrı bir görev olarak ele alınmalı — STATE.md'ye not edilir.
 
 ### 4. Leaflet CSS
 
@@ -156,16 +188,37 @@ JS/CSS" raporuyla gerçek fark gözlemlenir, garanti olarak değil gözlem olara
 
 ## Test stratejisi
 
-- Renk isim geçişi: mekanik, davranış değişikliği yok, test gerektirmez (build+lint yeterli).
-- Kontrast düzeltmesi (`bg-brandSolid`): TDD — `venue-detail.spec.tsx`'e "Yol tarifi al"
-  butonunun `bg-[#bd4c30]` (veya token class'ı) taşıdığını doğrulayan test, RED→GREEN.
-- Font: elle doğrulama (yukarıda) + mevcut `venue-card.spec.tsx`/`venue-detail.spec.tsx`'in
-  kırılmadığı TDD'de doğrulanır (component değişmiyor, sadece layout+config).
-- `next/image` geçişi: mevcut `getByRole("img")`/`alt` testleri `next/image`'ın render ettiği
-  gerçek `<img>` üzerinde de çalışır — RED→GREEN ile kanıtlanır; ayrıca yukarıdaki elle
-  network-doğrulaması.
-- Leaflet CSS taşıma: davranışsal fark yok, test gerekmiyor; build çıktısı elle gözlemlenir.
+- Renk isim geçişi: mekanik, davranış değişikliği yok, test gerektirmez (build+lint yeterli);
+  cross-model-review'da 17 dosyalık rename spot-check edildi, TEMİZ.
+- Kontrast düzeltmesi (rest+hover, `bg-brandSolid`/`hover:bg-terracottaDeep`): TDD —
+  `venue-detail.spec.tsx`'e her iki durumun da AA-güvenli tonu taşıdığını VE başarısız tonların
+  (`bg-terracotta`/`bg-brand`) hiçbir durumda kullanılmadığını doğrulayan test, RED→GREEN
+  (tur 2'nin yakaladığı hover regresyonu tekrar olmasın diye ikisi de ayrı ayrı assert edilir).
+- Font: elle doğrulama HENÜZ YAPILMADI (yukarıya bkz, dürüstçe not edildi) + mevcut
+  `venue-card.spec.tsx`/`venue-detail.spec.tsx`'in kırılmadığı TDD'de doğrulanır.
+- `next/image`: YAPILMADI, dolayısıyla test yok — mevcut `<img>` testleri değişmeden kaldı.
+- Leaflet CSS taşıma: davranışsal fark yok, test gerekmiyor; build çıktısı elle gözlemlenip
+  gerçek izolasyon kanıtlandı (aşağıya bkz).
 
 ## Kapsam dışı bırakılan, STATE.md'ye not edilecek ayrı görevler
 - Mobil renk/font tutarlılığı (RN, kendi cihaz doğrulaması gerektirir).
 - `FavoriteList` aynı-isim yarış durumu (`@@unique([userId, name])`) — ürün kuralı değişikliği.
+- `next/image` gerçek optimizasyonu — admin'e dosya yükleme + bilinen tek domain'den SONRA.
+- Fraunces'ın gerçek uzun Türkçe mekan adlarıyla Playwright doğrulaması.
+
+## Uygulama sonrası doğrulama — dürüst durum
+
+Bu ortamda (Playwright/tarayıcı kurulu değil, tam yığın — Supabase+API+seed'li DB — ayağa
+kaldırmak bu değişikliğin kendisinden daha büyük bir iş olurdu) **gerçek tarayıcıda görsel
+doğrulama yapılamadı.** Bunun yerine yapılan, daha zayıf ama gerçek kanıtlar:
+
+- `next build` gerçekten çalıştırıldı (mock değil): Fraunces derlendi, tip hatası yok.
+- Leaflet CSS izolasyonu **build çıktısından dosya seviyesinde doğrulandı**: `.next/static/chunks/`
+  altında leaflet stilleri ayrı bir 10KB chunk'ta, ve `favoriler.html`/`giris.html`/`index.html`
+  prerender çıktılarının hiçbirinde bu chunk'a referans yok (`grep -c` ile sayıldı, 0). Bu, gerçek
+  build çıktısı üzerinden dosya-seviyesinde doğrulandı (cross-model-review'ın workspace'inde
+  `.next` bulunmadığı için kendisi yeniden üretemedi, ama yöntem tarif edilen şekilde geçerli).
+- `next/image` **hiç yapılmadı** (yukarıya bkz) — bu maddeye artık gerek yok.
+- Font/uzun-isim satır kırılımı **doğrulanamadı** — ilk sürümdeki "font'tan bağımsız" iddiası
+  YANLIŞTI (cross-model-review düzeltti: `ch` birimi font metriğine bağlıdır), düzeltildi. Bu,
+  düşük-ama-doğrulanmamış bir görsel risk olarak teslim ediliyor.

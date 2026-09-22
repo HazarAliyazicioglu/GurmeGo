@@ -10,12 +10,12 @@ const VenueMapCanvas = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="grid h-full place-items-center bg-[#e8e1d5]"
+        className="grid h-full place-items-center bg-sandLight"
         role="status"
         aria-label="Harita yükleniyor"
       >
-        <div className="flex items-center gap-3 rounded-full border border-[#201d18]/10 bg-[#f4f0e7]/95 px-4 py-2.5 text-xs font-bold text-[#201d18]/65 shadow-sm">
-          <span className="size-2 animate-pulse rounded-full bg-[#d75d3b]" aria-hidden="true" />
+        <div className="flex items-center gap-3 rounded-full border border-ink/10 bg-cream/95 px-4 py-2.5 text-xs font-bold text-ink/65 shadow-sm">
+          <span className="size-2 animate-pulse rounded-full bg-terracotta" aria-hidden="true" />
           Harita hazırlanıyor
         </div>
       </div>
@@ -35,12 +35,12 @@ export function VenueMap({
   return (
     <section
       data-testid="venue-map"
-      className="relative isolate mt-9 overflow-hidden rounded-[1.5rem] border border-[#201d18]/15 bg-[#201d18] shadow-[0_18px_45px_rgba(32,29,24,0.12)]"
+      className="relative isolate mt-9 overflow-hidden rounded-[1.5rem] border border-ink/15 bg-ink shadow-[0_18px_45px_rgba(32,29,24,0.12)]"
       aria-labelledby="venue-map-title"
     >
-      <div className="flex items-end justify-between gap-4 bg-[#201d18] px-4 py-4 text-[#f4f0e7] sm:px-5">
+      <div className="flex items-end justify-between gap-4 bg-ink px-4 py-4 text-cream sm:px-5">
         <div>
-          <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#e67b5e]">
+          <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-terracottaSoft">
             Mahalle görünümü
           </p>
           <h2
@@ -50,7 +50,7 @@ export function VenueMap({
             Mekanları haritada keşfet
           </h2>
         </div>
-        <span className="mb-1 shrink-0 text-xs font-bold tabular-nums text-[#f4f0e7]/55">
+        <span className="mb-1 shrink-0 text-xs font-bold tabular-nums text-cream/55">
           {(focusVenue ? 1 : venues.length).toString().padStart(2, "0")} mekan
         </span>
       </div>

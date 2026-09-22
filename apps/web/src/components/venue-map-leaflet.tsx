@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Map as LeafletMap } from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   CircleMarker,
   MapContainer,
@@ -16,6 +17,7 @@ import {
   type MapVenue,
   type VenueListItem,
 } from "@/lib/api";
+import { PRIMITIVE_COLORS } from "@/lib/colors";
 
 type LocatedVenue = MapVenue & { slug: string };
 type LoadState = "loading" | "ready" | "error";
@@ -158,7 +160,7 @@ export function VenueMapCanvas({
         zoom={13}
         minZoom={10}
         scrollWheelZoom={false}
-        className="h-full w-full bg-[#e8e1d5]"
+        className="h-full w-full bg-sandLight"
         aria-label="Mekanların konumlarını gösteren interaktif harita"
       >
         <TileLayer
@@ -180,8 +182,8 @@ export function VenueMapCanvas({
             center={[venue.lat, venue.lng]}
             radius={9}
             pathOptions={{
-              color: "#f4f0e7",
-              fillColor: "#d75d3b",
+              color: PRIMITIVE_COLORS.cream,
+              fillColor: PRIMITIVE_COLORS.terracotta,
               fillOpacity: 1,
               opacity: 1,
               weight: 3,
@@ -189,8 +191,8 @@ export function VenueMapCanvas({
             eventHandlers={markerEventHandlers(venue.name)}
           >
             <Popup minWidth={180}>
-              <div className="font-sans text-[#201d18]">
-                <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#d75d3b]">
+              <div className="font-sans text-ink">
+                <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-terracotta">
                   {venue.category}
                 </p>
                 <p className="mt-1 font-serif text-lg font-semibold leading-tight">
@@ -198,7 +200,7 @@ export function VenueMapCanvas({
                 </p>
                 <Link
                   href={`/mekan/${venue.slug}`}
-                  className="mt-3 inline-flex min-h-9 items-center rounded-full bg-[#201d18] px-3.5 text-xs font-bold text-[#f4f0e7] transition-colors hover:bg-[#d75d3b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d75d3b] focus-visible:ring-offset-2"
+                  className="mt-3 inline-flex min-h-9 items-center rounded-full bg-ink px-3.5 text-xs font-bold text-cream transition-colors hover:bg-terracotta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2"
                 >
                   Mekanı incele
                   <span className="ml-1.5" aria-hidden="true">
@@ -213,17 +215,17 @@ export function VenueMapCanvas({
 
       {loadState === "loading" && (
         <div
-          className="pointer-events-none absolute left-3 top-3 z-[500] flex items-center gap-2 rounded-full border border-[#201d18]/10 bg-[#f4f0e7]/95 px-3 py-2 text-[0.68rem] font-bold text-[#201d18]/70 shadow-md backdrop-blur-sm"
+          className="pointer-events-none absolute left-3 top-3 z-[500] flex items-center gap-2 rounded-full border border-ink/10 bg-cream/95 px-3 py-2 text-[0.68rem] font-bold text-ink/70 shadow-md backdrop-blur-sm"
           role="status"
         >
-          <span className="size-2 animate-pulse rounded-full bg-[#d75d3b]" aria-hidden="true" />
+          <span className="size-2 animate-pulse rounded-full bg-terracotta" aria-hidden="true" />
           Bu alandaki mekanlar aranıyor
         </div>
       )}
 
       {loadState === "error" && (
         <div
-          className="absolute bottom-8 left-3 right-3 z-[500] rounded-xl border border-[#201d18]/10 bg-[#f4f0e7]/95 px-4 py-3 text-sm font-semibold text-[#201d18] shadow-lg backdrop-blur-sm sm:left-auto sm:max-w-sm"
+          className="absolute bottom-8 left-3 right-3 z-[500] rounded-xl border border-ink/10 bg-cream/95 px-4 py-3 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm sm:left-auto sm:max-w-sm"
           role="status"
         >
           Konumlar şu an yüklenemedi. Haritayı yine de inceleyebilirsin.
@@ -232,7 +234,7 @@ export function VenueMapCanvas({
 
       {!focusVenue && loadState === "ready" && locations.length === 0 && (
         <div
-          className="pointer-events-none absolute bottom-8 left-3 right-3 z-[500] rounded-xl border border-[#201d18]/10 bg-[#f4f0e7]/95 px-4 py-3 text-sm font-semibold text-[#201d18] shadow-lg backdrop-blur-sm sm:left-auto sm:max-w-sm"
+          className="pointer-events-none absolute bottom-8 left-3 right-3 z-[500] rounded-xl border border-ink/10 bg-cream/95 px-4 py-3 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm sm:left-auto sm:max-w-sm"
           role="status"
         >
           Bu görünümde seçili mekanlardan biri yok. Haritayı hareket ettirerek çevreye bakabilirsin.

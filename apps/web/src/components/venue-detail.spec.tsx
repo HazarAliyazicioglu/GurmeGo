@@ -35,6 +35,25 @@ describe("VenueDetail", () => {
     expect(link.href).toContain("maps/dir");
   });
 
+  // WCAG AA contrast finding (idea-red-team round 1, 2026-09-22): `#d75d3b` (terracotta) under
+  // white text is 3.81:1, below AA's 4.5:1 for normal text. `#bd4c30` (terracottaDark /
+  // `brandSolid`, 4.95:1) passes and is used at rest.
+  //
+  // Round 2 finding: the FIRST fix only changed the resting state and flipped hover to
+  // `terracotta` (3.81:1) -- failing AA on hover/keyboard-focus-plus-hover. `terracottaDeep`
+  // (#9e422b, 6.43:1) is used for hover instead so BOTH states stay AA-safe.
+  it("uses AA-contrast-safe backgrounds in both resting (brandSolid, 4.95:1) and hover (terracottaDeep, 6.43:1) states", () => {
+    render(<VenueDetail venue={venue} />);
+    const classes = screen.getByTestId("directions-link").className.split(/\s+/);
+    expect(classes).toContain("bg-brandSolid");
+    expect(classes).toContain("hover:bg-terracottaDeep");
+    // The failing-contrast tones must not appear as the resting or hover background at all.
+    expect(classes).not.toContain("bg-terracotta");
+    expect(classes).not.toContain("bg-brand");
+    expect(classes).not.toContain("hover:bg-terracotta");
+    expect(classes).not.toContain("hover:bg-brand");
+  });
+
   it("renders a WhatsApp share button", () => {
     render(<VenueDetail venue={venue} />);
     const link = screen.getByTestId("whatsapp-share") as HTMLAnchorElement;
