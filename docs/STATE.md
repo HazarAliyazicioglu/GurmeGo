@@ -22,11 +22,13 @@ Web `venue-card` fotoğraf eksikliği bilinçli editöryel tercih DEĞİL — ek
 ## Bu oturumda tamamlanan: venue-card kapak fotoğrafı (PR #8, 2026-09-22)
 Bounded görev (brainstorming onayı alındı, spec dosyası yok). `VenueListItemSchema`'ya `coverPhoto: string | null` eklendi (tam `photos` dizisi değil), API `searchPublished` SELECT'ine `v.photos[1] AS "coverPhoto"`, web `venue-card.tsx` düz `<img>` ile kapak fotoğrafı gösteriyor. TDD ile katman katman (shared→API→web), Codex cross-model review 5 minor bulgu (2 kabul, 1 red, 2 zaten temiz). CI kırmızıya düştü (`@gurmego/mobile#test` — mobile'ın kendi `api.spec.ts` fixture'ı da aynı şemayı runtime doğruluyordu, coverPhoto eksikti), düzeltildi, CI yeşil, `master`'a squash-merge.
 
-## Admin paketi ilerlemesi (kullanıcı onaylı sıra: veri kalitesi → rol atama → mekan geri alma → nav zaten 1'le birlikte gitti)
-1/3 tamam: **veri kalitesi raporu** (PR #9, 2026-09-22) — `/veri-kalitesi` sayfası + nav linkleri, `DataQualityReportSchema` eklendi.
+## Admin paketi ilerlemesi (kullanıcı onaylı sıra: veri kalitesi → rol atama → mekan geri alma)
+2/3 tamam:
+- **veri kalitesi raporu** (PR #9, 2026-09-22) — `/veri-kalitesi` sayfası + nav, `DataQualityReportSchema`.
+- **rol atama** (PR #10, 2026-09-22) — `GET /admin/users?search=` (yeni), `packages/api-client`'a `put()` eklendi, `/roller` sayfası (email ara + curator ata).
 
 ## Sıradaki adım
-Admin alt görev 2/3: **rol atama** ekranı. Backend'de `PUT /admin/users/:id/roles` var ama kullanıcı arama endpoint'i YOK — önce `GET /admin/users?search=` (email/isim) gibi bir arama endpoint'i eklenmeli, sonra admin sayfası. Ardından 3/3: **mekan geri alma** — `POST /admin/venues/:id/revert/:versionId` var ama versiyon listeleme endpoint'i yok, o da önce eklenmeli. Mobil liste ekranı (`DiscoveryScreen`) venue-card ile aynı fotoğraf eksikliğini taşıyor — kapsam dışı bırakıldı, istenirse ayrı bounded görev olarak alınabilir.
+Admin alt görev 3/3: **mekan geri alma**. Backend'de `POST /admin/venues/:id/revert/:versionId` var ama versiyon listeleme endpoint'i YOK (`VenueVersion` tablosu zaten var, sadece bir `GET /admin/venues/:id/versions` eksik) — önce o eklenmeli, sonra admin sayfası (mekan seç → versiyon geçmişi → geri al). Mobil liste ekranı (`DiscoveryScreen`) venue-card ile aynı fotoğraf eksikliğini taşıyor — kapsam dışı bırakıldı, istenirse ayrı bounded görev olarak alınabilir.
 
 ## Bloke olanlar
 - Yok. Plan 4e (canlıya çıkış) eylem maddeleri hâlâ açık: uygulamanın DB rolü `audit_log` sahibi olmayacak/yalnız INSERT+SELECT (ADR 006); SUPABASE_JWT_ISSUER/AUDIENCE set edilecek.
@@ -47,3 +49,4 @@ Admin alt görev 2/3: **rol atama** ekranı. Backend'de `PUT /admin/users/:id/ro
 - Workspace'te birden çok `@types/react` sürümü: ELENDİ, KALICI — pnpm hoist rastgele seçer, aynı commit'te flaky TS2742. CI'da scripts/check-single-types-react.mjs korur.
 - Kilitsiz okuma-sonra-yazma ile "önceki değeri" kaydetmek: ELENDİ — koşullu `updateMany` kalıbı. jest 29 ESM-only transitive'leri parse edemez: NestJS 12 (ESM-only) KOŞULLU — Vitest göçü yapılırsa yeniden bak.
 - Paylaşılan (`packages/shared`) bir zod şemasına zorunlu alan eklemek: sadece değiştirdiğin app'in testine bakıp "yeşil" saymak ELENDİ, KALICI — o şemayı runtime doğrulayan HER app'in kendi fixture'ı kırılır (web VE mobile'ın ayrı ayrı `lib/api.spec.ts`'i var, ikisi de aynı `VenueListItemSchema`'yı `safeParse` ediyor). Yeni alan eklerken `grep -rn "<benzer_alan_adı>"` ile tüm apps/ dizinini tara, sadece dokunduğun app'i değil.
+- JS regex `/i` bayrağıyla Türkçe metinde büyük "İ" ile başlayan bir kelimeyi küçük harfli pattern'le eşleştirmeye çalışmak: ELENDİ, KALICI — `/işlem/i`, cümle "İşlem..." ile başlıyorsa eşleşmez (İ/i Unicode case-fold'u locale-bağımsız JS regex'te doğru çalışmıyor). Pattern'i büyük harfle başlamayan bir alt-dizeyle kur (`/gerçekleştirilemedi/i` gibi) ya da tam string karşılaştır.
