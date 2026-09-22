@@ -69,3 +69,25 @@ describe("AdminUsersService.assignRole", () => {
     await expect(service.assignRole("u1", "curator", "admin-1")).rejects.toThrow("audit down");
   });
 });
+
+describe("AdminUsersService.search", () => {
+  function searchHarness(users: unknown[] = []) {
+    const prisma = { user: { findMany: jest.fn().mockResolvedValue(users) } } as any;
+    return { prisma, service: new AdminUsersService(prisma, {} as any) };
+  }
+
+  it("matches users whose email contains the search term, case-insensitively", async () => {
+    const { prisma, service } = searchHarness([{ id: "u1", email: "hazar@example.com", role: "CURATOR" }]);
+    const result = await service.search("HAZAR");
+    expect(result).toEqual([{ id: "u1", email: "hazar@example.com", role: "CURATOR" }]);
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: { contains: "HAZAR", mode: "insensitive" } } }),
+    );
+  });
+
+  it("caps the result at 20 rows", async () => {
+    const { prisma, service } = searchHarness([]);
+    await service.search("a");
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 20 }));
+  });
+});

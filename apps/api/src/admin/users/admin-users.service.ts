@@ -29,6 +29,14 @@ function roleChangedConcurrently() {
 export class AdminUsersService {
   constructor(private prisma: PrismaService, private audit: AuditService) {}
 
+  async search(term: string) {
+    return this.prisma.user.findMany({
+      where: { email: { contains: term, mode: "insensitive" } },
+      select: { id: true, email: true, role: true },
+      take: 20,
+    });
+  }
+
   async assignRole(userId: string, role: string, actorId: string) {
     if (!MVP_ASSIGNABLE_ROLES.includes(role)) {
       // The HTTP response body must stay exactly `{ error: { code, message } }` per

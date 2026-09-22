@@ -4,9 +4,11 @@ import {
   AdminQueueMutationResultSchema,
   CsvImportResultSchema,
   DataQualityReportSchema,
+  AdminUserSearchResultSchema,
   type AdminQueueItem,
   type CsvImportResult,
   type DataQualityReport,
+  type AdminUserSearchResult,
 } from "@gurmego/shared";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/v1";
@@ -48,6 +50,22 @@ export async function rejectQueueItem(token: string, id: string): Promise<void> 
   const raw = await client.post<unknown>(`/admin/queue/${id}/reject`, {});
   const result = AdminQueueMutationResultSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(`/admin/queue/${id}/reject`, result.error.issues);
+}
+
+export async function searchUsers(token: string, term: string): Promise<AdminUserSearchResult> {
+  const client = createApiClient(API_BASE, () => token);
+  const raw = await client.get<unknown>(`/admin/users?search=${encodeURIComponent(term)}`);
+  const result = AdminUserSearchResultSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError("/admin/users", result.error.issues);
+  return result.data;
+}
+
+// No response schema: the caller re-runs searchUsers() after a successful assign to pick up the
+// new role, same as approveQueueItem()/rejectQueueItem() not returning the mutated row -- the
+// success/failure of the PUT (thrown ApiHttpError on non-2xx) is all a caller needs here.
+export async function assignRole(token: string, userId: string, role: string): Promise<void> {
+  const client = createApiClient(API_BASE, () => token);
+  await client.put(`/admin/users/${userId}/roles`, { role });
 }
 
 export async function getDataQualityReport(token: string): Promise<DataQualityReport> {

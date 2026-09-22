@@ -61,6 +61,7 @@ describe("ProtectedLayout", () => {
     expect(await screen.findByRole("link", { name: /kuyruk/i })).toHaveAttribute("href", "/kuyruk");
     expect(screen.getByRole("link", { name: /import/i })).toHaveAttribute("href", "/import");
     expect(screen.getByRole("link", { name: /veri kalitesi/i })).toHaveAttribute("href", "/veri-kalitesi");
+    expect(screen.getByRole("link", { name: /^roller$/i })).toHaveAttribute("href", "/roller");
   });
 
   it("renders a sign-out control that calls signOut() when authenticated", async () => {
