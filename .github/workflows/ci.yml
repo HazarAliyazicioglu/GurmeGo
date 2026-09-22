@@ -24,8 +24,6 @@ jobs:
         with:
           node-version-file: ".nvmrc"
       - uses: pnpm/action-setup@v6
-        with:
-          version: 9
       - run: pnpm install --frozen-lockfile
       - run: node scripts/check-single-types-react.mjs
       - run: pnpm --filter @gurmego/api exec prisma migrate deploy
