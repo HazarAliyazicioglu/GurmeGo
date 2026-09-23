@@ -30,6 +30,15 @@ import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 // `@fastify/proxy-addr` calls it once per forwarded address, walking outward from the direct
 // socket peer (hop 0); returning `true` marks that hop as a trusted proxy to skip over, so
 // trusting exactly N hops means hop indices `[0, N)`.
+//
+// KNOWN LIMITATION (cross-model review, 2026-09-23): this counts hops by POSITION only, the same
+// way the pre-5.12 numeric option did -- it never validates that the address AT each hop is
+// actually one of the real trusted proxies (e.g. a known load-balancer CIDR). A client that can
+// reach this process directly (bypassing the real proxy chain) could still forge enough
+// `X-Forwarded-For` entries to land its own spoofed address at hop 0 and have it trusted. This
+// is dormant today (TRUST_PROXY_HOPS is unset in every current environment); it must be replaced
+// with real address/CIDR validation once Plan 4's actual infrastructure (the load balancer's IP
+// range) is known, not left as hop-counting alone.
 export function resolveTrustProxy(raw: string | undefined): boolean | ((address: string, hop: number) => boolean) {
   if (raw === undefined || raw === "") return false;
   const hops = Number(raw);
