@@ -23,7 +23,9 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 - **#24 (zod v4):** önceden NO-GO (bkz. ELENMİŞ).
 
 ## Sıradaki adım
-Her majör bump ayrı iş kalemi olarak ele alınacak (öncelik sırası önerisi: #27 TS6 → #20/22/26 NestJS trio → #25 Prisma7 → #21 Tailwind4 → #18); gerçek Supabase kurulunca DB rol script'i uygulanacak.
+**#27 (TS6) derinlemesine incelendi (2026-09-23), TEK BAŞINA ERTELENDİ:** `moduleResolution=node10` + ambient `@types` taraması (TS6'da kapatıldı, `"types":["jest","node"]` eklenmeli) düzeltilebilir görünüyordu, ama asıl sorun daha derinde — Prisma 5.22'nin ürettiği `Prisma.TransactionClient = Omit<DefaultPrismaClient, ITXClientDenyList>` tipi TS6 altında TÜM delegate property'lerini kaybediyor (`contributionQueue`/`venue`/`venueVersion`/`auditLog`/`user`/`$queryRaw` hepsi "does not exist" hatası veriyor), `denylist` kaynağı doğru tanımlı — TS6'nın generic/`Omit` çözümlemesi Prisma 5.x tipleriyle uyumsuz. Bu, transaction içindeki HER admin serviste (queue/users/venues) ve audit log yazma yolunda (ADR 006) tip güvenliğini kırar; `as any` ile yamanacak bir şey değil. PR #27'ye bulgu yazıldı. **TS6 ve Prisma7 (#25) birlikte ele alınmalı** — sıradaki adım: #25 Prisma7'yi (schema `datasource url`→`prisma.config.ts` migrasyonu) önce çöz, sonra TS6'yı aynı pakette dene. Sonra #20/22/26 NestJS trio → #21 Tailwind4 → #18.
+
+Gerçek Supabase kurulunca DB rol script'i uygulanacak.
 
 ## Bloke olanlar
 - Yok. Gerçek Supabase erişimi gerektiren adımlar (DB rolü script'i, JWT env) kod/doküman tarafında hazır.
@@ -48,3 +50,4 @@ Her majör bump ayrı iş kalemi olarak ele alınacak (öncelik sırası öneris
 - `next.config.js`'de `images.remotePatterns: [{hostname:"**"}]`: ELENDİ, KALICI — açık proxy riski.
 - zod v4 `.partial()` default alanları sessizce output'a enjekte ediyor: ELENDİ, KALICI — `X.partial()` türetilen HER update şemasını her `.default(...)` alan için denetle.
 - Fastify patch bump'ları (#18) bile `@fastify/{helmet,compress,multipart}` plugin tipleriyle kırılabiliyor: ELENDİ, KALICI.
+- TypeScript 6 + Prisma 5.22 birlikte: `Prisma.TransactionClient` tipi delegate property'lerini kaybediyor (Omit/generic çözümleme uyumsuzluğu). KOŞULLU — Prisma 7'ye geçilince yeniden denenmeli, TS6'yı Prisma7'den önce/ayrı merge etmeye çalışma.
