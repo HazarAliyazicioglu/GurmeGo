@@ -10,8 +10,11 @@ import { defineConfig } from "prisma/config";
 // (fresh install, CI, production), which is the common case this config also has to support.
 try {
   process.loadEnvFile(path.join(__dirname, ".env"));
-} catch {
-  // No .env file -- expected in CI/production, where the real env vars are already set.
+} catch (err) {
+  // Only swallow "file doesn't exist" (expected in CI/production, where the real env vars are
+  // already set) -- a real read failure (permissions, a malformed .env) must surface, not get
+  // mistaken for "no .env file, falling back to the environment" (cross-model review finding).
+  if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 }
 
 // `datasource.url` is intentionally read from `process.env` directly (not the `env()` helper,
