@@ -18,7 +18,7 @@ export function WhatsappShareButton({ venue }: { venue: VenueDetailType }) {
       href="https://wa.me/?text="
       target="_blank"
       rel="noreferrer"
-      className="group inline-flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-ink/15 bg-cream px-4 text-sm font-black text-ink transition-all hover:border-terracotta/45 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-creamLight"
+      className="group inline-flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-ink/15 bg-cream px-4 text-sm font-black text-ink transition-all hover:border-terracotta/45 hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-creamLight"
       onClick={(event) => {
         event.preventDefault();
         window.open(whatsappShareUrl(venue, window.location.href), "_blank", "noreferrer");

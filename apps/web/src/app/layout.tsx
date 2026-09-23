@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-4 sm:px-6">
                 <Link
                   href="/"
-                  className="group -ml-2 flex min-h-11 items-center gap-2 rounded-full px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+                  className="group -ml-2 flex min-h-11 items-center gap-2 rounded-full px-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
                   aria-label="GurmeGo ana sayfa"
                 >
                   <span
@@ -57,7 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <nav aria-label="Ana navigasyon">
                   <Link
                     href="/"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-ink/15 bg-white/45 px-3.5 text-[0.68rem] font-bold uppercase tracking-[0.14em] transition-colors hover:border-ink/35 hover:bg-white/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-ink/15 bg-white/45 px-3.5 text-[0.68rem] font-bold uppercase tracking-[0.14em] transition-colors hover:border-ink/35 hover:bg-white/75 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
                   >
                     <span className="size-1.5 rounded-full bg-terracotta" aria-hidden="true" />
                     {"Se\u00e7kiler"}

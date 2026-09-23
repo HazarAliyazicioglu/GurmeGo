@@ -162,7 +162,7 @@ export function DiscoveryClient({
         type="button"
         data-testid="view-mode-toggle"
         onClick={() => setViewMode(toggleViewMode(viewMode))}
-        className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-full border border-ink/15 bg-white/45 px-4 text-[0.68rem] font-black uppercase tracking-[0.12em] text-ink transition-colors hover:border-terracotta/50 hover:bg-terracotta hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-full border border-ink/15 bg-white/45 px-4 text-[0.68rem] font-black uppercase tracking-[0.12em] text-ink transition-colors hover:border-terracotta/50 hover:bg-terracotta hover:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
       >
         <span className="grid size-6 place-items-center rounded-full bg-ink text-cream" aria-hidden="true">
           {viewMode === "list" ? (
@@ -191,7 +191,7 @@ export function DiscoveryClient({
                 data-testid="load-more"
                 onClick={() => void loadMore()}
                 disabled={loadingMore}
-                className="min-h-11 rounded-full border border-ink/15 bg-white/45 px-6 text-sm font-black text-ink transition-colors hover:border-terracotta/50 hover:bg-terracotta hover:text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+                className="min-h-11 rounded-full border border-ink/15 bg-white/45 px-6 text-sm font-black text-ink transition-colors hover:border-terracotta/50 hover:bg-terracotta hover:text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
               >
                 {loadingMore ? "Yükleniyor…" : "Daha fazla göster"}
               </button>

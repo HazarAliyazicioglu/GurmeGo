@@ -48,7 +48,7 @@ export function ReportForm({ venueId }: { venueId: string }) {
             minLength={5}
             required
             rows={3}
-            className="mt-2 w-full rounded-2xl border border-ink/15 bg-white px-3.5 py-2.5 text-sm font-medium text-ink placeholder:text-ink/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta"
+            className="mt-2 w-full rounded-2xl border border-ink/15 bg-white px-3.5 py-2.5 text-sm font-medium text-ink placeholder:text-ink/35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta"
             placeholder="Örn. fiyat aralığı güncel değil"
           />
         </div>
@@ -56,7 +56,7 @@ export function ReportForm({ venueId }: { venueId: string }) {
         <button
           type="submit"
           disabled={submitting}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-terracotta px-5 text-sm font-black text-white transition-colors hover:bg-terracottaDark disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-creamLight"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-terracotta px-5 text-sm font-black text-white transition-colors hover:bg-terracottaDark disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-creamLight"
         >
           {submitting ? "Gönderiliyor…" : "Gönder"}
         </button>

@@ -58,7 +58,7 @@ export function CategoryQuickRoute({
               onClick={() => onSelectCategory(isActive ? undefined : c)}
               className={[
                 "group relative min-h-[4.75rem] min-w-[9rem] flex-1 overflow-hidden rounded-[1.15rem] border px-4 py-3 text-left transition-all duration-200",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
                 isActive
                   ? "border-ink bg-ink text-cream shadow-[0_8px_22px_rgba(32,29,24,0.15)]"
                   : "border-ink/12 bg-sand/65 text-ink hover:border-ink/30 hover:bg-sand",
@@ -80,7 +80,7 @@ export function CategoryQuickRoute({
           href={directionsUrl(activeVenue.name, districtName)}
           target="_blank"
           rel="noreferrer"
-          className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-terracotta px-4 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)] transition-all hover:-translate-y-0.5 hover:bg-terracottaDark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+          className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-terracotta px-4 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)] transition-all hover:-translate-y-0.5 hover:bg-terracottaDark focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
         >
           {sortedByDistance ? `En yakın ${activeCategory} mekana git` : `${activeCategory} mekana git`}
         </a>

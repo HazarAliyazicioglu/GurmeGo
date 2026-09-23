@@ -110,7 +110,7 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
       onClick={handleClick}
       disabled={pending || initialCheckPending}
       aria-pressed={added}
-      className={`group inline-flex min-h-12 w-full items-center justify-between gap-4 rounded-full border px-5 text-sm font-black transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${
+      className={`group inline-flex min-h-12 w-full items-center justify-between gap-4 rounded-full border px-5 text-sm font-black transition-all duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${
         added
           ? "border-terracotta bg-terracotta text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)]"
           : "border-ink/15 bg-creamLight text-ink hover:-translate-y-0.5 hover:border-terracotta/55 hover:text-terracottaDeep hover:shadow-[0_10px_28px_rgba(71,52,35,0.09)]"
