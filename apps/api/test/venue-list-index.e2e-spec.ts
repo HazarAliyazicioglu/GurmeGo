@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 // DENETIM-RAPORU Orta: category/price/boutique list filters had no index support. Measured on a rolled-back
 // 5k/50k-row benchmark (see docs/superpowers/plans/2026-09-21-api-hardening.md A7): the composite index below
@@ -9,7 +10,7 @@ import { PrismaClient } from "@prisma/client";
 describe("Venue list composite index", () => {
   let prisma: PrismaClient;
   beforeAll(() => {
-    prisma = new PrismaClient();
+    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
   });
   afterAll(async () => {
     await prisma.$disconnect();

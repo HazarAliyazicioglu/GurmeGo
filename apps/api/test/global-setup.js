@@ -9,9 +9,10 @@
 // its normal ts-jest transform pipeline, so a `.ts` file here would fail to load. `@prisma/client`
 // is already a compiled JS package, so no transpilation is needed to use it directly.
 const { PrismaClient } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
 
 module.exports = async function globalSetup() {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
   try {
     // Idempotent: a developer's local test DB may already have seed data (from `pnpm run seed` or
     // a prior run of this same setup) -- only create the fixture if no District exists yet, so

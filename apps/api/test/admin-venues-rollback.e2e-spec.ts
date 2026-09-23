@@ -45,10 +45,12 @@ describe("AdminVenuesService.update — real rollback", () => {
     // in the transaction (e.g. snapshot serialization) threw for an unrelated reason, without ever
     // reaching the FK violation this test exists to exercise -- so assert on the actual error
     // instead. `updateWithLocation`'s UPDATE runs via `$queryRaw` (ADR 002), so the FK violation
-    // surfaces the same way admin-venues.service.ts's `isUniqueViolation()` documents for unique
-    // violations: a `PrismaClientKnownRequestError` with code `P2010` ("raw query failed") and the
-    // underlying Postgres error code nested in `meta.code` -- `23503` (foreign_key_violation) here
-    // instead of `23505`. Verified empirically against the local Postgres stack.
+    // surfaces the same way admin-venues.service.ts's `isUniqueViolation()` documents: a
+    // `PrismaClientKnownRequestError` with code `P2010` ("raw query failed") and, on Prisma 7's
+    // driver-adapter engine, the underlying Postgres error code nested at
+    // `meta.driverAdapterError.cause.originalCode` -- `23503` (foreign_key_violation) here instead
+    // of `23505` (under Prisma 5 this same code lived directly at `meta.code`). Verified empirically
+    // against the local Postgres stack.
     let caught: unknown;
     await adminVenuesService.update(venue.id, { districtId: "00000000-0000-0000-0000-000000000000" }, "e2e-actor").catch((err) => {
       caught = err;
@@ -56,7 +58,10 @@ describe("AdminVenuesService.update — real rollback", () => {
     expect(caught).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
     const knownError = caught as Prisma.PrismaClientKnownRequestError;
     expect(knownError.code).toBe("P2010");
-    expect((knownError.meta as { code?: string } | undefined)?.code).toBe("23503");
+    expect(
+      (knownError.meta as { driverAdapterError?: { cause?: { originalCode?: string } } } | undefined)?.driverAdapterError?.cause
+        ?.originalCode,
+    ).toBe("23503");
     const versionsAfter = await prisma.venueVersion.count({ where: { venueId: venue.id } });
     expect(versionsAfter).toBe(versionsBefore);
   });
