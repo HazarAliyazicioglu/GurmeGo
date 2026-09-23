@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { auditStub } from "../../audit/audit-stub";
 import { Prisma } from "@prisma/client";
 import { AdminVenuesService } from "./admin-venues.service";
@@ -227,16 +228,16 @@ describe("AdminVenuesService.importRows", () => {
       createWithLocation: jest.fn().mockRejectedValue(new Error("relation \"venues\" violates constraint fk_district_internal_detail")),
     } as any;
     const service = new AdminVenuesService(prisma, boutique, venuesRepository, auditStub());
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
 
     const result = await service.importRows(rows);
 
     expect(result.created).toBe(0);
     expect(result.rowErrors).toEqual([{ row: 1, message: "Mekan oluşturulamadı: beklenmeyen hata" }]);
     expect(result.rowErrors[0].message).not.toContain("fk_district_internal_detail");
-    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(loggerErrorSpy).toHaveBeenCalled();
 
-    consoleErrorSpy.mockRestore();
+    loggerErrorSpy.mockRestore();
   });
 
   it("treats a unique-constraint violation on insert as a clean skip, not a row error (concurrent-import race)", async () => {
@@ -279,16 +280,16 @@ describe("AdminVenuesService.importRows", () => {
     });
     const venuesRepository = { createWithLocation: jest.fn().mockRejectedValue(uniqueViolation) } as any;
     const service = new AdminVenuesService(prisma, boutique, venuesRepository, auditStub());
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
 
     const result = await service.importRows(rows);
 
     expect(result.created).toBe(0);
     expect(result.skipped).toBe(1);
     expect(result.rowErrors).toEqual([]);
-    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    expect(loggerErrorSpy).not.toHaveBeenCalled();
 
-    consoleErrorSpy.mockRestore();
+    loggerErrorSpy.mockRestore();
   });
 });
 
@@ -362,7 +363,7 @@ describe("AdminVenuesService.importWithAudit", () => {
   });
 
   it("still returns the import result, and logs, when only the final CSV_IMPORTED record fails", async () => {
-    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const errorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
     const record = jest.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("audit down at the end"));
     const { service } = setup({ auditImpl: record });
     const result = await service.importWithAudit([row], 0, "curator-1");

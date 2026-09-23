@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { parse } from "csv-parse";
 import { CsvVenueImportRowSchema, type CsvVenueImportRow } from "@gurmego/shared";
 import { CSV_IMPORT_LIMITS } from "./csv-import.config";
@@ -15,6 +15,8 @@ export type CsvImportRow = { row: number; data: CsvRow };
 
 @Injectable()
 export class CsvImportService {
+  private readonly logger = new Logger(CsvImportService.name);
+
   async parseRows(csv: string): Promise<{ valid: CsvImportRow[]; errors: { row: number; message: string }[] }> {
     let records: Record<string, string>[];
     try {
@@ -40,8 +42,11 @@ export class CsvImportService {
       // even the valid rows in an otherwise-fine file. The raw csv-parse message (internal parser
       // state, sometimes fragments of file content) is logged server-side only, same pattern as
       // admin-venues.service.ts's importRows create()-failure handling — the client gets a generic
-      // message.
-      console.error("CSV parse failed:", err);
+      // message. Error must be the first arg to logger.error -- nestjs-pino only attaches a
+      // structured `err` field (with the full stack) when the first argument is an Error instance;
+      // passed second, it's silently dropped as an unused printf-style format arg (cross-model
+      // review finding, verified empirically).
+      this.logger.error(err instanceof Error ? err : new Error(String(err)), "CSV parse failed");
       return { valid: [], errors: [{ row: 0, message: "CSV dosyası ayrıştırılamadı: dosya biçimi geçersiz" }] };
     }
 
