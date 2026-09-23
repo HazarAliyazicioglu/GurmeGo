@@ -221,7 +221,7 @@ modül tekrar açıldığında üç seçenek hâlâ geçerli, karar o zaman veri
 
 **Karar zamanı:** Faz 2 (pilot GO sonrası), Gurme Puanı modülü implementasyonundan önce. Hangi seçenek seçilirse seçilsin FR-GP-04 korumaları geçerli.
 
-### AK-02 — Kullanıcı hesabı ne kadar zorunlu? · durum: AÇIK
+### AK-02 — Kullanıcı hesabı ne kadar zorunlu? · durum: MVP İÇİN KAPANDI (2026-09-23)
 
 | Seçenek | Artı | Eksi |
 |---|---|---|
@@ -229,7 +229,7 @@ modül tekrar açıldığında üç seçenek hâlâ geçerli, karar o zaman veri
 | **(b) Favori de hesapsız (cihaz-local)** — favoriler cihazda, hesapla sync opsiyonel | En düşük sürtünme | Ekstra geliştirme (local store + sync mantığı); cihaz değişiminde kayıp riski |
 | **(c) Her şey hesaplı** | Zengin kullanıcı verisi | Yüksek onboarding sürtünmesi; keşif ürünü için riskli |
 
-**Karar zamanı:** architecture.md auth tasarımından önce. API tasarımı (a)'yı varsayılan alır; (b)'ye geçiş istemci tarafı ekleme, (c)'ye geçiş endpoint guard değişikliği.
+**Karar:** (a) — zaten uygulanmış durumda, yeniden değerlendirilmedi. `architecture.md` §7 auth tasarımı (a)'yı varsayılan olarak belgeliyor; `apps/api/src/venues/venues.controller.ts` ve `reports.controller.ts` keşif/arama/detay/bildirim uçlarında `JwtAuthGuard` kullanmıyor (yalnızca rate limit), `favorites.controller.ts` auth guard'lı. Kod ve mimari doküman tutarlı — bu madde sadece PRD durumunu gerçeğe eşitliyor, davranış değişikliği yok. (b)/(c)'ye geçiş ihtiyacı doğarsa (mobil cihaz-değiştirme şikayetleri, vb.) yeniden açılabilir — bkz. mimari not: (b) istemci tarafı local store+sync eklemesi, (c) endpoint guard değişikliği gerektirir.
 
 ### AK-03 — Gelir modeli · durum: AÇIK (Faz 2 başında)
 
