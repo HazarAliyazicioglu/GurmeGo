@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { AdminVenueCreateInput, AdminVenueUpdateInput } from "@gurmego/shared";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -29,6 +29,8 @@ function isUniqueViolation(err: unknown): boolean {
 
 @Injectable()
 export class AdminVenuesService {
+  private readonly logger = new Logger(AdminVenuesService.name);
+
   constructor(
     private prisma: PrismaService,
     private boutique: BoutiqueService,
@@ -165,7 +167,7 @@ export class AdminVenuesService {
         }),
       );
     } catch (err) {
-      console.error(`CSV import ${importId}: import finished but the CSV_IMPORTED audit record could not be written:`, err);
+      this.logger.error(`CSV import ${importId}: import finished but the CSV_IMPORTED audit record could not be written`, err);
     }
     return result;
   }
@@ -228,7 +230,7 @@ export class AdminVenuesService {
         }
         // Prisma/repository error detail (schema/column names, constraint names, ...) must not
         // leak to the client — log it server-side and return a generic row error instead.
-        console.error(`CSV import row ${rowNumber} failed:`, err);
+        this.logger.error(`CSV import row ${rowNumber} failed`, err);
         rowErrors.push({ row: rowNumber, message: "Mekan oluşturulamadı: beklenmeyen hata" });
       }
     }

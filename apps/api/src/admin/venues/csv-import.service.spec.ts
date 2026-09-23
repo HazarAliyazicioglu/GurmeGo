@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { CsvImportService } from "./csv-import.service";
 
 describe("CsvImportService.parseRows", () => {
@@ -94,15 +95,15 @@ Test Cafe,${longSlug},kadikoy,cafe,MODERATE,1,false,40.99,29.02,"{}"`;
     // logged server-side.
     const csv = `name,slug,districtSlug,category,priceRange,branchCount,franchiseFlag,lat,lng,openingHours
 "Unterminated quote,test-cafe,kadikoy,cafe,MODERATE,1,false,40.99,29.02,"{}"`;
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
 
     const result = await service.parseRows(csv);
 
     expect(result.valid).toEqual([]);
     expect(result.errors).toEqual([{ row: 0, message: "CSV dosyası ayrıştırılamadı: dosya biçimi geçersiz" }]);
-    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(loggerErrorSpy).toHaveBeenCalled();
 
-    consoleErrorSpy.mockRestore();
+    loggerErrorSpy.mockRestore();
   });
 
   it("strips a leading UTF-8 BOM so the header row parses correctly (Excel 'CSV UTF-8' export)", async () => {

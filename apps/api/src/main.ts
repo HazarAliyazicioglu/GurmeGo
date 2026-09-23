@@ -1,6 +1,7 @@
 import { HttpAdapterHost, NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { Logger } from "nestjs-pino";
 import fastifyMultipart from "@fastify/multipart";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyCompress from "@fastify/compress";
@@ -101,7 +102,7 @@ export async function configureApp(app: NestFastifyApplication): Promise<void> {
   app.setGlobalPrefix("v1", { exclude: ["health"] });
 
   if (process.env.NODE_ENV === "production" && (!process.env.RATE_LIMIT_READ_PER_MINUTE || !process.env.RATE_LIMIT_REPORT_PER_DAY)) {
-    console.warn("RATE_LIMIT_* env vars not set in production -- using defaults (100/min, 10/day)");
+    app.get(Logger).warn("RATE_LIMIT_* env vars not set in production -- using defaults (100/min, 10/day)");
   }
 
   // Not `app.enableCors(...)`: NestJS 12's FastifyAdapter now implements it as
@@ -117,7 +118,11 @@ export async function configureApp(app: NestFastifyApplication): Promise<void> {
 }
 
 export async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, createAdapter());
+  // `bufferLogs: true` holds Nest's own startup logs (module init, route mapping) until
+  // `useLogger` swaps in the real pino-backed logger just below, instead of losing them to the
+  // default console logger.
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, createAdapter(), { bufferLogs: true });
+  app.useLogger(app.get(Logger));
   await configureApp(app);
   await app.listen(process.env.PORT ?? 3000, "0.0.0.0");
 }
