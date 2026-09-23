@@ -10,13 +10,20 @@ import type { CsvImportRow } from "./csv-import.service";
 
 // Postgres unique_violation (SQLSTATE 23505). `createWithLocation` inserts via `$queryRaw` (ADR 002 —
 // the `location` PostGIS column forces raw SQL), so a constraint violation surfaces as a Prisma
-// `PrismaClientKnownRequestError` with code P2010 ("raw query failed") and the underlying Postgres
-// error code nested in `meta.code`, NOT as the P2002 code the generated Prisma Client API would use.
+// `PrismaClientKnownRequestError` with code P2010 ("raw query failed"), NOT as the P2002 code the
+// generated Prisma Client API would use. Prisma 7's driver-adapter engine nests the underlying
+// Postgres error code at `meta.driverAdapterError.cause.originalCode` (verified empirically against
+// the local Postgres stack) -- under Prisma 5 this same code lived directly at `meta.code`, a shape
+// this function no longer sees since the Prisma 7 migration (bump commit).
 function isUniqueViolation(err: unknown): boolean {
   return (
     err instanceof Prisma.PrismaClientKnownRequestError &&
     err.code === "P2010" &&
-    (err.meta as { code?: string } | undefined)?.code === "23505"
+    (
+      err.meta as
+        | { driverAdapterError?: { cause?: { originalCode?: string } } }
+        | undefined
+    )?.driverAdapterError?.cause?.originalCode === "23505"
   );
 }
 

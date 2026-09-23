@@ -4,9 +4,10 @@
 // Venue rows are created via `VenuesRepository.createWithLocation()` (apps/api/src/venues/venues.repository.ts)
 // rather than a hand-rolled INSERT here, so the seed script can never drift from the authoritative
 // column list / `location` (PostGIS geography) construction pattern established by ADR 002. The
-// repository only needs a `PrismaService` instance in its constructor, and `PrismaService` has no
-// constructor dependencies of its own (it merely adds NestJS lifecycle hooks around `PrismaClient`),
-// so it's instantiated directly here without spinning up a Nest application context.
+// repository only needs a `PrismaService` instance in its constructor, and `PrismaService` takes no
+// external constructor args (it builds its own DATABASE_URL-based driver adapter internally and adds
+// NestJS lifecycle hooks around `PrismaClient`), so it's instantiated directly here without spinning
+// up a Nest application context.
 import { PrismaService } from "../src/prisma/prisma.service";
 import { VenuesRepository } from "../src/venues/venues.repository";
 

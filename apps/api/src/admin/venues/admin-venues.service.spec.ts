@@ -269,8 +269,13 @@ describe("AdminVenuesService.importRows", () => {
     const boutique = { evaluate: jest.fn().mockReturnValue(false) } as any;
     const uniqueViolation = new Prisma.PrismaClientKnownRequestError("Raw query failed.", {
       code: "P2010",
-      clientVersion: "5.22.0",
-      meta: { code: "23505", message: 'duplicate key value violates unique constraint "Venue_slug_key"' },
+      clientVersion: "7.10.0",
+      meta: {
+        driverAdapterError: {
+          name: "DriverAdapterError",
+          cause: { originalCode: "23505", originalMessage: 'duplicate key value violates unique constraint "Venue_slug_key"', kind: "UniqueConstraintViolation" },
+        },
+      },
     });
     const venuesRepository = { createWithLocation: jest.fn().mockRejectedValue(uniqueViolation) } as any;
     const service = new AdminVenuesService(prisma, boutique, venuesRepository, auditStub());
