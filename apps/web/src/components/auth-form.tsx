@@ -41,7 +41,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
           required
           placeholder="ornek@eposta.com"
           autoComplete="email"
-          className="min-h-12 w-full rounded-xl border border-ink/15 bg-creamPale/75 px-4 text-base font-medium text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition placeholder:text-ink/30 hover:border-ink/30 focus:border-terracotta focus:bg-creamPale focus:ring-4 focus:ring-terracotta/10"
+          className="min-h-12 w-full rounded-xl border border-ink/15 bg-creamPale/75 px-4 text-base font-medium text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-hidden transition placeholder:text-ink/30 hover:border-ink/30 focus:border-terracotta focus:bg-creamPale focus:ring-4 focus:ring-terracotta/10"
         />
       </div>
 
@@ -66,7 +66,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
           required
           placeholder="••••••••"
           autoComplete={mode === "signin" ? "current-password" : "new-password"}
-          className="min-h-12 w-full rounded-xl border border-ink/15 bg-creamPale/75 px-4 text-base font-medium tracking-[0.08em] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition placeholder:tracking-[0.14em] placeholder:text-ink/25 hover:border-ink/30 focus:border-terracotta focus:bg-creamPale focus:ring-4 focus:ring-terracotta/10"
+          className="min-h-12 w-full rounded-xl border border-ink/15 bg-creamPale/75 px-4 text-base font-medium tracking-[0.08em] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-hidden transition placeholder:tracking-[0.14em] placeholder:text-ink/25 hover:border-ink/30 focus:border-terracotta focus:bg-creamPale focus:ring-4 focus:ring-terracotta/10"
         />
       </div>
 
@@ -88,7 +88,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
       <button
         type="submit"
         disabled={submitting}
-        className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-black text-cream shadow-[0_8px_22px_rgba(32,29,24,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-inkSoft hover:shadow-[0_10px_26px_rgba(32,29,24,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream active:translate-y-0 disabled:opacity-60 disabled:pointer-events-none"
+        className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-black text-cream shadow-[0_8px_22px_rgba(32,29,24,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-inkSoft hover:shadow-[0_10px_26px_rgba(32,29,24,0.22)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream active:translate-y-0 disabled:opacity-60 disabled:pointer-events-none"
       >
         {mode === "signin" ? "Giriş yap" : "Kayıt ol"}
         <svg

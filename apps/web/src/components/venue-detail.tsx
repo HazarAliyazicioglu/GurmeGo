@@ -88,7 +88,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
                     <p data-testid="transport-note" className="mt-2 flex max-w-[48ch] items-start gap-2 text-sm font-semibold leading-relaxed text-ink/60"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-terracotta" aria-hidden="true" />{venue.transportNote}</p>
                   )}
                 </div>
-                <a data-testid="directions-link" href={directionsUrl(venue.name, venue.district.name)} target="_blank" rel="noreferrer" className="group inline-flex min-h-12 w-full shrink-0 items-center justify-between gap-4 rounded-full bg-brandSolid px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)] transition-all hover:-translate-y-0.5 hover:bg-terracottaDeep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-sandLight sm:w-auto">
+                <a data-testid="directions-link" href={directionsUrl(venue.name, venue.district.name)} target="_blank" rel="noreferrer" className="group inline-flex min-h-12 w-full shrink-0 items-center justify-between gap-4 rounded-full bg-brandSolid px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)] transition-all hover:-translate-y-0.5 hover:bg-terracottaDeep focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-sandLight sm:w-auto">
                   Yol tarifi al
                   <svg viewBox="0 0 20 20" className="size-4 fill-none" aria-hidden="true"><path d="M4 15 15 4m-7 0h7v7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </a>
@@ -141,7 +141,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
           </section>
 
           {venue.googleRating != null && (
-            <a data-testid="google-rating" href={`https://maps.google.com/?q=${encodeURIComponent(venue.name)}`} target="_blank" rel="noreferrer" className="group flex min-h-12 items-center justify-between gap-3 rounded-full border border-ink/12 bg-creamLight px-4 text-sm font-black text-ink transition-colors hover:border-terracotta/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream" aria-label={`${venue.googleRating} yıldız, ${venue.googleRatingCount} Google yorumu`}>
+            <a data-testid="google-rating" href={`https://maps.google.com/?q=${encodeURIComponent(venue.name)}`} target="_blank" rel="noreferrer" className="group flex min-h-12 items-center justify-between gap-3 rounded-full border border-ink/12 bg-creamLight px-4 text-sm font-black text-ink transition-colors hover:border-terracotta/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream" aria-label={`${venue.googleRating} yıldız, ${venue.googleRatingCount} Google yorumu`}>
               <span className="flex items-center gap-2">
                 <svg viewBox="0 0 18 18" className="size-4 text-terracotta" aria-hidden="true"><path d="m9 1.4 1.9 4.7 5 .4-3.8 3.2 1.2 4.9L9 12l-4.3 2.6 1.2-4.9-3.8-3.2 5-.4L9 1.4Z" fill="currentColor" /></svg>
                 <span>{venue.googleRating.toFixed(1)}</span>

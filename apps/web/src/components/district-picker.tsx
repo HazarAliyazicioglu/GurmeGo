@@ -57,7 +57,7 @@ export function DistrictPicker({ districts, current }: { districts: District[]; 
               aria-current={isCurrent ? "page" : undefined}
               className={[
                 "relative min-h-11 shrink-0 rounded-full border px-5 text-sm font-bold transition-all duration-200",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
                 isCurrent
                   ? "border-ink bg-ink text-cream shadow-[0_5px_16px_rgba(32,29,24,0.16)]"
                   : "border-ink/15 bg-white/40 text-ink/65 hover:border-ink/35 hover:bg-white/70 hover:text-ink",
@@ -71,7 +71,7 @@ export function DistrictPicker({ districts, current }: { districts: District[]; 
       </div>
       {suggested && (
         <details open className="group absolute left-4 right-4 top-full mt-2 overflow-hidden rounded-2xl border border-terracotta/20 bg-sand shadow-[0_12px_32px_rgba(71,52,35,0.14)] sm:left-6 sm:right-6 [&:not([open])]:hidden">
-          <summary className="absolute right-1.5 top-1.5 z-10 grid size-10 cursor-pointer list-none place-items-center rounded-full text-ink/45 transition-colors hover:bg-ink/5 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-terracotta [&::-webkit-details-marker]:hidden">
+          <summary className="absolute right-1.5 top-1.5 z-10 grid size-10 cursor-pointer list-none place-items-center rounded-full text-ink/45 transition-colors hover:bg-ink/5 hover:text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-terracotta [&::-webkit-details-marker]:hidden">
             <span className="sr-only">{"Konum \u00f6nerisini kapat"}</span>
             <svg viewBox="0 0 20 20" className="size-4" aria-hidden="true">
               <path d="m6 6 8 8m0-8-8 8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -93,7 +93,7 @@ export function DistrictPicker({ districts, current }: { districts: District[]; 
                 type="button"
                 data-testid="district-suggestion"
                 onClick={() => handleSelect(suggested.slug)}
-                className="mt-0.5 min-h-6 text-left text-sm font-bold leading-snug text-ink underline decoration-terracotta/45 decoration-1 underline-offset-4 transition-colors hover:text-terracottaDeep focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta"
+                className="mt-0.5 min-h-6 text-left text-sm font-bold leading-snug text-ink underline decoration-terracotta/45 decoration-1 underline-offset-4 transition-colors hover:text-terracottaDeep focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta"
               >
           {suggested.name}'e mi geçmek istersin?
               </button>

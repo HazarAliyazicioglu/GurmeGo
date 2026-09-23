@@ -63,7 +63,7 @@ export function VenueFilters({
             onChange={(e) => update({ category: e.target.value || undefined })}
             className={[
               "min-h-11 cursor-pointer appearance-none rounded-full border py-2 pl-4 pr-9 text-sm font-bold transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
               filters.category ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",
             ].join(" ")}
           >
@@ -86,7 +86,7 @@ export function VenueFilters({
             onChange={(e) => update({ priceRange: e.target.value || undefined })}
             className={[
               "min-h-11 cursor-pointer appearance-none rounded-full border py-2 pl-4 pr-9 text-sm font-bold transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
               filters.priceRange ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",
             ].join(" ")}
           >
@@ -111,7 +111,7 @@ export function VenueFilters({
               onChange={(e) => update({ radiusM: e.target.value ? Number(e.target.value) : undefined })}
               className={[
                 "min-h-11 appearance-none rounded-full border py-2 pl-4 pr-9 text-sm font-bold transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+                "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
                 !coordsAvailable
                   ? "cursor-not-allowed border-ink/8 bg-ink/5 text-ink/28"
                   : filters.radiusM
@@ -144,7 +144,7 @@ export function VenueFilters({
           aria-pressed={Boolean(filters.isBoutique)}
           className={[
             "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition-all",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+            "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
             filters.isBoutique
               ? "border-terracotta bg-terracotta text-white shadow-[0_5px_14px_rgba(215,93,59,0.18)]"
               : "border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",
@@ -162,7 +162,7 @@ export function VenueFilters({
           aria-pressed={Boolean(filters.openNow)}
           className={[
             "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-bold transition-all",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+            "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
             filters.openNow
               ? "border-terracotta bg-terracotta text-white shadow-[0_5px_14px_rgba(215,93,59,0.18)]"
               : "border-ink/15 bg-white/45 text-ink/65 hover:border-ink/30",

@@ -174,7 +174,7 @@ export default function FavorilerPage() {
               value={newListName}
               onChange={(event) => setNewListName(event.target.value)}
               placeholder="Örn. Kadıköy Kahveleri"
-              className="mt-1.5 block w-full rounded-full border border-ink/15 bg-creamLight px-4 py-2.5 text-sm font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-terracotta"
+              className="mt-1.5 block w-full rounded-full border border-ink/15 bg-creamLight px-4 py-2.5 text-sm font-medium text-ink outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta"
             />
           </label>
           <button
@@ -220,7 +220,7 @@ export default function FavorilerPage() {
               </p>
               <Link
                 href="/"
-                className="group mt-6 inline-flex min-h-12 w-full items-center justify-between gap-4 rounded-full bg-terracotta px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.28)] transition-all hover:-translate-y-0.5 hover:bg-terracottaDark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-ink sm:w-auto"
+                className="group mt-6 inline-flex min-h-12 w-full items-center justify-between gap-4 rounded-full bg-terracotta px-5 text-sm font-black text-white shadow-[0_8px_22px_rgba(158,66,43,0.28)] transition-all hover:-translate-y-0.5 hover:bg-terracottaDark focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-cream focus-visible:ring-offset-2 focus-visible:ring-offset-ink sm:w-auto"
               >
                 Mekanları keşfet
                 <svg viewBox="0 0 20 20" className="size-4 fill-none transition-transform group-hover:translate-x-0.5" aria-hidden="true">

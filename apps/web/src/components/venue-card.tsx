@@ -17,7 +17,7 @@ export function VenueCard({ venue }: { venue: VenueListItem }) {
     <Link
       href={`/mekan/${venue.slug}`}
       data-testid="venue-card"
-      className="group relative block h-full overflow-hidden rounded-[1.4rem] border border-ink/12 bg-creamLight p-5 shadow-[0_1px_0_rgba(32,29,24,0.05)] transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/25 hover:shadow-[0_14px_36px_rgba(71,52,35,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream sm:p-6"
+      className="group relative block h-full overflow-hidden rounded-[1.4rem] border border-ink/12 bg-creamLight p-5 shadow-[0_1px_0_rgba(32,29,24,0.05)] transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/25 hover:shadow-[0_14px_36px_rgba(71,52,35,0.10)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream sm:p-6"
     >
       <span
         className="absolute inset-y-0 left-0 w-1 origin-bottom scale-y-0 bg-terracotta transition-transform duration-300 group-hover:scale-y-100 group-focus-visible:scale-y-100"

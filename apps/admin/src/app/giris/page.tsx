@@ -56,7 +56,7 @@ export default function GirisPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2"
+              className="block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:outline-hidden focus:ring-2 focus:ring-blue-700 focus:ring-offset-2"
             />
           </div>
           <div>
@@ -70,7 +70,7 @@ export default function GirisPage() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2"
+              className="block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:outline-hidden focus:ring-2 focus:ring-blue-700 focus:ring-offset-2"
             />
           </div>
           {error && (

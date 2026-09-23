@@ -49,7 +49,7 @@ export default function GirisPage() {
             <button
               type="button"
               onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-              className="min-h-11 rounded-full px-4 text-sm font-bold text-ink/60 transition-colors hover:bg-white/45 hover:text-terracottaDeep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-sandPale"
+              className="min-h-11 rounded-full px-4 text-sm font-bold text-ink/60 transition-colors hover:bg-white/45 hover:text-terracottaDeep focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-sandPale"
             >
               {mode === "signin" ? "Hesabın yok mu? Kayıt ol" : "Zaten hesabın var mı? Giriş yap"}
             </button>

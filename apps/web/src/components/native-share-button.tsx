@@ -20,7 +20,7 @@ export function NativeShareButton({ venue }: { venue: { name: string } }) {
     <button
       type="button"
       data-testid="native-share-button"
-      className="group inline-flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-ink/15 bg-cream px-4 text-sm font-black text-ink transition-all hover:border-terracotta/45 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-creamLight"
+      className="group inline-flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-ink/15 bg-cream px-4 text-sm font-black text-ink transition-all hover:border-terracotta/45 hover:bg-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-creamLight"
       onClick={() => {
         // navigator.share() rejects when the user cancels the native share sheet -- that's a
         // normal, expected outcome, not an error to surface, so it's swallowed here rather than

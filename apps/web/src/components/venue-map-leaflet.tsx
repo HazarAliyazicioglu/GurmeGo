@@ -200,7 +200,7 @@ export function VenueMapCanvas({
                 </p>
                 <Link
                   href={`/mekan/${venue.slug}`}
-                  className="mt-3 inline-flex min-h-9 items-center rounded-full bg-ink px-3.5 text-xs font-bold text-cream transition-colors hover:bg-terracotta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2"
+                  className="mt-3 inline-flex min-h-9 items-center rounded-full bg-ink px-3.5 text-xs font-bold text-cream transition-colors hover:bg-terracotta focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2"
                 >
                   Mekanı incele
                   <span className="ml-1.5" aria-hidden="true">

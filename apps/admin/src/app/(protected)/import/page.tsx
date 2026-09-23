@@ -191,7 +191,7 @@ export default function ImportPage() {
                 type="file"
                 accept=".csv"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="block w-full rounded-md border border-slate-300 bg-slate-50 text-sm text-slate-600 shadow-sm file:mr-4 file:border-0 file:border-r file:border-slate-300 file:bg-white file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2"
+                className="block w-full rounded-md border border-slate-300 bg-slate-50 text-sm text-slate-600 shadow-sm file:mr-4 file:border-0 file:border-r file:border-slate-300 file:bg-white file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-slate-800 hover:file:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-blue-700 focus:ring-offset-2"
               />
               {file && (
                 <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-600">
