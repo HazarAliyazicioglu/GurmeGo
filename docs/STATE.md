@@ -7,18 +7,18 @@ Codex: izinli, GLM: izinli (kişisel proje). Kaynak: 2026-09-08.
 Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-**Yetki (2026-09-22/23, kullanıcı beyanı, pekiştirildi):** A-Z yetki verildi, kapanış sorusu bile sormadan sıradaki işe geç — büyük şirket ürünü kalite çıtası, süreç disiplini (PR+CI+cross-model review) düşürülmez. Yalnız gerçek Supabase/production erişimi gerektiren geri dönüşsüz adımlarda durulur. 4 alt proje + AK-02 tamam. Şu an: Dependabot majör bump triyajı sürüyor.
+**Yetki (2026-09-22/23, kullanıcı beyanı, pekiştirildi):** A-Z yetki verildi, kapanış sorusu bile sormadan sıradaki işe geç — büyük şirket ürünü kalite çıtası, süreç disiplini (PR+CI+cross-model review) düşürülmez. Yalnız gerçek Supabase/production erişimi gerektiren geri dönüşsüz adımlarda durulur. 4 alt proje + AK-02 tamam. **Dependabot 7 majör bump triyajı TAMAMLANDI** — hepsi kapandı (aşağı bkz.).
 
 ## Şu an ne yapıyoruz
-**Dependabot 7 majör bump triyajı (2026-09-23), sonuç:**
-- **#21 Tailwind v4 — MERGE (5482816).** `@tailwindcss/postcss` migrasyonu + Codex'in bulduğu MAJOR erişilebilirlik regresyonu (`outline-none`→`outline-hidden`, forced-colors modunda focus kayboluyordu) düzeltildi.
-- **#25 Prisma7 + #27 TS6 — MERGE, bundled (39a3976).** Dependabot'un PR'ı sadece CLI'ı yükseltip client'ı 5.14.0'da bırakmıştı (kırık); gerçek geçiş yapıldı: `@prisma/client`→7.10.0, `prisma.config.ts` eklendi, `PrismaService` artık `@prisma/adapter-pg` kullanıyor. TS6 bundled çünkü Prisma5+TS6 `TransactionClient` uyumsuzluğunu Prisma7 çözüyor. **Codex review (yüksek efor, 2 tur) gerçek prodüksiyon bug'ı yakaladı:** `isUniqueViolation()` (CSV import duplicate-skip) Prisma7'nin hata kodu taşınmasıyla sessizce bozulacaktı + `.env` auto-load kayboldu + eksik `DATABASE_URL` sessiz fallback riski + Prisma7'nin lazy connection pool'u nedeniyle derlenmiş uygulama **erişilemez DB ile bile boot olup /health 200 dönüyordu** — hepsi düzeltilip ampirik doğrulandı (kötü URL artık boot'u patlatıyor). Doğrulama: yerel Postgres + gerçek CI 3 kez yeşil, jest 366/366, web+admin 159/159+106/106.
-- **#20/#22/#26 NestJS trio — ERTELENDİ.** Her PR `@nestjs/*` ailesinden sadece biri, `@nestjs/core` dahil hiçbiri kapsanmıyor — tek koordineli PR gerekiyor.
+**Dependabot majör bump triyajı kapandı (2026-09-23):**
+- **#21 Tailwind v4 — MERGE (5482816).** Codex'in bulduğu MAJOR erişilebilirlik regresyonu (`outline-none`→`outline-hidden`) düzeltildi.
+- **#25 Prisma7 + #27 TS6 — MERGE, bundled (39a3976).** Gerçek geçiş: `@prisma/client`→7.10.0, `prisma.config.ts`, `PrismaService`→`@prisma/adapter-pg`. Codex review gerçek bir prodüksiyon bug'ı (`isUniqueViolation()` CSV import duplicate-skip kırılıyordu) + lazy-connection-pool nedeniyle smoke test'in yanlış "bağlandı" iddiası verdiğini buldu, hepsi düzeltildi.
+- **#20/#22/#26 NestJS trio → gerçek koordineli migrasyon (PR #30, e3911af) — MERGE, üçü kapatıldı.** Tüm `@nestjs/*` ailesi (common/core/platform-fastify/schedule/swagger/cli/testing) 12.x'e + fastify 5.12.5'e hizalandı. Codex review (2 tur, yüksek efor) 1 MAJOR + 2 MINOR buldu: (a) Fastify 5.12 numeric `trustProxy`'i sessizce fail-closed yapıyordu → `resolveTrustProxy` artık aynı eski hop-counting semantiğini taklit eden bir fonksiyon döndürüyor, ama bu YENİ bir açık değil — Fastify'ın 5.12'de kapattığı AYNI zayıf (adres doğrulamadan sadece pozisyon sayan) deseni geri getiriyor; kodda açıkça işaretlendi, Plan 4'te gerçek CIDR doğrulamasıyla değiştirilmeli, TRUST_PROXY_HOPS şu an her yerde unset/dormant. (b) `enableCors()` artık koşulsuz `import()` kullanıyor → `app.register(fastifyCors,...)`'a geçirildi (hem prod hem test için daha sağlam). (c) manuel multipart register NestJS'in kendi dinamik-import'una yönlendiriliyordu → `multipart: false`. Jest, NestJS12'nin saf-ESM paketlerini parse edemiyordu (prod etkilenmiyor, Node 22 `require(esm)` ile sorunsuz) → pnpm-farkında `transformIgnorePatterns` + özel küçük bir babel plugin'i (`import.meta.url`→`__filename`, sadece `createRequire(...)` çağrısında) eklendi. Doğrulama: jest 366/366 (52→54/54 suite), gerçek CORS preflight header testi, kötü DATABASE_URL/DB ile boot patlıyor.
 - **#18 — upstream'de bloklu**, fastify 5.12.x uyumlu plugin sürümü henüz yok.
 - **#24 zod v4 — önceden NO-GO** (bkz. ELENMİŞ).
 
 ## Sıradaki adım
-NestJS 11→12 trio için tüm `@nestjs/*` ailesini birlikte yükselten tek plan/PR hazırla. AK-03 (gelir modeli) PRD'nin kendi zamanlaması gereği Faz 2'ye açık bırakıldı, zorlanmadı. Gerçek Supabase kurulunca DB rol script'i uygulanacak.
+Dependabot triyajı bitti, açık majör bump yok. AK-03 (gelir modeli) PRD'nin kendi zamanlaması gereği Faz 2'ye açık bırakıldı. Gerçek Supabase kurulunca DB rol script'i uygulanacak. Takip edilecek küçük borç: `@nestjs/schematics@12.0.5`'in Node engine aralığı (`^22.22.3`) `.nvmrc`'in 22.19.0'ını kapsamıyor (pnpm strict enforce etmiyor, CI yeşil) — ayrı bir `.nvmrc` bump değerlendirmesi gerektirir, aceleye getirilmedi. `resolveTrustProxy`'nin hop-counting sınırlaması Plan 4'te gerçek CIDR doğrulamasıyla değiştirilmeli.
 
 ## Bloke olanlar
 - Yok. Gerçek Supabase erişimi gerektiren adımlar (DB rolü script'i, JWT env) kod/doküman tarafında hazır.
@@ -30,19 +30,17 @@ NestJS 11→12 trio için tüm `@nestjs/*` ailesini birlikte yükselten tek plan
 ## Denenmiş ve ELENMİŞ yaklaşımlar (KALICI dersler)
 - Tam menü/semantic search (MVP'de): Faz 2. KOŞULLU.
 - Review/red-team'i tek turda bitirmeyi ummak · CI "yazıldı=çalışıyor" varsayımı · Codex çıktısını görmeden "çalışıyor" saymak: ELENDİ, KALICI. `codex exec … - < dosya` (stdin), bitiş = `tokens used`.
-- Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ, KALICI — zod v4/TS6/Prisma7 hepsi bunu doğruladı; canlı `tsc`/worktree probe + gerçek DB/boot testi şart, mock yetmez.
-- Versiyon-özel tsconfig bayrağını (ör. TS6'nın `ignoreDeprecations`) ana `tsconfig.base.json`'a önden eklemek: ELENDİ, KALICI — o PR'ın kendi branch'inde test et.
+- **Codex kotası dolduğunda "birazdan tekrar dene" değil, SABİT bir saatte yenileniyor** (mesajdaki saat = gerçek reset zamanı): ELENDİ, KALICI — erken tekrar denemek zaman kaybı, mesajdaki saate kadar bekle.
+- Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ, KALICI — zod v4/TS6/Prisma7/NestJS12 hepsi bunu doğruladı; canlı `tsc`/worktree probe + gerçek DB/boot testi şart, mock yetmez.
 - Dependabot bir paket ailesinden (Prisma CLI+client, `@nestjs/*`) sadece BİR üyeyi yükseltebiliyor, diğerlerini eski bırakıp kırık kombinasyon oluşturuyor: ELENDİ, KALICI — merge etmeden önce ailenin diğer üyelerinin durumunu kontrol et.
-- Prisma7 driver adapter'da `$connect()` lazy (ilk sorguya kadar gerçek bağlantı açmıyor): ELENDİ, KALICI — boot-time kanıt için `onModuleInit`'e gerçek sorgu (`SELECT 1`) şart; health-check/smoke-test iddialarını kötü bir URL ile ampirik doğrula.
-- Worktree'de `apps/api` typecheck'i bazen master'dan FARKLI (yanlış) hata verebiliyor (kaynak/config/generated client birebir aynı olsa bile): ELENDİ, KALICI — körü körüne gerçek sanma, gerçek CI'da doğrula.
-- `prisma migrate dev` çıktısını olduğu gibi uygulamak: ELENDİ, KALICI — PostGIS GiST index'ini "drift" sanıp DROP önerir, elle çıkar.
+- Prisma7 driver adapter'da `$connect()` lazy: ELENDİ, KALICI — boot-time kanıt için gerçek sorgu (`SELECT 1`) şart.
+- Worktree'de `apps/api` typecheck'i bazen master'dan FARKLI (yanlış) hata verebiliyor: ELENDİ, KALICI — gerçek CI'da doğrula.
+- `prisma migrate dev` çıktısını olduğu gibi uygulamak: ELENDİ, KALICI — PostGIS GiST index'ini "drift" sanıp DROP önerir.
 - Workspace'te birden çok `@types/react` sürümü: ELENDİ, KALICI — `scripts/check-single-types-react.mjs` korur.
-- Paylaşılan zod şemasına zorunlu alan eklemek, tek app'in testine bakıp "yeşil" saymak: ELENDİ, KALICI — tüm `apps/`'i grep'le.
+- Paylaşılan zod şemasına zorunlu alan eklemek, tek app'in testine bakıp "yeşil" saymak: ELENDİ, KALICI.
 - JS regex `/i` ile Türkçe büyük "İ" eşleştirmek: ELENDİ, KALICI.
-- Seçili öğe değişirken önceki async yanıtları guard'lamamak: ELENDİ, KALICI — eski state'i hemen temizle + ref kontrolü.
+- Seçili öğe değişirken önceki async yanıtları guard'lamamak: ELENDİ, KALICI.
 - Mobile gerçek Expo dev server'da hiç elle denenmemiş: ELENDİ, KALICI.
-- `apps/mobile` VenueDetailScreen ilk testi CI'da global 15sn jest timeout'unu aşıyordu: ELENDİ, KALICI — sadece o testin timeout'u 20sn'ye çıkarıldı.
-- `gh pr merge --squash` sonrası yerel `master` "fast-forward yapılamıyor" hatası: ELENDİ, KALICI — GitHub'da merge olmuştur, `git reset --hard origin/master` ile hizala.
+- `gh pr merge --squash` sonrası yerel `master` "fast-forward yapılamıyor" hatası: ELENDİ, KALICI — `git reset --hard origin/master`.
 - `next.config.js`'de `images.remotePatterns: [{hostname:"**"}]`: ELENDİ, KALICI — açık proxy riski.
-- zod v4 `.partial()` default alanları sessizce output'a enjekte ediyor: ELENDİ, KALICI — `X.partial()` türetilen HER update şemasını her `.default(...)` alan için denetle.
-- Fastify patch bump'ları bile plugin tipleriyle kırılabiliyor: ELENDİ, KALICI.
+- zod v4 `.partial()` default alanları sessizce output'a enjekte ediyor: ELENDİ, KALICI.
