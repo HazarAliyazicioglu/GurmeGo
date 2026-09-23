@@ -167,7 +167,11 @@ export class AdminVenuesService {
         }),
       );
     } catch (err) {
-      this.logger.error(`CSV import ${importId}: import finished but the CSV_IMPORTED audit record could not be written`, err);
+      // The Error must be the FIRST argument, not the second (cross-model review finding,
+      // verified empirically) -- nestjs-pino's Logger only attaches a `err` field (with the full
+      // stack) when `typeof message === "object" && message instanceof Error`; passed second, it's
+      // silently dropped as an unused printf-style format arg to the string message.
+      this.logger.error(err instanceof Error ? err : new Error(String(err)), `CSV import ${importId}: import finished but the CSV_IMPORTED audit record could not be written`);
     }
     return result;
   }
@@ -230,7 +234,8 @@ export class AdminVenuesService {
         }
         // Prisma/repository error detail (schema/column names, constraint names, ...) must not
         // leak to the client — log it server-side and return a generic row error instead.
-        this.logger.error(`CSV import row ${rowNumber} failed`, err);
+        // Error must be the first arg -- see the comment on the other logger.error call above.
+        this.logger.error(err instanceof Error ? err : new Error(String(err)), `CSV import row ${rowNumber} failed`);
         rowErrors.push({ row: rowNumber, message: "Mekan oluşturulamadı: beklenmeyen hata" });
       }
     }

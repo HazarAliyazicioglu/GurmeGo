@@ -42,8 +42,11 @@ export class CsvImportService {
       // even the valid rows in an otherwise-fine file. The raw csv-parse message (internal parser
       // state, sometimes fragments of file content) is logged server-side only, same pattern as
       // admin-venues.service.ts's importRows create()-failure handling — the client gets a generic
-      // message.
-      this.logger.error("CSV parse failed", err);
+      // message. Error must be the first arg to logger.error -- nestjs-pino only attaches a
+      // structured `err` field (with the full stack) when the first argument is an Error instance;
+      // passed second, it's silently dropped as an unused printf-style format arg (cross-model
+      // review finding, verified empirically).
+      this.logger.error(err instanceof Error ? err : new Error(String(err)), "CSV parse failed");
       return { valid: [], errors: [{ row: 0, message: "CSV dosyası ayrıştırılamadı: dosya biçimi geçersiz" }] };
     }
 
