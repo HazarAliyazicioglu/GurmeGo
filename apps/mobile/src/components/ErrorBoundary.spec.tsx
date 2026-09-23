@@ -54,4 +54,19 @@ describe("ErrorBoundary", () => {
 
     expect(screen.getByText("hayatta")).toBeTruthy();
   });
+
+  it("shows the fallback again (not a crash) if the underlying cause is still there on retry", async () => {
+    await render(
+      <ErrorBoundary>
+        <Bomb />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("Bir şeyler ters gitti")).toBeTruthy();
+
+    // Bomb always throws -- retrying doesn't fix the root cause. This must land back on the
+    // fallback, not crash the test (which would mean the retry path re-threw uncaught).
+    await fireEvent.press(screen.getByText("Tekrar dene"));
+
+    expect(screen.getByText("Bir şeyler ters gitti")).toBeTruthy();
+  });
 });
