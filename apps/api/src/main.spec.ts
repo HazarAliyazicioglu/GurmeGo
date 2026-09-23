@@ -2,6 +2,7 @@ import { SwaggerModule } from "@nestjs/swagger";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { Controller, Get } from "@nestjs/common";
+import cors from "@fastify/cors";
 import { setupSwagger, resolveTrustProxy, buildCorsOptions } from "./main";
 
 // Security/ops finding: Fastify's `req.ip` is the raw socket address unless `trustProxy` is
@@ -19,9 +20,18 @@ describe("resolveTrustProxy", () => {
   it("returns false for explicit 0 hops", () => {
     expect(resolveTrustProxy("0")).toBe(false);
   });
-  it("returns the hop count as a number for a positive integer", () => {
-    expect(resolveTrustProxy("1")).toBe(1);
-    expect(resolveTrustProxy("2")).toBe(2);
+  it("returns a function trusting exactly N hops for a positive integer (fastify 5.12+ fails a bare number closed)", () => {
+    const trustOne = resolveTrustProxy("1");
+    expect(typeof trustOne).toBe("function");
+    if (typeof trustOne !== "function") throw new Error("expected a function");
+    expect(trustOne("1.2.3.4", 0)).toBe(true); // the single trusted hop (e.g. the load balancer)
+    expect(trustOne("5.6.7.8", 1)).toBe(false); // one hop further back -- not trusted
+
+    const trustTwo = resolveTrustProxy("2");
+    if (typeof trustTwo !== "function") throw new Error("expected a function");
+    expect(trustTwo("1.2.3.4", 0)).toBe(true);
+    expect(trustTwo("5.6.7.8", 1)).toBe(true);
+    expect(trustTwo("9.10.11.12", 2)).toBe(false);
   });
   it("throws a clear error for a non-numeric value (fail fast on misconfiguration, not a silent NaN)", () => {
     expect(() => resolveTrustProxy("not-a-number")).toThrow(/TRUST_PROXY_HOPS/);
@@ -71,7 +81,16 @@ describe("buildCorsOptions", () => {
   async function preflight(origin: string, method: string, corsOrigin?: string) {
     const moduleRef = await Test.createTestingModule({ controllers: [PingController] }).compile();
     const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-    app.enableCors(buildCorsOptions(corsOrigin));
+    // Not `app.enableCors(...)`: NestJS 12's FastifyAdapter now implements it as
+    // `this.register(import('@fastify/cors'), options)` -- an unconditional dynamic import, with
+    // no synchronous-registration escape hatch (unlike multipart's `multipart: false`). Jest 29's
+    // CJS runtime can't execute a real dynamic `import()` without `--experimental-vm-modules`,
+    // which conflicts with this project's babel-CJS-transform approach for NestJS 12's other ESM
+    // packages (tried, made things worse). Registering the same real `@fastify/cors` plugin
+    // directly (synchronous CJS import, top of file) with the exact same options exercises
+    // identical real HTTP behavior without going through that wrapper. Production is unaffected --
+    // verified empirically: the compiled app's real `enableCors()` call boots and serves traffic.
+    await app.register(cors, buildCorsOptions(corsOrigin));
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
     const res = await app.inject({

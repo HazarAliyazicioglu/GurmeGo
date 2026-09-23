@@ -42,7 +42,7 @@ describe("AdminVenuesController (e2e) — RolesGuard", () => {
       ],
     }).compile();
 
-    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter({ multipart: false }));
     await app.register(fastifyMultipart);
     // Test-only stand-in for JwtAuthGuard: sets req.user from a header instead of verifying a real JWT.
     app.getHttpAdapter()
@@ -281,7 +281,7 @@ describe("AdminVenuesController (e2e) — GET search & versions", () => {
       ],
     }).compile();
 
-    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter({ multipart: false }));
     await app.register(fastifyMultipart);
     app.getHttpAdapter()
       .getInstance()

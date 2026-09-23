@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import fastifyMultipart from "@fastify/multipart";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyCompress from "@fastify/compress";
+import fastifyCors from "@fastify/cors";
 import { writeFileSync } from "fs";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/all-exceptions.filter";
@@ -20,13 +21,23 @@ import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 // wants), and once real infrastructure exists (Plan 4), it's set to the actual number of trusted
 // reverse-proxy hops in front of this process (e.g. 1 for a single load balancer) without needing
 // a code change or a guess at what that infrastructure will look like today.
-export function resolveTrustProxy(raw: string | undefined): number | boolean {
+// Fastify 5.12 (bumped alongside NestJS 12) made a bare numeric `trustProxy` fail CLOSED at
+// runtime -- "hop-count-only trust cannot validate the immediate peer", so it now just returns
+// `false` for every address instead of trusting anything (verified against fastify's own
+// lib/request.js). Passing a number would silently stop working the moment TRUST_PROXY_HOPS is
+// ever set for real (Plan 4's load balancer), defeating RateLimitGuard's IP-based bucketing
+// without any error. Replicate the exact old semantics ourselves as an explicit trust function:
+// `@fastify/proxy-addr` calls it once per forwarded address, walking outward from the direct
+// socket peer (hop 0); returning `true` marks that hop as a trusted proxy to skip over, so
+// trusting exactly N hops means hop indices `[0, N)`.
+export function resolveTrustProxy(raw: string | undefined): boolean | ((address: string, hop: number) => boolean) {
   if (raw === undefined || raw === "") return false;
   const hops = Number(raw);
   if (!Number.isInteger(hops) || hops < 0) {
     throw new Error(`TRUST_PROXY_HOPS must be a non-negative integer if set, got: "${raw}"`);
   }
-  return hops === 0 ? false : hops;
+  if (hops === 0) return false;
+  return (_address, hop) => hop < hops;
 }
 
 // Browser clients (Plan 2's Next.js web/PWA app, Plan 3's admin panel) need CORS to call this API
@@ -48,7 +59,15 @@ export function buildCorsOptions(raw: string | undefined) {
 // real-setup e2e (test/bootstrap.e2e-spec.ts) -- otherwise the tests would build their own
 // different app and never prove this wiring.
 export function createAdapter(): FastifyAdapter {
-  return new FastifyAdapter({ trustProxy: resolveTrustProxy(process.env.TRUST_PROXY_HOPS) });
+  return new FastifyAdapter({
+    trustProxy: resolveTrustProxy(process.env.TRUST_PROXY_HOPS),
+    // NestJS 12 added its own automatic `@fastify/multipart` registration (triggered whenever
+    // `app.register(fastifyMultipart, ...)` -- our own call, below -- or a multipart interceptor
+    // decorator is used), which loads the plugin itself via a dynamic `import()`. This app already
+    // registers the plugin explicitly with its own options (the 10 MB CSV upload cap), so `false`
+    // here keeps that manual registration in full control instead of NestJS's own auto-detection.
+    multipart: false,
+  });
 }
 
 // JSON smaller than this is not worth the CPU of compressing it.
@@ -76,7 +95,14 @@ export async function configureApp(app: NestFastifyApplication): Promise<void> {
     console.warn("RATE_LIMIT_* env vars not set in production -- using defaults (100/min, 10/day)");
   }
 
-  app.enableCors(buildCorsOptions(process.env.CORS_ORIGIN));
+  // Not `app.enableCors(...)`: NestJS 12's FastifyAdapter now implements it as
+  // `this.register(import('@fastify/cors'), options)` -- an unconditional dynamic import, with no
+  // synchronous-registration opt-out (unlike multipart's `multipart: false` above). Registering
+  // the same plugin directly, the same way every other plugin on this page is registered, avoids
+  // depending on that dynamic import ever succeeding (and is what let this function's own e2e
+  // test -- which boots the real app -- run under Jest's CJS runtime, which can't execute a real
+  // dynamic `import()` without `--experimental-vm-modules`).
+  await app.register(fastifyCors, buildCorsOptions(process.env.CORS_ORIGIN));
 
   setupSwagger(app);
 }

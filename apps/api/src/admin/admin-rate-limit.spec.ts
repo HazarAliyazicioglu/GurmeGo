@@ -41,7 +41,9 @@ async function buildApp() {
       { provide: CsvImportService, useValue: {} },
     ],
   }).compile();
-  const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+  // `multipart: false` opts out of NestJS 12's own automatic @fastify/multipart registration
+  // (see main.ts's createAdapter) so the explicit registration below is the only one that runs.
+  const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter({ multipart: false }));
   await app.register(fastifyMultipart);
   app.getHttpAdapter().getInstance().addHook("onRequest", (req: any, _reply: any, done: () => void) => {
     const role = req.headers["x-test-role"];
