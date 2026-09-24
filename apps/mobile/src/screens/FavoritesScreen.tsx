@@ -24,12 +24,13 @@ function flattenFavorites(lists: FavoriteList[]): FlatFavorite[] {
 }
 
 export default function FavoritesScreen() {
-  const { user, session } = useAuth();
+  const { user, session, signOut } = useAuth();
   const navigation = useNavigation<Nav>();
   // §M1 audit finding: this tab's native header is hidden (TabNavigator.tsx), so nothing
   // accounted for the status bar/notch on either of this screen's render branches.
   const insets = useSafeAreaInsets();
   const [favorites, setFavorites] = useState<FlatFavorite[]>([]);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   // Codex cross-model-review finding: `favorites.length === 0` is ALSO true before the initial
   // fetch resolves -- gating the empty-state message on that alone would flash it for a user who
   // genuinely has favorites while getFavoriteLists() is still in flight. Same pattern as
@@ -80,6 +81,20 @@ export default function FavoritesScreen() {
     );
   }
 
+  async function handleSignOut() {
+    setSignOutError(null);
+    try {
+      const result = await signOut();
+      // Supabase's signOut() resolves with `{ error }` rather than rejecting on failure -- checking
+      // only for a rejected promise would miss that and leave the stale session in place. No
+      // explicit navigation needed on success: useAuth()'s `session` updates via onAuthStateChange,
+      // which flips `user` to null and this screen already re-renders to the signed-out branch below.
+      if (result?.error) setSignOutError("Çıkış yapılamadı. Tekrar deneyin.");
+    } catch {
+      setSignOutError("Çıkış yapılamadı. Tekrar deneyin.");
+    }
+  }
+
   async function handleRemove(listId: string, venueId: string) {
     if (!session?.access_token) return;
     await removeFavoriteVenue(session.access_token, listId, venueId).catch(() => {
@@ -91,6 +106,14 @@ export default function FavoritesScreen() {
 
   return (
     <View testID="favorites-root" style={{ flex: 1, paddingTop: insets.top }}>
+      <Pressable onPress={() => void handleSignOut()} accessibilityRole="button" accessibilityLabel="Çıkış yap">
+        <Text>Çıkış yap</Text>
+      </Pressable>
+      {signOutError && (
+        <Text accessibilityLiveRegion="polite" accessibilityRole="alert">
+          {signOutError}
+        </Text>
+      )}
       <FlatList
         data={favorites}
         keyExtractor={(item) => item.venueId}

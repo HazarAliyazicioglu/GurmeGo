@@ -7,11 +7,12 @@ import { getFavoriteLists, createFavoriteList } from "@/lib/api";
 import type { FavoriteList } from "@gurmego/shared";
 
 export default function FavorilerPage() {
-  const { user, session, loading } = useAuth();
+  const { user, session, loading, signOut } = useAuth();
   const router = useRouter();
   const [lists, setLists] = useState<FavoriteList[] | null>(null);
   const [newListName, setNewListName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   // Guards against the privacy-sensitive race where a `getFavoriteLists` request (or a
   // `createFavoriteList` submission) is still in flight when the session changes (e.g. logout
   // followed by a different user logging back in before the first request settles) -- without
@@ -58,6 +59,23 @@ export default function FavorilerPage() {
     // in this component, not just `lists`.
     if (newListName !== "") setNewListName("");
     if (creating) setCreating(false);
+  }
+
+  async function handleSignOut() {
+    setSignOutError(null);
+    try {
+      const result = await signOut();
+      // Supabase's signOut() resolves with `{ error }` rather than rejecting on failure -- checking
+      // only for a rejected promise would miss that and redirect as if sign-out succeeded, leaving
+      // the stale session in place. Same pattern as apps/admin's protected layout.
+      if (result?.error) {
+        setSignOutError("Çıkış yapılamadı. Tekrar deneyin.");
+        return;
+      }
+      router.push("/giris");
+    } catch {
+      setSignOutError("Çıkış yapılamadı. Tekrar deneyin.");
+    }
   }
 
   async function handleCreateList(event: React.FormEvent<HTMLFormElement>) {
@@ -156,13 +174,27 @@ export default function FavorilerPage() {
               Yeniden dönmek istediğin lezzet duraklarını burada bir arada tut.
             </p>
           </div>
-          {lists && lists.length > 0 && (
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-ink/12 bg-creamLight px-3 py-2 text-[0.65rem] font-black uppercase tracking-[0.14em] text-ink/55">
-              <span className="size-1.5 rounded-full bg-terracotta" aria-hidden="true" />
-              {lists.length} liste
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {lists && lists.length > 0 && (
+              <span className="inline-flex w-fit items-center gap-2 rounded-full border border-ink/12 bg-creamLight px-3 py-2 text-[0.65rem] font-black uppercase tracking-[0.14em] text-ink/55">
+                <span className="size-1.5 rounded-full bg-terracotta" aria-hidden="true" />
+                {lists.length} liste
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="text-xs font-semibold text-ink/55 underline-offset-2 hover:text-ink hover:underline"
+            >
+              Çıkış yap
+            </button>
+          </div>
         </div>
+        {signOutError && (
+          <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">
+            {signOutError}
+          </p>
+        )}
       </header>
 
       {lists !== null && (

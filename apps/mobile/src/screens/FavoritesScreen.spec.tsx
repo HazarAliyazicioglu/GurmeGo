@@ -119,6 +119,57 @@ describe("FavoritesScreen", () => {
     });
   });
 
+  it("shows a 'Çıkış yap' button that calls signOut when pressed", async () => {
+    const signOut = jest.fn().mockResolvedValue({ error: null });
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" }, signOut });
+    (getFavoriteLists as jest.Mock).mockResolvedValue([]);
+
+    await renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Çıkış yap")).toBeTruthy(), { timeout: 5000 });
+    await fireEvent.press(screen.getByText("Çıkış yap"));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+  });
+
+  it("shows the signed-out prompt and hides the favorites list once signOut resolves and the session clears", async () => {
+    const signOut = jest.fn().mockResolvedValue({ error: null });
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" }, signOut });
+    (getFavoriteLists as jest.Mock).mockResolvedValue(ONE_LIST);
+
+    const { rerender } = await renderScreen();
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeTruthy(), { timeout: 5000 });
+
+    await fireEvent.press(screen.getByText("Çıkış yap"));
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+
+    // Mirrors what a real onAuthStateChange callback does after signOut() resolves: `useAuth()`'s
+    // session/user flip to null, driving this screen's own signed-out render branch -- no explicit
+    // navigation call is involved (see FavoritesScreen.tsx's handleSignOut comment).
+    (useAuth as jest.Mock).mockReturnValue({ user: null, session: null, signOut });
+    await rerender(
+      <NavigationContainer>
+        <FavoritesScreen />
+      </NavigationContainer>,
+    );
+
+    expect(screen.getByText("Favorilerini görmek için giriş yap")).toBeTruthy();
+    expect(screen.queryByText("Test Cafe")).toBeFalsy();
+  });
+
+  it("shows an error message when sign-out fails, without crashing", async () => {
+    const signOut = jest.fn().mockResolvedValue({ error: "network error" });
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" }, signOut });
+    (getFavoriteLists as jest.Mock).mockResolvedValue([]);
+
+    await renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Çıkış yap")).toBeTruthy(), { timeout: 5000 });
+    await fireEvent.press(screen.getByText("Çıkış yap"));
+
+    await waitFor(() => expect(screen.getByText(/çıkış yapılamadı/i)).toBeTruthy());
+  });
+
   it("does not apply a stale user's favorites after a session/user switch happens before the slow request resolves", async () => {
     let resolveA: (v: unknown) => void;
     const pendingA = new Promise((resolve) => {

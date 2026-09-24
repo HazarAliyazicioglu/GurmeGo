@@ -420,6 +420,53 @@ describe("FavorilerPage — visible loading state instead of a silent blank scre
   });
 });
 
+describe("FavorilerPage — sign out", () => {
+  beforeEach(() => {
+    push.mockClear();
+    vi.mocked(getFavoriteLists).mockReset();
+    useAuthMock.mockReset();
+  });
+
+  it("shows a 'Çıkış yap' control that signs the user out and redirects to /giris", async () => {
+    const signOut = vi.fn().mockResolvedValue({ error: null });
+    useAuthMock.mockReturnValue({
+      user: { id: "u1" },
+      loading: false,
+      session: { access_token: "token-123" },
+      signOut,
+    });
+    vi.mocked(getFavoriteLists).mockResolvedValue([]);
+
+    render(<FavorilerPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /çıkış yap/i })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: /çıkış yap/i }));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/giris"));
+  });
+
+  it("shows an error and does not redirect when sign-out fails", async () => {
+    const signOut = vi.fn().mockResolvedValue({ error: "network error" });
+    useAuthMock.mockReturnValue({
+      user: { id: "u1" },
+      loading: false,
+      session: { access_token: "token-123" },
+      signOut,
+    });
+    vi.mocked(getFavoriteLists).mockResolvedValue([]);
+
+    render(<FavorilerPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /çıkış yap/i })).toBeTruthy());
+    push.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: /çıkış yap/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
 describe("Favoriler page — create a new list", () => {
   beforeEach(() => {
     push.mockClear();
