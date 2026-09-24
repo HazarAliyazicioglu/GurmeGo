@@ -817,6 +817,19 @@ karşı güvenli değil" bulgusu geçerliliğini koruyor — mevcut CI seri çal
 kalmıyor, ama testler aynı gerçek DB'yi transaction-izolasyonu olmadan paylaşıyor. Gelecekte
 CI paralelleştirilirse veya test suite büyürse yeniden gündeme gelecek.
 
+**Güncelleme (2026-09-24, proje-geneli smoke test denetimi):** #3'teki mitigasyon (tek testin
+timeout'unu artırmak) kalıcı çözüm değilmiş — aynı flake 3. kez tekrarladı, bu kez web ve
+admin'de de aynı semptom (CPU çekişmesi altında rastgele timeout) çıktı. Kök neden `apps/api`
+değil, turbo'nun 4 paketin Jest/Vitest suite'lerini tamamen paralel çalıştırması. Çözüm:
+root `pnpm test` script'i artık `turbo run test --filter=...` çağrılarını ardışık zincirliyor
+(`api → web → admin → mobile`), `turbo.json`'ın task graph'ına DOKUNMADAN — böylece
+`turbo run test --filter=@gurmego/web` gibi izole geliştirici çağrıları hâlâ bağımsız çalışıyor
+(ilk denemede `dependsOn` ile task graph'a bağlanmıştı, `cross-model-review` bunun izole
+filtreli çalıştırmaları kırdığını buldu — MAJOR, düzeltildi). 3 ayrı `--force` (cache-bypass)
+koşumda gerçek Postgres+PostGIS'e karşı sıfır flake: api 366/366, web 27/27, admin 10/10,
+mobile 60/60. `apps/api`'nin e2e paralellik-güvenliği sorunu YUKARIDAKİ paragrafta hâlâ açık —
+bu değişiklik onu ele almıyor, sadece CI/lokal test flake'ini kapatıyor. Commit: `024896e`.
+
 ### Adım 2 — §1.3 KRİTİK bulgu: User tablosu hiç doldurulmuyordu
 
 Kullanıcı "user tablosuna geçelim" dedi (2026-09-14). Bounded brainstorming + TDD +

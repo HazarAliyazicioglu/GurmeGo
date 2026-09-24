@@ -1,4 +1,4 @@
-# Durum — 2026-09-23
+# Durum — 2026-09-24
 
 ## Veri sınırı
 Codex: izinli, GLM: izinli (kişisel proje). Kaynak: 2026-09-08.
@@ -7,22 +7,20 @@ Codex: izinli, GLM: izinli (kişisel proje). Kaynak: 2026-09-08.
 Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek: SADECE İstanbul. Detay: REVIEW-PLAN.md.
 
 ## Aktif plan
-**Yetki (2026-09-22/23, kullanıcı beyanı, pekiştirildi):** A-Z yetki verildi, kapanış sorusu bile sormadan sıradaki işe geç. Yalnız gerçek Supabase/production erişimi gerektiren geri dönüşsüz adımlarda durulur. 4 alt proje + AK-02 + Dependabot majör bump triyajı (7/7) tamam. **Şu an: "projeyi tamamlama" değerlendirmesinden çıkan iki agent-yapabilir eksik de kapatıldı** (aşağı bkz.) — kalan tek gerçek blocker altyapı/hesap tarafında (kullanıcıya ait).
+**Yetki (2026-09-22/23, pekiştirildi):** A-Z yetki verildi, kapanış sorusu bile sormadan sıradaki işe geç. Yalnız gerçek Supabase/production erişimi gerektiren geri dönüşsüz adımlarda durulur. Kod tarafı tamamlandı (bkz. önceki günlük), kalan tek gerçek blocker altyapı/hesap tarafında (kullanıcıya ait).
 
 ## Şu an ne yapıyoruz
-**Proje tamamlama değerlendirmesi (2026-09-23, fork araştırması) + iki eksik kapatıldı:**
-- **Structured logging (pino) — MERGE (PR #31, 03166d0).** `nestjs-pino` bağlandı, NFR-04 (`x-user-location` redact) + Codex review'ın bulduğu **gerçek MAJOR güvenlik açığı**: `Authorization` bearer token'ları da loglara sızıyordu (pino-http varsayılan olarak tüm header'ları logluyor) — redact listesine eklendi, gerçek istekle doğrulandı. İkinci bulgu: `logger.error(message, err)` çağrı sırası ters — nestjs-pino sadece Error İLK argümansa `err` alanını (stack dahil) ekliyor, tersi sessizce siliniyordu — izole script ile doğrulanıp 3 çağrı yeri düzeltildi.
-- **Mobile React Error Boundary — MERGE (PR #32, b85220b).** REVIEW-PLAN'ın "en yüksek riskli bulgu"su kapandı. TDD ile yazıldı, Codex review 2 MINOR buldu (tek kök boundary = bir sekme hatası tüm app'i unmount eder — bilinçli tradeoff, koda not düşüldü; retry testi "hata devam ediyor" senaryosunu kapsamıyordu — test eklendi).
-- **Kalan gerçek "tamamlanma" blocker'ı tamamen kullanıcıya ait:** gerçek Supabase projesi + DB rol script'inin uygulanması (kod hazır), Railway/Vercel hesapları + deploy pipeline kurulumu (`infrastructure.md`'nin "bilinçli MVP kararı: henüz kurulmadı" dediği tek gerçek production blocker), domain seçimi. Agent bunları yapamaz.
-- **Haftalık bulut rutini kuruldu** (Pazartesi 09:02 TR saati, trig_01EmTq2Gm49KADsXUcLM6zGC): PR #18 (fastify plugin uyumluluğu) ve #24 (zod v4 NO-GO) durumunu otonom tekrar kontrol eder, gerekirse merge eder, her durumda STATE.md günceller.
-
-**Dependabot 7 majör bump triyajı (2026-09-23) — TAMAMLANDI:** #21 Tailwind4 MERGE (Codex erişilebilirlik regresyonu buldu/düzeltti), #25 Prisma7+#27 TS6 bundled MERGE (Codex gerçek prod bug'ı buldu), #20/#22/#26 NestJS12 koordineli MERGE (PR #30 — Codex `trustProxy` fail-closed güvenlik regresyonunu buldu, kodda işaretlendi), #18 upstream'de bloklu, #24 zod4 NO-GO. Detay: git log.
+**Proje-geneli smoke test denetimi (2026-09-24, kullanıcı isteğiyle) — 2 gerçek bulgu kapatıldı:**
+- **Docker+gerçek Postgres/PostGIS ile tam denetim:** install→lint→typecheck(force)→build(4 app)→**tüm test suite'i gerçek DB'ye karşı**→smoke-api.sh→pnpm audit→mimari invariant taraması (ContributionQueue bypass, konum loglama, raw SQL sızıntısı — hepsi temiz).
+- **fix (62a3086):** `csv-parse` 7.0.1→7.0.2, GHSA-8cw4-87c7-c6xx (moderate prototype-pollution) kapatıldı. cross-model-review bir MINOR buldu (lockfile'da csv-parse dışı webpack-zinciri paketleri de güncellenmiş) — build/typecheck/lint ile zararsız olduğu doğrulandı.
+- **fix (024896e):** Mobile test flake'i (`docs/REVIEW-PLAN.md` Adım 1'de 2 kez CI'da görülmüş, bugün 3. kez tekrarladı, bu sefer web+admin'de de aynı semptom) — kök neden turbo'nun 4 paketin test suite'lerini tam paralel çalıştırması (CPU çekişmesi). Root `pnpm test` artık `turbo run test --filter=...` çağrılarını ardışık zincirliyor. İlk deneme `turbo.json`'da `dependsOn` kullanmıştı — cross-model-review bunun izole `turbo run test --filter=X` çağrılarını kırdığını buldu (MAJOR), root script'e taşınarak düzeltildi. 3 ayrı cache-bypass koşumda sıfır flake.
+- **Diğer bulgular (aksiyon gerektirmedi/düşük öncelik):** Yetim worktree klasörü (`gurmego-nestjs12`, boştu) silindi. `pnpm audit`'teki kalan 2 high+5 moderate hepsi Prisma CLI'nin mysql2/deepmerge-ts zincirinde — bu proje sadece Postgres kullanıyor, runtime'da hiç yüklenmiyor, upstream bekleniyor.
 
 ## Sıradaki adım
-Agent-yapılabilir iş kalemi kalmadı. Kullanıcı: gerçek Supabase/Railway/Vercel/domain kurulumu. Haftalık rutin #18/#24'ü otonom izliyor. AK-03 (gelir modeli) Faz 2'ye açık bırakıldı, zorlanmadı.
+Agent-yapılabilir iş kalemi kalmadı. Kullanıcıya sorulup kapatılmayan tek gerçek backlog: `apps/api`'nin e2e testleri paralel/sıra-bağımlı çalışmaya güvenli değil (aynı gerçek DB'yi transaction-izolasyonu olmadan paylaşıyorlar) — bugünkü fix bunu ele almadı, sadece CI test-flake'ini kapattı. CI paralelleştirilirse veya suite büyürse gündeme gelecek. Kullanıcı: gerçek Supabase/Railway/Vercel/domain kurulumu.
 
 ## Bloke olanlar
-- Yok (agent tarafı). Kullanıcıya ait: gerçek Supabase/Railway/Vercel hesapları + domain — bunlar olmadan "production'a çıkış" tamamlanamaz, kod/script tarafı hazır.
+- Yok (agent tarafı). Kullanıcıya ait: gerçek Supabase/Railway/Vercel hesapları + domain.
 
 ## Yakın kararlar
 - ADR 006: DB-trigger'lı append-only audit log → docs/adr/006-audit-log-append-only-table.md
@@ -30,19 +28,10 @@ Agent-yapılabilir iş kalemi kalmadı. Kullanıcı: gerçek Supabase/Railway/Ve
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar (KALICI dersler)
 - Tam menü/semantic search (MVP'de): Faz 2. KOŞULLU.
-- Review/red-team'i tek turda bitirmeyi ummak · CI "yazıldı=çalışıyor" varsayımı · Codex çıktısını görmeden "çalışıyor" saymak: ELENDİ, KALICI. `codex exec … - < dosya` (stdin), bitiş = `tokens used`.
-- Codex kotası dolduğunda SABİT bir saatte yenileniyor (mesajdaki saat = gerçek reset zamanı), "birazdan tekrar dene" değil: ELENDİ, KALICI.
-- Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ, KALICI — canlı `tsc`/worktree probe + gerçek DB/boot testi şart, mock yetmez.
-- Dependabot bir paket ailesinden sadece BİR üyeyi yükseltebiliyor, kırık kombinasyon oluşturuyor: ELENDİ, KALICI — merge etmeden önce ailenin diğer üyelerinin durumunu kontrol et.
-- `console.error(msg, err)`'ü blind bir şekilde `logger.error(msg, err)`'e çevirmek: ELENDİ, KALICI — nestjs-pino'da argüman sırası TERS (`err` ilk argüman olmalı), aksi halde hata detayı sessizce kayboluyor; her logging kütüphanesi geçişinde gerçek log çıktısını ampirik doğrula.
-- pino-http gibi bir HTTP logger eklerken "sadece bildiğim hassas alanı redact ederim" varsayımı: ELENDİ, KALICI — varsayılan olarak TÜM request header'ları loglanır (Authorization dahil), redact listesini bilinen tüm hassas header'lar için kur, tek bir alanla sınırlama.
-- Prisma7 driver adapter'da `$connect()` lazy: ELENDİ, KALICI — boot-time kanıt için gerçek sorgu şart.
-- Worktree'de `apps/api` typecheck'i bazen master'dan FARKLI (yanlış) hata verebiliyor: ELENDİ, KALICI — gerçek CI'da doğrula.
-- `prisma migrate dev` çıktısını olduğu gibi uygulamak: ELENDİ, KALICI.
-- Workspace'te birden çok `@types/react` sürümü: ELENDİ, KALICI — `scripts/check-single-types-react.mjs` korur.
-- Paylaşılan zod şemasına zorunlu alan eklemek, tek app'in testine bakıp "yeşil" saymak: ELENDİ, KALICI.
-- JS regex `/i` ile Türkçe büyük "İ" eşleştirmek: ELENDİ, KALICI.
-- Seçili öğe değişirken önceki async yanıtları guard'lamamak: ELENDİ, KALICI.
-- `gh pr merge --squash` sonrası yerel `master` "fast-forward yapılamıyor" hatası: ELENDİ, KALICI — `git reset --hard origin/master`.
-- `next.config.js`'de `images.remotePatterns: [{hostname:"**"}]`: ELENDİ, KALICI.
-- zod v4 `.partial()` default alanları sessizce output'a enjekte ediyor: ELENDİ, KALICI.
+- Review/red-team'i tek turda bitirmeyi ummak · CI "yazıldı=çalışıyor" varsayımı · Codex çıktısını görmeden "çalışıyor" saymak: ELENDİ, KALICI.
+- Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ, KALICI — canlı `tsc`/worktree probe + gerçek DB/boot testi şart.
+- `turbo.json`'da paket-özel `dependsOn` ile test task'larını zincirlemek: ELENDİ, KALICI — `turbo run test --filter=X` gibi izole çağrıları da task graph'a bağlayıp kırıyor; sıralama root script'te (`&&` ile ayrı `--filter` çağrıları) yapılmalı, task graph'a değil.
+- Global turbo `--concurrency=2` ile test flake'ini çözmeye çalışmak: ELENDİ, KALICI — `apps/api`'nin e2e testlerinde 5 yeni, sıra-bağımlı başarısızlık açtı (paylaşılan gerçek DB, transaction-izolasyonu yok).
+- Tek bir testin timeout'unu artırarak CPU-çekişmesi kaynaklı flake'i "çözmek": ELENDİ, KALICI — kök neden çözülmediği için 3. kez farklı paketlerde tekrarladı.
+- pino-http'de sadece bilinen alanı redact etmek: ELENDİ, KALICI — varsayılan TÜM header'lar loglanır.
+- Prisma7 `$connect()` lazy güveni · `prisma migrate dev` çıktısını olduğu gibi uygulamak · Worktree'de apps/api typecheck'i farklı sonuç verebilir (turbo cache eski worktree yolundan "cache hit" döndürebilir — `--force` ile bypass et) · Workspace'te birden çok `@types/react` sürümü · zod v4 `.partial()` default enjeksiyonu · JS `/i` Türkçe "İ" eşleşmiyor: hepsi ELENDİ, KALICI.
