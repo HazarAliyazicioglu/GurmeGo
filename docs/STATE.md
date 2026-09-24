@@ -17,7 +17,7 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 - **Diğer bulgular (aksiyon gerektirmedi/düşük öncelik):** Yetim worktree klasörü (`gurmego-nestjs12`, boştu) silindi. `pnpm audit`'teki kalan 2 high+5 moderate hepsi Prisma CLI'nin mysql2/deepmerge-ts zincirinde — bu proje sadece Postgres kullanıyor, runtime'da hiç yüklenmiyor, upstream bekleniyor.
 
 ## Sıradaki adım
-Agent-yapılabilir iş kalemi kalmadı. Kullanıcıya sorulup kapatılmayan tek gerçek backlog: `apps/api`'nin e2e testleri paralel/sıra-bağımlı çalışmaya güvenli değil (aynı gerçek DB'yi transaction-izolasyonu olmadan paylaşıyorlar) — bugünkü fix bunu ele almadı, sadece CI test-flake'ini kapattı. CI paralelleştirilirse veya suite büyürse gündeme gelecek. Kullanıcı: gerçek Supabase/Railway/Vercel/domain kurulumu.
+Agent-yapılabilir iş kalemi kalmadı. `apps/api` e2e paralellik-güvenliği backlog maddesi araştırıldı (systematic-debugging, 2026-09-24): kod aslında dikkatli izole edilmiş (benzersiz targetId/category scoping), önde giden hipotez (Postgres connection-pool tükenmesi, 20 çekirdek → ~20 Jest worker) `max_connections=15/30` + `maxWorkers=16/20` ile ampirik olarak test edildi, 2 denemede de 366/366 yeşil — DOĞRULANMADI. Bugün yeniden üretilemiyor, CI zaten seri (dünkü fix), spekülatif düzeltme yapılmadı (root-cause kuralı). Detay: REVIEW-PLAN.md. Kullanıcı: gerçek Supabase/Railway/Vercel/domain kurulumu.
 
 ## Bloke olanlar
 - Yok (agent tarafı). Kullanıcıya ait: gerçek Supabase/Railway/Vercel hesapları + domain.

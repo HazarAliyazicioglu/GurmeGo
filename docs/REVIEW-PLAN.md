@@ -830,6 +830,27 @@ koşumda gerçek Postgres+PostGIS'e karşı sıfır flake: api 366/366, web 27/2
 mobile 60/60. `apps/api`'nin e2e paralellik-güvenliği sorunu YUKARIDAKİ paragrafta hâlâ açık —
 bu değişiklik onu ele almıyor, sadece CI/lokal test flake'ini kapatıyor. Commit: `024896e`.
 
+**Kök neden araştırması (2026-09-24, systematic-debugging):** Yukarıdaki "e2e testler
+paralel/sıra-bağımlı çalışmaya güvenli değil" iddiasını doğrulamaya çalıştım. Kod incelemesi:
+e2e-spec dosyaları aslında dikkatli izole edilmiş — her biri `Date.now()`/`Math.random()` ile
+üretilmiş benzersiz `targetId`/`category`/`slug` kullanıyor ve sorgularını buna filtreliyor
+(`audit-log.e2e-spec.ts`: "every test scopes its assertions to a unique targetId"; hiçbir
+`.count()`/`.findMany()` çağrısı `where` filtresiz değil). En olası alternatif hipotez:
+bu makine 20 çekirdekli, Jest varsayılan `maxWorkers` ~19 işlem açıyor, her biri kendi
+`pg.Pool`'unu (node-postgres varsayılanı: max 10 bağlantı) açıyor → teorik olarak Postgres'in
+`max_connections=100`'ünü aşabilir. Bunu ampirik olarak test ettim: Postgres'i kasıtlı olarak
+`max_connections=30` (16 worker) ve `max_connections=15` (20 worker, makinenin tam çekirdek
+sayısı) ile sınırlayıp tüm `apps/api` suite'ini (54 dosya, 366 test) çalıştırdım — **iki
+denemede de 366/366 yeşil, hiç bağlantı hatası yok.** Hipotez DOĞRULANMADI. Sonuç: mevcut
+kod tabanında bugün ampirik olarak yeniden üretilebilen bir e2e paralellik-güvensizliği yok;
+CI'da 2026 başında görülen o 5 başarısızlık muhtemelen ya GitHub Actions runner'ının farklı
+kaynak profiline (daha az çekirdek → daha az worker, farklı bir mekanizma) ya da o zamandan
+beri yapılan sertleştirme çalışmasına (benzersiz-anahtar scoping, audit trigger) bağlı, ve
+bugün reprodüksiyon yok. "NO FIXES WITHOUT ROOT CAUSE" kuralı gereği spekülatif bir düzeltme
+YAPILMADI. Madde açık bırakıldı (zarasız, CI zaten seri) — yeniden CI'da gerçek bir
+başarısızlık görülürse GitHub Actions'ın kendi ortamında (yerel Docker'da değil) tekrar
+araştırılmalı.
+
 ### Adım 2 — §1.3 KRİTİK bulgu: User tablosu hiç doldurulmuyordu
 
 Kullanıcı "user tablosuna geçelim" dedi (2026-09-14). Bounded brainstorming + TDD +
