@@ -996,6 +996,40 @@ olsa literal eşleşme yerine wildcard gibi davranırdı. Düzeltildi (`\\`-esca
 gerçek-DB e2e testiyle doğrulandı (`venues-search-query.e2e-spec.ts`). **Bu değişiklik gerçek
 çapraz-model review görmedi — Codex kotası döndüğünde tekrar gözden geçirilmesi önerilir.**
 
+### Adım 6 — Codex kotası dönene kadar: kalan güvenli/mekanik maddeler
+
+2026-09-25, aynı gün, kullanıcı "kota yenilenene kadar yapılabilecek her şeyi yap" dedi. Kalan
+REVIEW-PLAN.md maddeleri tek tek elden geçirildi: çoğu zaten stale (fark edilmeden önceki
+oturumlarda çözülmüş — CSV injection, audit log, rate-limit, OG meta, tasarım tokenı, hepsi
+doğrulanarak stale bulundu). Tarayıcı/hesap gerektirmeyen, gerçekten açık olanlar kapatıldı:
+
+- **JSON-LD structured data** (`61f857f` sonrası, `6536858`) — `mekan/[slug]` sayfasına schema.org
+  `Restaurant` yapısal verisi eklendi (`src/lib/venue-json-ld.ts`). XSS-güvenli: `toSafeJsonLdString`
+  `<` karakterini kaçırıyor (JSON-LD-in-React'ın bilinen `</script>` breakout riski).
+- **Twitter card meta** (`a2bd244`) — `mekan/[slug]` (fotoğraf varsa `summary_large_image`) ve
+  `[district]` (`summary`) sayfalarına eklendi.
+- **ReportForm maxLength + venue-detail lazy loading** (`d876c5e`) — web'in `ReportForm`'unda
+  backend şemasıyla eşleşen `maxLength=500` yoktu; `venue-detail.tsx`'in foto galerisinde
+  `loading="lazy"` eksikti (venue-card'da vardı).
+- **Admin sign-out butonunda focus-visible yoktu** (`6278026`) — hem paylaşılan
+  `(protected)/layout.tsx` hem `erisim-yok/page.tsx` (bugün stillendirilirken kaçmış) düzeltildi.
+
+**Kasıtlı olarak yapılmadı (tarayıcı doğrulaması veya tasarım/hesap gerektiriyor):**
+- **CSP header** (web+admin) — kod içinde zaten belgelenmiş bilinçli erteleme; bir CSP'yi gerçek
+  tarayıcıda test etmeden şart koşmak (Leaflet/Supabase allow-list'i kırma riski) bu ortamda
+  yapılamaz.
+- **Maskable PWA icon** — mevcut ikonu `purpose:"maskable"` ile işaretlemek, safe-zone padding'i
+  olmayan bir asset'i OS'un maske (dairesel/squircle) kırpmasına sokar — görsel doğrulama
+  gerektirir.
+- **Root layout OG image** (site geneli paylaşım önizlemesi) — marka assets'i (1200×630 görsel)
+  gerektirir, tasarım kararı.
+- **Manuel mekan düzenleme UI'ı, Gurme Puanı, semantic search, mod/durum bazlı arama** — hepsi ya
+  Faz 2 kapsamında ya da ayrı bir brainstorming/plan gerektiren büyüklükte özellik, bu adımın
+  "güvenli/mekanik düzeltme" kapsamının dışında.
+
+**Tüm bu değişiklikler self-review ile geçti (Codex kotası nedeniyle çapraz-model DEĞİL) —
+kota döndüğünde toplu bir cross-model-review önerilir.**
+
 ---
 
 *(Buradan sonrası: kullanıcının önceliklendirme kararına göre aksiyon planı — ayrı bir konuşma/plan
