@@ -117,6 +117,13 @@ describe("VenueDetail — address, single-marker map, photo grid (net-new sectio
     expect(screen.getByText(/henüz fotoğraf eklenmedi/i)).toBeInTheDocument();
   });
 
+  // 2026-09-25 audit finding: no lazy loading on the photo gallery's <img> elements.
+  it("lazy-loads every photo in the gallery", () => {
+    render(<VenueDetail venue={baseVenue} />);
+    const images = screen.getAllByRole("img", { name: new RegExp(baseVenue.name) });
+    for (const img of images) expect(img).toHaveAttribute("loading", "lazy");
+  });
+
   it("still renders the Google rating block when googleRating is a real 0 (not just null/undefined)", () => {
     // `googleRating` is `z.number().min(0).max(5).nullable()` — 0 is a valid, real rating,
     // distinct from `null` ("no rating yet"). A truthiness check (`venue.googleRating && ...`)

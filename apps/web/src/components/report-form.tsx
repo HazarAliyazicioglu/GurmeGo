@@ -46,6 +46,7 @@ export function ReportForm({ venueId }: { venueId: string }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             minLength={5}
+            maxLength={500}
             required
             rows={3}
             className="mt-2 w-full rounded-2xl border border-ink/15 bg-white px-3.5 py-2.5 text-sm font-medium text-ink placeholder:text-ink/35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta"

@@ -129,6 +129,7 @@ export function VenueDetail({ venue }: { venue: VenueDetailType }) {
                     key={`${photo}-${index}`}
                     src={photo}
                     alt={`${venue.name} fotoğrafı ${index + 1}`}
+                    loading="lazy"
                     className="aspect-square w-full rounded-xl object-cover"
                   />
                 ))}
