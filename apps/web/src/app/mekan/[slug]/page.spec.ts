@@ -88,8 +88,28 @@ describe("venue detail page", () => {
 
     expect(getVenueBySlug).toHaveBeenCalledWith("test-cafe");
     expect(notFound).not.toHaveBeenCalled();
-    expect(result.type).toBeDefined();
-    expect(result.props.venue).toEqual(venue);
+    // The page now returns a fragment (<script type="application/ld+json"> + <VenueDetail>) --
+    // the VenueDetail element is the fragment's second child.
+    const children = result.props.children as unknown[];
+    const venueDetailElement = children[1] as { props: { venue: unknown } };
+    expect(venueDetailElement.props.venue).toEqual(venue);
+  });
+});
+
+// 2026-09-25 audit finding: no JSON-LD structured data anywhere -- Google rich results (star
+// rating, price, address) never render for a venue link.
+describe("venue detail page JSON-LD", () => {
+  it("renders a script[type=application/ld+json] with the venue's structured data", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue(venue as never);
+
+    const result = await VenueDetailPage({ params: Promise.resolve({ slug: "test-cafe" }) });
+    const children = result.props.children as unknown[];
+    const scriptElement = children[0] as { type: string; props: { type: string; dangerouslySetInnerHTML: { __html: string } } };
+
+    expect(scriptElement.type).toBe("script");
+    expect(scriptElement.props.type).toBe("application/ld+json");
+    const parsed = JSON.parse(scriptElement.props.dangerouslySetInnerHTML.__html);
+    expect(parsed).toMatchObject({ "@context": "https://schema.org", "@type": "Restaurant", name: "Test Cafe" });
   });
 });
 

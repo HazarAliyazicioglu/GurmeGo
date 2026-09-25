@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { VenueDetail } from "@/components/venue-detail";
 import { SITE_URL } from "@/lib/site";
 import { districtLocative } from "@/lib/district-locative";
+import { buildVenueJsonLd, toSafeJsonLdString } from "@/lib/venue-json-ld";
 import type { Metadata } from "next";
 
 export const revalidate = 3600; // ISR — pilot scale (30-45 venues), hourly revalidation is plenty
@@ -66,5 +67,12 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
     }
   }
   if (!venue) notFound();
-  return <VenueDetail venue={venue} />;
+  const jsonLd = buildVenueJsonLd(venue, `${SITE_URL}/mekan/${venue.slug}`);
+  return (
+    <>
+      {/* Our own JSON.stringify output, `<` escaped via toSafeJsonLdString -- not raw user HTML. */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toSafeJsonLdString(jsonLd) }} />
+      <VenueDetail venue={venue} />
+    </>
+  );
 }
