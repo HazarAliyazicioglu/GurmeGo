@@ -978,9 +978,23 @@ işaretli bulgular kod tabanıyla tek tek karşılaştırıldı.
 **Hâlâ açık, bu adımda ele alınmadı (kapsam/boyut gerekçesiyle ayrı işe bırakıldı):**
 - **CSP eksikliği** (web+admin `next.config.js`) — kod içinde bilinçli erteleme yorumu var
   (Leaflet/Supabase için allow-list gerektiriyor), orta öncelik/orta boyut
-- **Web'de serbest metin arama yok** — `venue-filters.tsx`'te arama input'u/parametresi hiç yok,
-  orta-yüksek öncelik (ürün deneyimi açısından), orta-büyük boyut — ayrı bir plan/brainstorming
-  gerektirir, bu adımın "küçük düzeltme" kapsamının dışında bırakıldı
+
+### Adım 5 — §2.2/§5.1 bulgusu: web'de serbest metin arama yoktu
+
+`61f857f` — bounded brainstorming (kullanıcı "soru sormana gerek yok" dedi) + TDD. `packages/shared`
+`VenueListQuerySchema`'ya `q` (trim, min 2, max 100) eklendi; `VenuesRepository.searchPublished()`
+`q` varsa `name`/`cuisineType`/`editorialNote` üzerinde ILIKE koşulu ekliyor (repository katmanında
+kalıyor, servis/controller generic pass-through); web'de 300ms debounce'lu arama input'u eklendi.
+Bilinçli kapsam dışı: semantic/pgvector arama (Faz 2), aksan-duyarsız arama (pg_trgm/unaccent, MVP
+ölçeğinde gerekmiyor).
+
+**Review notu:** Codex bu diff'in cross-model-review'ında kota sınırına takıldı (28 Eylül'e kadar
+sıfırlanmıyor), yapılandırılmış bir bulgu raporu üretemedi. Kullanıcı onayıyla kendim review ettim
+(çapraz-model DEĞİL, kendi kör noktalarımı taşıyor) — bir gerçek bulgu buldu: ILIKE terimi
+`%`/`_` karakterlerini kaçırmıyordu (Postgres LIKE wildcard'ları), arama metninde bu karakterler
+olsa literal eşleşme yerine wildcard gibi davranırdı. Düzeltildi (`\\`-escape), hem unit hem
+gerçek-DB e2e testiyle doğrulandı (`venues-search-query.e2e-spec.ts`). **Bu değişiklik gerçek
+çapraz-model review görmedi — Codex kotası döndüğünde tekrar gözden geçirilmesi önerilir.**
 
 ---
 
