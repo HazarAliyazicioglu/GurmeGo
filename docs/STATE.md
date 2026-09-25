@@ -1,4 +1,4 @@
-# Durum — 2026-09-24 (gün sonu)
+# Durum — 2026-09-25
 
 ## Veri sınırı
 Codex: izinli, GLM: izinli (kişisel proje). Kaynak: 2026-09-08.
@@ -10,21 +10,15 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 **Yetki (2026-09-22/23, pekiştirildi):** A-Z yetki verildi, kapanış sorusu bile sormadan sıradaki işe geç. Yalnız gerçek Supabase/production erişimi gerektiren geri dönüşsüz adımlarda durulur.
 
 ## Şu an ne yapıyoruz
-**Proje-geneli smoke test denetimi + REVIEW-PLAN.md'deki eski bulguların güncel kod üzerinde doğrulanması (2026-09-24).** Docker+gerçek Postgres/PostGIS ile tam denetim yapıldı (install→lint→typecheck→build→test→smoke-api→audit→mimari invariant taraması). Commit'lenen 5 fix:
-- `62a3086` csv-parse güvenlik yaması (GHSA-8cw4-87c7-c6xx)
-- `024896e` mobile/web/admin test flake fix'i (turbo paralellik → root script'te sıralı `--filter` zinciri; ilk deneme `dependsOn` kullanmıştı, cross-model-review MAJOR bulup düzeltti)
-- `034c3bb`/`1a3968d` dokümantasyon + e2e paralellik-güvenliği araştırması (hipotez test edildi, doğrulanmadı, spekülatif fix yapılmadı)
-- `ccca17f` **web+mobile'da eksik sign-out UI** (§4.1 KRİTİK — signOut() fonksiyonu vardı, hiçbir ekran çağırmıyordu), TDD + cross-model-review (3 MINOR, hepsi düzeltildi)
-- `6adcd10` **web+admin'de eksik güvenlik header'ları** (§5.2 sistemik bulgu), cross-model-review TEMİZ
-
-**YARIDA KALAN, COMMIT'LENMEMİŞ (disk'te hazır, çalışma dizininde):**
-`apps/web/src/app/{error,not-found}.tsx` + spec'leri, `apps/admin/src/app/{error,not-found}.tsx` + spec'leri (§5.2/§3.1 "happy path only, error.tsx/not-found.tsx hiç yok" bulgusu). **Test/build/typecheck/lint hepsi yeşil, doğrulandı** — tek eksik cross-model-review. Codex review'ı 3 kez arka planda sistem bellek baskısı yüzünden `killed` oldu (sistemde 15.7GB'ın sadece 2.5GB'ı boştu, Firefox 10+ süreç ~4-5GB tüketiyordu) — kullanıcı "yarın gereksiz RAM yükü olmadan deneriz" dedi, bilerek durduruldu.
+**REVIEW-PLAN.md temizliği + kalan bulguların kapatılması (2026-09-25).** İki commit:
+- `7f3c003` — web+admin `error.tsx`/`not-found.tsx` (dünden yarım kalmış, cross-model-review yapıldı: 1 MAJOR reddedildi — Next.js `reset()` zaten Server Component segmentini yeniden fetch ediyor, "sonuçsuz kalır" iddiası dokümantasyona aykırı)
+- `fb460e2` — geniş bir fork denetimiyle REVIEW-PLAN.md'nin güncel olmadığı görüldü (§2.1 web cache revalidate, §4.1 sign-out, §4.5 mobile Error Boundary, §4.2 mobile pagination fark edilmeden zaten çözülmüştü). **Artık 6/6 KRİTİK bulgu çözülmüş durumda.** Ayrıca gerçekten açık olan küçük maddeler kapatıldı: mobile AuthScreen double-submit guard, TabNavigator tabBarIcon (geçici glyph), ReportForm client validasyonu (backend şemasını reuse ediyor), admin erisim-yok sayfası stili, web manifest.json theme_color senkronu. Cross-model-review: 0 BLOCKER/0 MAJOR/2 MINOR, ikisi de düzeltildi.
 
 ## Sıradaki adım
-**Yarın ilk iş:** bellek uygunken `codex exec` ile yukarıdaki error/not-found diff'ini review'a gönder (prompt hazır, önceki mesajlarda var — diff scratchpad'de olmayabilir, `git diff HEAD -- apps/web/src/app/error.tsx apps/web/src/app/not-found.tsx apps/web/src/app/error.spec.tsx apps/web/src/app/not-found.spec.tsx apps/admin/src/app/error.tsx apps/admin/src/app/not-found.tsx apps/admin/src/app/error.spec.tsx apps/admin/src/app/not-found.spec.tsx` ile yeniden üret). Review TEMİZ/DÜZELTİLEBİLİR çıkarsa commit'le. Sonra REVIEW-PLAN.md §2.6/§3.2'deki kalan düşük öncelikli bulgulara (admin `erişim-yok` sayfası stilsiz, CSP eksikliği — ayrı, tarayıcı doğrulaması gerektiren iş) bakılabilir. Agent-yapılabilir gerçek blocker yok, kullanıcı tarafı: Supabase/Railway/Vercel/domain.
+**Web'de serbest metin arama eksikliği** (`venue-filters.tsx`'te arama input'u/parametresi hiç yok) — orta-büyük boyutlu, gerçek bir ürün deneyimi eksikliği, ayrı bir brainstorming/plan gerektirir (backend arama desteği var mı önce kontrol edilmeli). Bunun dışında CSP eksikliği (web+admin `next.config.js`, bilinçli ertelenmiş, Leaflet/Supabase allow-list gerektiriyor) orta öncelikli bekliyor. Agent-yapılabilir gerçek blocker yok, kullanıcı tarafı: Supabase/Railway/Vercel/domain.
 
 ## Bloke olanlar
-- Yok (agent tarafı, geçici bellek durumu hariç). Kullanıcıya ait: gerçek Supabase/Railway/Vercel hesapları + domain.
+- Yok (agent tarafı). Kullanıcıya ait: gerçek Supabase/Railway/Vercel hesapları + domain. Mobile crash reporting SDK'sı (Sentry) da bir hesap gerektirdiği için Faz 2'ye bilinçli ertelendi (`ErrorBoundary.tsx` içinde belgeli).
 
 ## Yakın kararlar
 - ADR 006: DB-trigger'lı append-only audit log → docs/adr/006-audit-log-append-only-table.md
@@ -34,10 +28,11 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 - Tam menü/semantic search (MVP'de): Faz 2. KOŞULLU.
 - Review/red-team'i tek turda bitirmeyi ummak · CI "yazıldı=çalışıyor" varsayımı · Codex çıktısını görmeden "çalışıyor" saymak: ELENDİ, KALICI.
 - Majör bağımlılık yükseltmesini "testler yeşil" ile kapatmak: ELENDİ, KALICI.
-- `turbo.json`'da paket-özel `dependsOn` ile test task'larını zincirlemek: ELENDİ, KALICI — izole `--filter` çağrılarını kırıyor, sıralama root script'te yapılmalı.
-- Global turbo `--concurrency=2` ile test flake'ini çözmeye çalışmak: ELENDİ, KALICI — `apps/api` e2e'lerinde 5 yeni başarısızlık açtı.
-- Tek bir testin timeout'unu artırarak CPU-çekişmesi flake'ini "çözmek": ELENDİ, KALICI — kök neden çözülmediği için tekrarladı.
-- Bellek baskısı altında arka plan `codex exec` komutunu ısrarla tekrar tekrar denemek: ELENDİ, KALICI — sistem otomatik `killed` ediyor, kullanıcı belleği boşaltana kadar beklemek gerekiyor, üç deneme yeterince kanıt.
+- `turbo.json`'da paket-özel `dependsOn` ile test task'larını zincirlemek: ELENDİ, KALICI.
+- Global turbo `--concurrency=2` ile test flake'ini çözmeye çalışmak: ELENDİ, KALICI.
+- Bellek baskısı altında arka plan `codex exec` komutunu ısrarla tekrar tekrar denemek: ELENDİ, KALICI — sistem otomatik `killed` ediyor; ama bellek biraz boşaltılınca (2.4GB→5.4GB) `codex exec` başarıyla çalıştı, sorun tamamen çözülemez değilmiş.
+- React Native testing-library'de `fireEvent.press`'i art arda `await`'siz çağırmak "overlapping act() calls" uyarısı üretiyor — testleri hâlâ geçiyor (kozmetik), tek bir `act(async () => {...})` bloğuna sarmak kısmen azaltıyor ama tam gidermiyor. KOŞULLU — RTL sürümü değişirse tekrar bakılabilir.
+- REVIEW-PLAN.md'deki "UYGULANMADI" etiketleri zamanla stale kalabiliyor (kod ilerlerken doküman güncellenmemiş) — büyük bir denetim/plan dokümanına dönmeden önce önce mevcut kodla çapraz kontrol et, doğrudan listeye güvenme. KALICI ders.
 - pino-http'de sadece bilinen alanı redact etmek: ELENDİ, KALICI.
-- Test dosyasında `import Error from "./error"` gibi global tip/sınıf adını gölgeleyen bir isimle component import etmek: ELENDİ, KALICI — `new Error(...)` component'i çağırmaya çalışıp tsc hatası veriyor, `ErrorPage` gibi çakışmayan bir ad kullan.
-- Prisma7 `$connect()` lazy güveni · Worktree'de apps/api typecheck farklı sonuç verebilir (`--force` ile bypass) · Workspace'te birden çok `@types/react` sürümü · zod v4 `.partial()` default enjeksiyonu · JS `/i` Türkçe "İ" eşleşmiyor: hepsi ELENDİ, KALICI.
+- Test dosyasında `import Error from "./error"` gibi global tip/sınıf adını gölgeleyen bir isimle component import etmek: ELENDİ, KALICI.
+- Prisma7 `$connect()` lazy güveni · Worktree'de apps/api typecheck farklı sonuç verebilir · Workspace'te birden çok `@types/react` sürümü · zod v4 `.partial()` default enjeksiyonu · JS `/i` Türkçe "İ" eşleşmiyor: hepsi ELENDİ, KALICI.
