@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import AuthScreen from "./AuthScreen";
 import { useAuth } from "../lib/auth-context";
 
@@ -104,5 +104,33 @@ describe("AuthScreen", () => {
     await fireEvent.press(screen.getByText("Kayıt ol"));
 
     await waitFor(() => expect(signUp).toHaveBeenCalledWith("new@example.com", "yenisifre123"));
+  });
+
+  // Denetim raporu (2026-09-25) "double-submit guard yok": without an in-flight guard, a second
+  // tap before the first request resolves fires signIn twice (e.g. duplicate sessions/rate-limit
+  // hits on a slow connection where the user taps again thinking the first tap didn't register).
+  // Kept last in the file: it deliberately leaves a press in flight while a second one fires.
+  it("ignores a second submit press while the first sign-in request is still in flight", async () => {
+    let resolveSignIn!: (value: { error: string | null }) => void;
+    const signIn = jest.fn().mockReturnValue(new Promise((resolve) => (resolveSignIn = resolve)));
+    (useAuth as jest.Mock).mockReturnValue({ signIn, signUp: jest.fn() });
+
+    await render(<AuthScreen />);
+    await fireEvent.changeText(screen.getByPlaceholderText("E-posta"), "test@example.com");
+    await fireEvent.changeText(screen.getByPlaceholderText("Şifre"), "sifre123");
+    // Both presses dispatch inside ONE act() scope instead of two separate act()-wrapped
+    // `fireEvent.press` calls -- calling fireEvent.press twice without awaiting between them
+    // opens two overlapping act() scopes (React warns "overlapping act() calls"), since each
+    // call's internal act() is still pending when the next one starts. Nesting inside a single
+    // outer act() avoids that while still landing the second press before the first's
+    // `signIn` promise resolves.
+    await act(async () => {
+      fireEvent.press(screen.getByText("Giriş yap"));
+      fireEvent.press(screen.getByText("Giriş yap"));
+    });
+
+    resolveSignIn({ error: null });
+    await waitFor(() => expect(mockGoBack).toHaveBeenCalled());
+    expect(signIn).toHaveBeenCalledTimes(1);
   });
 });

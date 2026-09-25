@@ -16,4 +16,16 @@ describe("TabNavigator", () => {
     // which it does regardless of which tab is focused.
     expect(screen.queryByText("Favorilerim")).toBeNull();
   });
+
+  // Denetim raporu (2026-09-25) "tabBarIcon yok": the tab bar had no icon definitions, showing
+  // only text labels -- no visual affordance for which tab is which at a glance.
+  it("renders an icon for each tab", async () => {
+    await render(
+      <NavigationContainer>
+        <TabNavigator />
+      </NavigationContainer>,
+    );
+    expect(screen.getAllByTestId("tab-icon-Discovery").length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId("tab-icon-Favoriler").length).toBeGreaterThan(0);
+  });
 });

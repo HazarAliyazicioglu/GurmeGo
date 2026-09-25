@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../lib/auth-context";
@@ -15,10 +15,29 @@ export default function AuthScreen() {
   // confirmation first) -- returning to the previous screen here would look successful while the
   // user still can't actually do whatever they came here to do.
   const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
+  // Denetim raporu (2026-09-25) "double-submit guard yok": a second tap before the first
+  // request resolves fired signIn/signUp twice (e.g. a slow connection where the user taps again
+  // thinking the first tap didn't register). A ref guards the check synchronously -- two presses
+  // fired back-to-back both run before React commits the `submitting` state update, so a state
+  // read here would still see the stale `false` on the second call.
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     setError(null);
     setConfirmationMessage(null);
+    try {
+      await submit();
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  async function submit() {
     if (mode === "signIn") {
       const result = await signIn(email, password);
       if (result.error) setError(result.error);
@@ -38,7 +57,7 @@ export default function AuthScreen() {
       <TextInput value={password} onChangeText={setPassword} placeholder="Şifre" secureTextEntry />
       {error && <Text>{error}</Text>}
       {confirmationMessage && <Text>{confirmationMessage}</Text>}
-      <Pressable onPress={handleSubmit}>
+      <Pressable onPress={handleSubmit} disabled={submitting}>
         <Text>{mode === "signIn" ? "Giriş yap" : "Kayıt ol"}</Text>
       </Pressable>
       <Pressable onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}>

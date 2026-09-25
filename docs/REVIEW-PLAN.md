@@ -617,18 +617,27 @@ geliştirme" aşamasına (kod yazma) geçilebilir.
 1. **✅ ÇÖZÜLDÜ (Adım 2, 2026-09-14, `fd4a44c`) — §1.3 — `User` tablosu hiç doldurulmuyor.**
    Supabase Auth ile senkron yok. Favoriler VE gelecekteki her türlü kullanıcı katkısı bu temel
    altyapıya bağımlı. Prod'da favoriler 500 verir. Fix: "Aksiyon Günlüğü — Adım 2" bölümü.
-2. **§2.1 — Web ana sayfası (`/[district]`) fetch'leri süresiz cache'leniyor.** Manuel revalidate
-   yok. Yeni onaylanan/arşivlenen mekanlar redeploy'a kadar görünmüyor.
+2. **✅ ÇÖZÜLDÜ (tarih/commit teyit edilemedi, 2026-09-25'te fark edilmeden çözülmüş bulundu) —
+   §2.1 — Web ana sayfası (`/[district]`) fetch'leri süresiz cache'leniyordu.** `apps/web/src/lib/api.ts`
+   içinde `DISTRICTS_REVALIDATE_S=300` / `VENUE_LIST_REVALIDATE_S=60` sabitleri eklenmiş,
+   `getDistricts()`/`getVenues()` artık `next.revalidate` ile TTL'li cache kullanıyor (doğrulandı,
+   kod okunarak).
 3. **✅ ÇÖZÜLDÜ (Adım 3, 2026-09-14, `f1ac2fc`) — §3.3 — CSV export'ta Formula/CSV Injection
    açığı.** `admin-reports.service.ts`'in `exportVenues()`'ı sanitizasyonsuzdu — kötü niyetli bir
    mekan adı Excel'de formül olarak çalışabilirdi. Fix: "Aksiyon Günlüğü — Adım 3" bölümü.
-4. **§4.1 — Mobile'da hiç sign-out yolu yok.** Fonksiyon var, hiçbir ekran çağırmıyor.
-5. **§4.5 — Mobile'da hiç Error Boundary/crash reporting yok.** Beklenmedik bir hata tüm
-   uygulamayı çökertir, kimse haberdar olmaz.
-6. **§5.5 — CI hiç çalışmamış + tetiklense bile kırmızı çıkar.** Branch uyuşmazlığı (`main` yok)
-   + GitHub default branch'i stray worktree + 3 e2e testinin seed fixture'ı yok. Yazılan hiçbir kod
-   şu ana kadar otomatik bir CI koşumundan geçmemiş — bu, diğer 5 kritik bulgunun "CI yakalardı"
-   varsayımını da geçersiz kılıyor.
+4. **✅ ÇÖZÜLDÜ (`ccca17f`, 2026-09-24) — §4.1 — Mobile'da hiç sign-out yolu yoktu.** Fonksiyon
+   vardı, hiçbir ekran çağırmıyordu — reachable sign-out UI eklendi, cross-model-review'dan geçti.
+5. **✅ ÇÖZÜLDÜ (`b85220b`, PR #32, 2026-09-23) — §4.5 — Mobile'da Error Boundary yoktu.**
+   `apps/mobile/src/components/ErrorBoundary.tsx` root-level olarak `App.tsx`'e eklendi, testli.
+   Crash reporting SDK'sı (Sentry) bilinçli olarak Faz 2'ye ertelendi (kod içi yorumla belgelendi) —
+   şu an console.error'a düşüyor, sessizce yutulmuyor. Bu erteleme "sorun" değil, kayıtlı bir karar.
+6. **✅ ÇÖZÜLDÜ (Adım 1, 2026-09-14) — §5.5 — CI hiç çalışmamıştı + tetiklense bile kırmızı
+   çıkardı.** Branch uyuşmazlığı + seed fixture eksikleri "Aksiyon Günlüğü — Adım 1" bölümünde
+   düzeltildi, CI o tarihten beri gerçek koşumlardan geçiyor.
+
+**Sonuç: 6/6 KRİTİK bulgu çözüldü.** Kalan iş "Önemli/orta öncelik" ve "Düşük öncelik" seviyesinde
+(bkz. §3.2 admin erişim-yok stilsizliği, CSP eksikliği, mobile pagination, tasarım tokenı sistemi
+yokluğu — §5.2/§5.4).
 
 ### 5.2 — Tekrar eden temalar (tek seferlik değil, sistemik)
 
@@ -936,6 +945,42 @@ export'a dokunulmadı (spreadsheet'te açılmıyor, risk yok). TDD ile yazıldı
   — eklendi. Bir yorum bloğu yanlışlıkla iki kez tekrarlanmıştı — düzeltildi.
 
 **Sonuç:** `f1ac2fc` — 43/43 suite, 248/248 test lokalde ve CI'da yeşil.
+
+### Adım 4 — Geniş denetim: hangi bulgular fark edilmeden zaten çözülmüş, hangileri gerçekten açık
+
+2026-09-25: `docs/REVIEW-PLAN.md`'nin birçok bulgusunun (§2.1 web cache revalidate, §4.1 mobile
+sign-out, §4.5 mobile Error Boundary, §4.2 mobile pagination) aralarda yapılan işle zaten
+düzeltilmiş olduğu ama dokümanın güncellenmediği fark edildi. Bir fork ile tüm §1-§5.5 arası açık
+işaretli bulgular kod tabanıyla tek tek karşılaştırıldı.
+
+**Fark edilmeden zaten çözülmüş (bu adımda doğrulandı, ek iş gerekmedi):**
+- §1.6 backend güvenlik header/compress/logging — `@fastify/helmet`, `@fastify/compress`, pino
+  (`apps/api/src/main.ts`)
+- §1.1/§1.2 favorites + admin yazma uçlarında rate-limit — `@UseGuards(RateLimitGuard)`
+- §1.5 XFF header sahteciliği — `rate-limit.guard.ts` artık sadece `req.ip` kullanıyor, regresyon
+  testi var
+- §3.3 admin audit log — `apps/api/src/audit/audit.service.ts` + migration
+- §2.2 web serif font, §2.3 tasarım tokenı (180 hardcode hex → 2), §2.3/§2.5 OG/Twitter meta,
+  §2.5 SEO (`robots.ts`/`sitemap.ts`)
+- §4.1 mobile auto-navigate-back (`AuthScreen.tsx`)
+
+**Gerçekten açık bulunan ve bu adımda kapatılan (TDD + cross-model-review, Codex: 0 BLOCKER/
+0 MAJOR/2 MINOR, ikisi de düzeltildi — bkz. commit mesajı):**
+- Mobile `AuthScreen` double-submit guard yoktu → `useRef` tabanlı senkron kilit eklendi
+- Mobile `TabNavigator`'da `tabBarIcon` yoktu → geçici text-glyph icon eklendi (gerçek icon seti
+  tasarım tokenı geçişiyle birlikte gelecek)
+- Mobile `ReportForm`'da client validasyon yoktu → backend'in kendi `CreateReportSchema`'sı
+  (`packages/shared`) client'ta da `safeParse` ile kullanıldı
+- Admin `erisim-yok/page.tsx` tamamen stilsizdi → Tailwind ile stillendirildi (mantık değişmedi)
+- Web `manifest.json`'ın `theme_color`/`background_color`'ı eski koyu tondaydı (`#1a1611`),
+  `layout.tsx`'in `PRIMITIVE_COLORS.cream`'i (`#f4f0e7`) ile eşleştirildi
+
+**Hâlâ açık, bu adımda ele alınmadı (kapsam/boyut gerekçesiyle ayrı işe bırakıldı):**
+- **CSP eksikliği** (web+admin `next.config.js`) — kod içinde bilinçli erteleme yorumu var
+  (Leaflet/Supabase için allow-list gerektiriyor), orta öncelik/orta boyut
+- **Web'de serbest metin arama yok** — `venue-filters.tsx`'te arama input'u/parametresi hiç yok,
+  orta-yüksek öncelik (ürün deneyimi açısından), orta-büyük boyut — ayrı bir plan/brainstorming
+  gerektirir, bu adımın "küçük düzeltme" kapsamının dışında bırakıldı
 
 ---
 
