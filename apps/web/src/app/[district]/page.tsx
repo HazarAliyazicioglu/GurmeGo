@@ -27,6 +27,9 @@ export async function generateMetadata({ params }: { params: Promise<{ district:
     description,
     alternates: { canonical: url },
     openGraph: { title, description, url, siteName: "GurmeGo", locale: "tr_TR", type: "website" },
+    // 2026-09-25 audit finding: no `twitter` metadata anywhere. No venue photo at the district
+    // level, so a plain "summary" card (title+description), not summary_large_image.
+    twitter: { card: "summary", title, description },
   };
 }
 

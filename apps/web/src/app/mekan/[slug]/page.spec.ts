@@ -162,6 +162,27 @@ describe("venue detail page metadata", () => {
     expect(meta.openGraph?.images).toBeUndefined();
   });
 
+  // 2026-09-25 audit finding: no `twitter` metadata anywhere.
+  it("sets a summary_large_image twitter card when the venue has a photo", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue(
+      { ...venue, photos: ["https://cdn.example.com/p1.jpg"] } as never,
+    );
+
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
+
+    expect(meta.twitter).toEqual({
+      card: "summary_large_image", title: meta.title, description: meta.description, images: ["https://cdn.example.com/p1.jpg"],
+    });
+  });
+
+  it("falls back to a plain summary twitter card when the venue has no photo", async () => {
+    vi.mocked(getVenueBySlug).mockResolvedValue({ ...venue, photos: [] } as never);
+
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "test-cafe" }) });
+
+    expect(meta.twitter).toEqual({ card: "summary", title: meta.title, description: meta.description });
+  });
+
   it("returns empty metadata when the venue can't be found, letting Next.js inherit the root layout's generic title/description instead of overriding with something wrong", async () => {
     vi.mocked(getVenueBySlug).mockResolvedValue(null as never);
 

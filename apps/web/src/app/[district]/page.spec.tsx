@@ -115,4 +115,16 @@ describe("DiscoveryPage metadata", () => {
 
     expect(meta).toEqual({});
   });
+
+  // 2026-09-25 audit finding: no `twitter` metadata anywhere -- Twitter/X falls back to reading
+  // OG tags in most cases, but an explicit card type is what actually guarantees the preview.
+  it("sets a twitter card (no venue photo on a district page, so a plain summary, not summary_large_image)", async () => {
+    vi.mocked(getDistricts).mockResolvedValue([
+      { id: "d1", slug: "kadikoy", name: "Kadıköy" },
+    ] as never);
+
+    const meta = await generateMetadata({ params: Promise.resolve({ district: "kadikoy" }) });
+
+    expect(meta.twitter).toEqual({ card: "summary", title: meta.title, description: meta.description });
+  });
 });

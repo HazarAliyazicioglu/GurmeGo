@@ -47,6 +47,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       type: "website",
       ...(venue.photos[0] ? { images: [venue.photos[0]] } : {}),
     },
+    // 2026-09-25 audit finding: no `twitter` metadata anywhere. Twitter/X falls back to OG tags
+    // in most cases, but an explicit card type is what actually guarantees the large-image
+    // preview instead of a small thumbnail (or no preview at all).
+    twitter: venue.photos[0]
+      ? { card: "summary_large_image", title, description, images: [venue.photos[0]] }
+      : { card: "summary", title, description },
   };
 }
 
