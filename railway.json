@@ -1,6 +1,9 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "pnpm exec turbo run build --filter=@gurmego/api"
+  },
   "deploy": {
-    "startCommand": "node dist/main.js"
+    "startCommand": "node apps/api/dist/main.js"
   }
 }
