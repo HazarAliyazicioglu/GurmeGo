@@ -77,6 +77,17 @@ describe("ProtectedLayout", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/giris"));
   });
 
+  // 2026-09-25 audit finding: sign-out button had no focus-visible style, every page.
+  it("the sign-out button has a visible focus style", async () => {
+    vi.doMock("@/lib/auth-context", () => ({
+      useAuth: () => ({ user: { id: "u1" }, role: "curator", loading: false, signOut: vi.fn() }),
+    }));
+    const { default: Layout } = await import("./layout");
+    render(<Layout><div>içerik</div></Layout>);
+    const button = await screen.findByRole("button", { name: /çıkış/i });
+    expect(button.className).toMatch(/focus-visible:outline/);
+  });
+
   it("shows a visible error and does NOT redirect when signOut() resolves with an error", async () => {
     // Regression test: before the fix, the button handler was `signOut().then(() => router.push(...))`
     // — it never inspected the resolved `{ error }` value, so a sign-out that resolved with an error

@@ -47,4 +47,15 @@ describe("ErisimYokPage", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/çıkış yapılamadı/i));
     expect(push).not.toHaveBeenCalledWith("/giris");
   });
+
+  // 2026-09-25 audit finding: sign-out button had no focus-visible style, every page.
+  it("the sign-out button has a visible focus style", async () => {
+    vi.doMock("@/lib/auth-context", () => ({
+      useAuth: () => ({ signOut: vi.fn() }),
+    }));
+    const { default: ErisimYokPage } = await import("./page");
+    render(<ErisimYokPage />);
+    const button = await screen.findByRole("button", { name: /çıkış/i });
+    expect(button.className).toMatch(/focus-visible:outline/);
+  });
 });

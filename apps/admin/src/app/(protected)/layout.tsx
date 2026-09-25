@@ -93,7 +93,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
         <button
           type="button"
           onClick={() => void handleSignOut()}
-          className="text-xs font-semibold text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
+          className="rounded text-xs font-semibold text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
         >
           Çıkış yap
         </button>

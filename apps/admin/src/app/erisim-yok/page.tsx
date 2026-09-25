@@ -40,7 +40,7 @@ export default function ErisimYokPage() {
       <button
         type="button"
         onClick={() => void handleSignOut()}
-        className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
       >
         Çıkış yap
       </button>
