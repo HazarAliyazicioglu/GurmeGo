@@ -35,6 +35,13 @@ describe("serializeFilters", () => {
   it("never emits isBoutique=false, even when called directly with isBoutique: false (bypassing the toggle button)", () => {
     expect(serializeFilters({ isBoutique: false })).toEqual({});
   });
+
+  // 2026-09-25 audit finding: web had no free-text search param at all.
+  it("includes q (trimmed) when set, omits it when empty/undefined", () => {
+    expect(serializeFilters({ q: "  kahve  " })).toEqual({ q: "kahve" });
+    expect(serializeFilters({ q: "" })).toEqual({});
+    expect(serializeFilters({})).toEqual({});
+  });
 });
 
 // Plan 4b's OptionalTrueFlag schema rejects `isBoutique=false` with a 400 — the toggle must only
@@ -60,5 +67,38 @@ describe("VenueFilters — openNow toggle", () => {
     rerender(<VenueFilters value={{ openNow: true }} onChange={onChange} coordsAvailable={false} />);
     fireEvent.click(screen.getByTestId("filter-open-now"));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ openNow: undefined }));
+  });
+});
+
+// 2026-09-25 audit finding: web had no free-text search input at all.
+describe("VenueFilters — search input", () => {
+  it("debounces onChange while typing, firing once 300ms after the last keystroke", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    render(<VenueFilters value={{}} onChange={onChange} coordsAvailable={false} />);
+    const input = screen.getByTestId("filter-search");
+
+    fireEvent.change(input, { target: { value: "k" } });
+    vi.advanceTimersByTime(100);
+    fireEvent.change(input, { target: { value: "ka" } });
+    vi.advanceTimersByTime(100);
+    fireEvent.change(input, { target: { value: "kahve" } });
+    expect(onChange).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(300);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ q: "kahve" }));
+    vi.useRealTimers();
+  });
+
+  it("clears the filter (calls onChange immediately, no debounce) when the input is emptied", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    render(<VenueFilters value={{ q: "kahve" }} onChange={onChange} coordsAvailable={false} />);
+    const input = screen.getByTestId("filter-search");
+
+    fireEvent.change(input, { target: { value: "" } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ q: undefined }));
+    vi.useRealTimers();
   });
 });

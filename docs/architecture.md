@@ -145,7 +145,10 @@ Cron: verified_at > N gün ──► kürasyon kuyruğuna "re-verify" görevi (F
 
 **MVP:** yalnızca **yapısal** arama. Kategori, fiyat, ilçe, açık/kapalı, mesafe → doğrudan SQL +
 PostGIS (`ST_DWithin`, `ST_Distance` sıralama). Hedef < 300 ms (NFR-02): district_id + GIST index'ler,
-keyset pagination. Serbest metin arama kutusu yok.
+keyset pagination. **Serbest metin arama (2026-09-25 eklendi):** `q` parametresi
+`name`/`cuisineType`/`editorialNote` üzerinde düz `ILIKE` ile eşleşiyor — bu hâlâ yapısal katmanın
+bir parçası (LLM/embedding yok), aksan-duyarsız değil (pg_trgm/unaccent yok, MVP'nin 3 ilçe
+ölçeğinde gerekmiyor). Bkz. [api-spec.md](api-spec.md).
 
 **Faz 2 (planlı, MVP'de yok):** Semantic katman eklenecek — doğal dil sorgu → LLM ile yapısal filtre
 çıkarımı (FR-AI-01) + pgvector benzerlik (FR-AI-02). Sonuç yapısal filtrelerle AND'lenecek. Eklendiğinde

@@ -51,7 +51,7 @@ Tüm yanıtlarda güvenlik başlıkları (`X-Content-Type-Options`, `X-Frame-Opt
 |---|---|---|---|
 | GET | `/districts?city=istanbul` | — | İlçe listesi (MVP: Kadıköy, Beşiktaş, Beyoğlu) |
 | GET | `/districts/nearest?lat&lng` | — | Konumdan ilçe önerisi (FR-KA-01); koordinat loglanmaz (NFR-04) |
-| GET | `/venues` | — | Keşif listesi. Filtreler: `district_id, category, cuisine, price_range, open_now, is_boutique, lat, lng, radius_m, sort=distance\|newest` (`sort=gourmet_score` **Faz 2**, MVP'de yok) |
+| GET | `/venues` | — | Keşif listesi. Filtreler: `district_id, category, cuisine, price_range, open_now, is_boutique, lat, lng, radius_m, sort=distance\|newest, q` (`sort=gourmet_score` **Faz 2**, MVP'de yok). `q` (2026-09-25, min 2/max 100 karakter): `name`/`cuisineType`/`editorialNote` üzerinde düz `ILIKE` (aksan-duyarsız değil, pg_trgm/unaccent yok — MVP'nin 3 ilçe ölçeğinde gerekmiyor, semantic search **Faz 2**) |
 | GET | `/venues/map?bbox=...` | — | Harita görünümü: bbox içi hafif payload (id, name, location, category) — `gourmet_score` **Faz 2** |
 | GET | `/search?q=...` | — | **Faz 2, MVP'de yok.** Doğal dil arama (FR-AI-01/02). Yanıt: yapısal sonuç + `interpreted_filters` (LLM çıkarımı şeffaf gösterilir). AI hatasında yapısal fallback (FR-AI-03) |
 

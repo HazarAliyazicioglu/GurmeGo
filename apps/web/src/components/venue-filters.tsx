@@ -1,12 +1,18 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 export interface FilterState {
   category?: string;
   priceRange?: string;
   isBoutique?: boolean;
   radiusM?: number;
   openNow?: boolean;
+  q?: string;
 }
+
+// Matches packages/shared's VenueListQuerySchema `q` field (min 2 chars once trimmed).
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface Coords {
   lat: number;
@@ -23,6 +29,8 @@ export function serializeFilters(filters: FilterState, coords?: Coords | null): 
   if (filters.isBoutique === true) out.isBoutique = String(filters.isBoutique);
   if (filters.radiusM !== undefined && coords) out.radiusM = String(filters.radiusM);
   if (filters.openNow) out.openNow = "true";
+  const q = filters.q?.trim();
+  if (q) out.q = q;
   return out;
 }
 
@@ -44,6 +52,26 @@ export function VenueFilters({
     onChange({ ...filters, ...patch });
   }
 
+  // Local, immediate-feedback copy of the search text -- `filters.q` only updates after the
+  // debounce (or instantly on clear), so typing must not wait on it to feel responsive. Synced
+  // back if `filters.q` changes from outside this component (e.g. a filter reset elsewhere).
+  const [searchText, setSearchText] = useState(filters.q ?? "");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => setSearchText(filters.q ?? ""), [filters.q]);
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+  function handleSearchChange(raw: string) {
+    setSearchText(raw);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (raw.trim() === "") {
+      // Clearing the box should drop the filter right away, not after a 300ms wait that would
+      // otherwise leave stale results on screen for a moment.
+      update({ q: undefined });
+      return;
+    }
+    debounceRef.current = setTimeout(() => update({ q: raw }), SEARCH_DEBOUNCE_MS);
+  }
+
   return (
     <div data-testid="venue-filters" className="mt-7 border-y border-ink/10 py-4">
       <div className="mb-3 flex items-center gap-2 px-1">
@@ -53,6 +81,29 @@ export function VenueFilters({
         <span className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-ink/45">Seçkiyi daralt</span>
         <span className="h-px flex-1 bg-ink/10" aria-hidden="true" />
       </div>
+
+      <label className="relative mb-3 block">
+        <span className="sr-only">Mekan, mutfak veya not ara</span>
+        <svg
+          viewBox="0 0 20 20"
+          className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink/35"
+          aria-hidden="true"
+        >
+          <circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <path d="m17 17-4.3-4.3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        <input
+          data-testid="filter-search"
+          type="text"
+          value={searchText}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Mekan, mutfak veya not ara"
+          className={[
+            "min-h-11 w-full rounded-full border border-ink/15 bg-white/45 py-2 pl-11 pr-4 text-sm font-semibold text-ink placeholder:text-ink/35 transition-colors",
+            "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+          ].join(" ")}
+        />
+      </label>
 
       <div className="-mx-1 flex items-start gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <label className="relative shrink-0">

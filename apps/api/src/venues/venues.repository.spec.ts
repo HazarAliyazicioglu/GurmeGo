@@ -83,6 +83,34 @@ describe("VenuesRepository.searchPublished — openNow", () => {
   });
 });
 
+describe("VenuesRepository.searchPublished — q (free-text search)", () => {
+  it("adds an ILIKE condition across name/cuisineType/editorialNote when q is given", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    await new VenuesRepository(prisma).searchPublished({ sort: "newest", limit: 20, q: "kahve" } as any);
+    const call = prisma.$queryRaw.mock.calls[0][0];
+    const sqlText = call.strings.join("");
+    expect(sqlText).toMatch(/ILIKE/);
+    expect(sqlText).toMatch(/name/i);
+    expect(sqlText).toMatch(/cuisineType/i);
+    expect(sqlText).toMatch(/editorialNote/i);
+    expect(call.values).toContain("%kahve%");
+  });
+  it("adds no search condition when q is absent", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    await new VenuesRepository(prisma).searchPublished({ sort: "newest", limit: 20 } as any);
+    expect(prisma.$queryRaw.mock.calls[0][0].strings.join("")).not.toMatch(/ILIKE/);
+  });
+  // Self-review finding (Codex hit its usage quota mid cross-model-review, so this was found in a
+  // non-cross-model pass instead): `%` and `_` are Postgres LIKE wildcards. A search term
+  // containing them (e.g. a venue named "50% İndirim") must match that LITERAL text, not use the
+  // user's own `%`/`_` as an extra wildcard.
+  it("escapes literal % and _ in the search term so they match literally, not as LIKE wildcards", async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) } as any;
+    await new VenuesRepository(prisma).searchPublished({ sort: "newest", limit: 20, q: "50%_off" } as any);
+    expect(prisma.$queryRaw.mock.calls[0][0].values).toContain("%50\\%\\_off%");
+  });
+});
+
 describe("open_now opening-hours format regex (extracted for direct testing)", () => {
   const HOURS_FORMAT = /^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$/;
   it("accepts a valid HH:MM-HH:MM range", () => expect(HOURS_FORMAT.test("09:00-18:00")).toBe(true));

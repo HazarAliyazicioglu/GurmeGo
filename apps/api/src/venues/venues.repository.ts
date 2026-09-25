@@ -197,6 +197,18 @@ export class VenuesRepository {
     if (filters.category) conditions.push(Prisma.sql`v.category = ${filters.category}`);
     if (filters.priceRange) conditions.push(Prisma.sql`v."priceRange" = ${filters.priceRange}::"PriceRange"`);
     if (filters.isBoutique !== undefined) conditions.push(Prisma.sql`v."isBoutique" = ${filters.isBoutique}`);
+    if (filters.q) {
+      // Plain ILIKE, not pg_trgm/unaccent -- MVP's 3-district scope doesn't need a search index
+      // (docs/REVIEW-PLAN.md, 2026-09-25). Known limitation: no accent-folding, so "cay" won't
+      // match "çay". `%`/`_`/`\` are escaped so a term containing them (e.g. a venue literally
+      // named "50% İndirim") matches that literal text instead of using the user's own character
+      // as an extra LIKE wildcard -- Postgres's default LIKE escape character is `\`.
+      const escaped = filters.q.replace(/[\\%_]/g, (c) => `\\${c}`);
+      const term = `%${escaped}%`;
+      conditions.push(
+        Prisma.sql`(v.name ILIKE ${term} OR v."cuisineType" ILIKE ${term} OR v."editorialNote" ILIKE ${term})`,
+      );
+    }
     if (filters.openNow) {
       // Fail-open by design (docs/superpowers/specs/2026-07-26-backend-fixes-design.md, 10
       // plan-red-team rounds): missing/malformed openingHours resolve to `true` (included), not

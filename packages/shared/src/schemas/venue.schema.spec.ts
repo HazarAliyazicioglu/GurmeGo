@@ -57,6 +57,20 @@ describe("VenueListQuerySchema", () => {
     expect(VenueListQuerySchema.safeParse({ openNow: "false" }).success).toBe(false);
   });
   it("isBoutique=false rejects", () => expect(VenueListQuerySchema.safeParse({ isBoutique: "false" }).success).toBe(false));
+
+  // 2026-09-25 audit finding: web had no free-text search param at all.
+  describe("q (free-text search)", () => {
+    it("trims and accepts a valid search term", () => {
+      expect(VenueListQuerySchema.parse({ q: "  kahve  " }).q).toBe("kahve");
+    });
+    it("stays undefined when absent", () => expect(VenueListQuerySchema.parse({}).q).toBeUndefined());
+    it("rejects a term shorter than 2 characters", () => {
+      expect(VenueListQuerySchema.safeParse({ q: "a" }).success).toBe(false);
+    });
+    it("rejects a term longer than 100 characters", () => {
+      expect(VenueListQuerySchema.safeParse({ q: "a".repeat(101) }).success).toBe(false);
+    });
+  });
 });
 
 describe("VenueDetailSchema", () => {

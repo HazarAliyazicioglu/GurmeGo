@@ -47,6 +47,11 @@ export const VenueListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().optional(),
   openNow: OptionalTrueFlag,
+  // 2026-09-25 audit finding: web had no free-text search. Plain ILIKE match against
+  // name/cuisineType/editorialNote (apps/api's VenuesRepository.searchPublished) -- no
+  // accent-folding (pg_trgm/unaccent) at MVP's 3-district scale, tracked as a known limitation
+  // rather than an extra Postgres extension for this size of dataset.
+  q: z.string().trim().min(2).max(100).optional(),
 });
 export type VenueListQuery = z.infer<typeof VenueListQuerySchema>;
 
