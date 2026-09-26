@@ -1,10 +1,36 @@
 "use client";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiHttpError } from "@gurmego/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { importCsv } from "@/lib/api";
 import type { CsvImportResult } from "@gurmego/shared";
+
+// Mirrors packages/shared's CsvVenueImportRowSchema field-by-field -- kept as a plain literal
+// (not derived from the zod schema at runtime) since these are curator-facing Turkish
+// explanations, not validation logic; a schema change that needs a new/renamed column should
+// touch this list too (same "docs next to the code they describe" spirit as this repo's other
+// hand-maintained references).
+const CSV_COLUMNS: Array<{ name: string; required: boolean; hint: string }> = [
+  { name: "name", required: true, hint: "Mekan adı" },
+  { name: "slug", required: true, hint: "URL için benzersiz kısa ad (ör. moda-kahvecisi)" },
+  { name: "districtSlug", required: true, hint: "İlçe slug'ı (ör. kadikoy, besiktas, beyoglu)" },
+  { name: "category", required: true, hint: "cafe, restaurant, bakery, street-food" },
+  { name: "priceRange", required: true, hint: "BUDGET, MODERATE, EXPENSIVE, PREMIUM" },
+  { name: "branchCount", required: true, hint: "Şube sayısı (butik kuralı girdisi)" },
+  { name: "franchiseFlag", required: true, hint: "true veya false" },
+  { name: "lat", required: true, hint: "Enlem (ondalık)" },
+  { name: "lng", required: true, hint: "Boylam (ondalık)" },
+  { name: "openingHours", required: true, hint: 'JSON string, ör. {"mon":"09:00-18:00"}' },
+  { name: "status", required: false, hint: "DRAFT veya PUBLISHED, boşsa DRAFT" },
+  { name: "address", required: false, hint: "Açık adres, en fazla 500 karakter" },
+];
+
+const EXAMPLE_CSV_ROW = [
+  "Moda Kahvecisi", "moda-kahvecisi", "kadikoy", "cafe", "MODERATE", "1", "false",
+  "40.9876", "29.0287", '"{""mon"":""09:00-18:00""}"', "PUBLISHED", "Moda Cd. No:1",
+].join(",");
+const EXAMPLE_CSV = `${CSV_COLUMNS.map((c) => c.name).join(",")}\n${EXAMPLE_CSV_ROW}\n`;
 
 export default function ImportPage() {
   const { session, user, signOut } = useAuth();
@@ -17,6 +43,10 @@ export default function ImportPage() {
   // so a stale upload's delayed 401 can be told apart from one belonging to the still-current
   // session. Updated on every render (not in a `useEffect`) so it's already correct by the time an
   // in-flight request's `.catch()` reads it, however soon after a session change that happens.
+  // A data: URI rather than a Blob object URL -- this content is static and tiny, so there's no
+  // real cost to inlining it, and it avoids `URL.createObjectURL` (unsupported in jsdom, this
+  // page's test environment) plus the cleanup a Blob URL would otherwise need on unmount.
+  const exampleCsvUrl = useMemo(() => `data:text/csv;charset=utf-8,${encodeURIComponent(EXAMPLE_CSV)}`, []);
   const currentTokenRef = useRef(session?.access_token);
   currentTokenRef.current = session?.access_token;
 
@@ -225,6 +255,28 @@ export default function ImportPage() {
               )}
             </button>
           </div>
+        </section>
+
+        <section aria-labelledby="format-heading" className="mt-4 border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+            <h2 id="format-heading" className="text-sm font-bold text-slate-950">CSV sütun formatı</h2>
+            <a
+              href={exampleCsvUrl}
+              download="gurmego-mekan-ornek.csv"
+              className="text-xs font-semibold text-blue-700 hover:underline"
+            >
+              Örnek CSV indir
+            </a>
+          </div>
+          <ul className="divide-y divide-slate-100 px-4 py-2 sm:px-5">
+            {CSV_COLUMNS.map((column) => (
+              <li key={column.name} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-2 text-xs">
+                <code className="font-mono font-bold text-slate-950">{column.name}</code>
+                {!column.required && <span className="text-slate-400">(opsiyonel)</span>}
+                <span className="text-slate-600">{column.hint}</span>
+              </li>
+            ))}
+          </ul>
         </section>
 
         {error && (
