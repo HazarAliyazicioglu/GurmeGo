@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { AuthProvider, useAuth } from "./auth-context";
@@ -31,6 +32,8 @@ vi.mock("./supabase", () => ({
       onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
       signInWithPassword: vi.fn(),
       signOut: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updateUser: vi.fn(),
     },
   },
 }));
@@ -119,5 +122,46 @@ describe("useAuth getSession() rejection", () => {
 
     await waitFor(() => expect(screen.getByTestId("auth-error")).toBeInTheDocument());
     expect(screen.queryByText("yükleniyor")).not.toBeInTheDocument();
+  });
+});
+
+function ActionsProbe() {
+  const { signIn, requestPasswordReset, updatePassword } = useAuth();
+  const [out, setOut] = useState("idle");
+  return (
+    <>
+      <span data-testid="out">{out}</span>
+      <button onClick={async () => setOut(JSON.stringify(await signIn("a@b.com", "bad")))}>signin</button>
+      <button onClick={async () => setOut(JSON.stringify(await requestPasswordReset("a@b.com")))}>reset</button>
+      <button onClick={async () => setOut(JSON.stringify(await updatePassword("newsecret")))}>update</button>
+    </>
+  );
+}
+
+describe("useAuth — Turkish errors and password reset", () => {
+  it("translates a sign-in error to Turkish", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ data: {}, error: { message: "Invalid login credentials" } } as never);
+    render(<AuthProvider><ActionsProbe /></AuthProvider>);
+    screen.getByText("signin").click();
+    await waitFor(() => expect(screen.getByTestId("out")).toHaveTextContent("E-posta veya şifre hatalı."));
+  });
+
+  it("requestPasswordReset redirects to this app's own /sifre-yenile", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase.auth.resetPasswordForEmail).mockResolvedValue({ error: null } as never);
+    render(<AuthProvider><ActionsProbe /></AuthProvider>);
+    screen.getByText("reset").click();
+    await waitFor(() =>
+      expect(supabase.auth.resetPasswordForEmail).toHaveBeenCalledWith("a@b.com", { redirectTo: `${window.location.origin}/sifre-yenile` }),
+    );
+  });
+
+  it("updatePassword calls supabase.auth.updateUser", async () => {
+    const { supabase } = await import("./supabase");
+    vi.mocked(supabase.auth.updateUser).mockResolvedValue({ error: null } as never);
+    render(<AuthProvider><ActionsProbe /></AuthProvider>);
+    screen.getByText("update").click();
+    await waitFor(() => expect(supabase.auth.updateUser).toHaveBeenCalledWith({ password: "newsecret" }));
   });
 });

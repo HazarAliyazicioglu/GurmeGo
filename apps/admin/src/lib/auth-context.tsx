@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { Session, User } from "@supabase/supabase-js";
 import { z } from "zod";
 import { supabase } from "./supabase";
+import { translateAuthError } from "./auth-errors";
 
 type Role = "curator" | "admin" | null;
 
@@ -38,6 +39,8 @@ interface AuthContextValue {
   error: string | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<{ error: string | null }>;
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -77,12 +80,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    return { error: error ? translateAuthError(error.message) : null };
   }, []);
 
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
-    return { error: error?.message ?? null };
+    return { error: error ? translateAuthError(error.message) : null };
+  }, []);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/sifre-yenile`,
+    });
+    return { error: error ? translateAuthError(error.message) : null };
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error: error ? translateAuthError(error.message) : null };
   }, []);
 
   const value: AuthContextValue = useMemo(
@@ -94,8 +109,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       error,
       signIn,
       signOut,
+      requestPasswordReset,
+      updatePassword,
     }),
-    [session, loading, error, signIn, signOut],
+    [session, loading, error, signIn, signOut, requestPasswordReset, updatePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

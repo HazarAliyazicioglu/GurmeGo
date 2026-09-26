@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
@@ -89,6 +90,11 @@ export default function GirisPage() {
             Giriş yap
           </button>
         </form>
+        <p className="mt-4 text-center">
+          <Link href="/sifre-unuttum" className="text-sm font-semibold text-blue-700 hover:underline">
+            Şifremi unuttum
+          </Link>
+        </p>
       </div>
     </main>
   );
