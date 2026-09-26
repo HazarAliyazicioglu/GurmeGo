@@ -4,7 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../lib/auth-context";
 
 export default function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, requestPasswordReset } = useAuth();
   const navigation = useNavigation();
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
@@ -15,6 +15,14 @@ export default function AuthScreen() {
   // confirmation first) -- returning to the previous screen here would look successful while the
   // user still can't actually do whatever they came here to do.
   const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
+  const [resetSentTo, setResetSentTo] = useState<string | null>(null);
+
+  async function handleForgotPassword() {
+    setError(null);
+    const result = await requestPasswordReset(email);
+    if (result.error) setError(result.error);
+    else setResetSentTo(email);
+  }
   // Denetim raporu (2026-09-25) "double-submit guard yok": a second tap before the first
   // request resolves fired signIn/signUp twice (e.g. a slow connection where the user taps again
   // thinking the first tap didn't register). A ref guards the check synchronously -- two presses
@@ -57,9 +65,15 @@ export default function AuthScreen() {
       <TextInput value={password} onChangeText={setPassword} placeholder="Şifre" secureTextEntry />
       {error && <Text>{error}</Text>}
       {confirmationMessage && <Text>{confirmationMessage}</Text>}
+      {resetSentTo && <Text>{`${resetSentTo} adresine bir sıfırlama linki gönderdik.`}</Text>}
       <Pressable onPress={handleSubmit} disabled={submitting}>
         <Text>{mode === "signIn" ? "Giriş yap" : "Kayıt ol"}</Text>
       </Pressable>
+      {mode === "signIn" && (
+        <Pressable onPress={handleForgotPassword}>
+          <Text>Şifremi unuttum</Text>
+        </Pressable>
+      )}
       <Pressable onPress={() => setMode(mode === "signIn" ? "signUp" : "signIn")}>
         <Text>{mode === "signIn" ? "Hesabın yok mu? Kayıt ol" : "Zaten hesabın var mı? Giriş yap"}</Text>
       </Pressable>
