@@ -1,4 +1,4 @@
-# Durum — 2026-09-25 (gece, 3. tur)
+# Durum — 2026-09-26
 
 ## Veri sınırı
 Codex: izinli ama **kota bitti, 2026-09-28'e kadar geri dönmüyor**. GLM: izinli. Kaynak: 2026-09-08 + bugünkü kota hatası.
@@ -18,18 +18,9 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 - `https://gurme-go-web.vercel.app/kadikoy` test edildi — gerçek mekan isimleri (Moda Meyhanesi, Kadıköy Kahvecisi) görünüyor, SSR çalışıyor.
 
 ## Sıradaki adım
-**Railway'deki `CORS_ORIGIN` değişkeni hâlâ localhost'a işaret ediyor — kullanıcı "yarın bakacağım" dedi, GÜNCELLENMEDİ.** Şu değerle değiştirilmesi lazım:
-```
-CORS_ORIGIN=https://gurme-go-web.vercel.app,https://gurme-go-admin-blush.vercel.app
-```
-Bu olmadan server-side render (SSR) çalışıyor ama **tarayıcıdan atılan client-side istekler (favoriler, filtre değişimi, arama, admin login) CORS'a takılıp başarısız olacak** — bir sonraki oturumda ilk iş bunu hatırlatmak ve kullanıcıdan Railway Variables'ı güncellemesini istemek (ben Railway'e programatik erişemiyorum, panel üzerinden elle giriliyor).
-
-Güncellendikten sonra: tarayıcıdan gerçek bir client-side aksiyonu (favori ekleme, filtre) test et. Ardından seed placeholder verisinin ne zaman gerçek veriyle değiştirileceğine kullanıcı karar verecek.
-
-**Codex kotası 2026-09-28'e kadar yok** — bugünkü kod değişiklikleri (arama özelliği + REVIEW-PLAN.md backlog'u) self-review ile geçti, kota dönünce toplu bir cross-model-review yapılmalı.
+**2026-09-26: tam yetki yeniden verildi ("kullanıcı kullanabilecek seviyeye getir").** CORS düzeldi (doğrulandı). Canlıya giden: PR #33 (favori toggle/hata/loading + favoriler sayfasında kaldır), PR #34 (header giriş/favoriler linki, kayıt sonrası e-posta doğrulama paneli, şifremi unuttum, TR hata mesajları, /gizlilik + /kullanim-kosullari + footer). Sıradaki tarama maddeleri: (1) API gecikmesi ~1 sn/istek — Supabase Sydney ↔ Railway bölgesi uyumsuz, KULLANICI kararı (Supabase'i Frankfurt'a taşımak = yeni proje + migration), (2) `NEXT_PUBLIC_SITE_URL` Vercel'de set mi? Yoksa sitemap/canonical `gurmego.com`'a işaret eder, (3) /gizlilik'te veri sorumlusu/başvuru kanalı yok — kullanıcı iletişim bilgisini verince eklenecek, (4) arama sayfası/mobil/admin tarama.
 
 ## Bloke olanlar
-- **`CORS_ORIGIN` güncellemesi** — kullanıcı yarın yapacak, Railway Variables sekmesinde elle.
 - **Codex kotası** (2026-09-28'e kadar).
 - CSP header, maskable icon, root OG görseli — tarayıcı/tasarım doğrulaması gerektiriyor.
 - Seed placeholder verisi gerçek mekan verisiyle değiştirilmeli (kullanıcı kararı bekliyor, acil değil).
