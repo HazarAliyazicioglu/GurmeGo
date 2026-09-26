@@ -103,11 +103,15 @@ export async function removeFavoriteVenue(token: string, listId: string, venueId
   await authedClient.delete(`/me/lists/${listId}/venues/${venueId}`);
 }
 
-export async function reportVenue(venueId: string, reason: string) {
+export async function reportVenue(
+  venueId: string,
+  reason: string,
+  correction?: { field?: string; suggestedValue?: string },
+) {
   const res = await fetch(`${API_BASE}/venues/${venueId}/report`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason, ...correction }),
   });
   if (!res.ok) throw new Error(`Report failed: ${res.status}`);
   const raw = await res.json();

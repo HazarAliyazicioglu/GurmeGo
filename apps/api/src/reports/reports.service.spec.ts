@@ -20,6 +20,23 @@ describe("ReportsService.submit", () => {
     expect(result.urgent).toBe(true);
   });
 
+  it("includes field/suggestedValue in the payload when the report is a structured correction", async () => {
+    const prisma = {
+      venue: { findUnique: jest.fn().mockResolvedValue({ id: "v1" }) },
+      contributionQueue: { create: jest.fn().mockResolvedValue({ id: "c1" }), count: jest.fn().mockResolvedValue(1) },
+    } as any;
+    const service = new ReportsService(prisma);
+
+    await service.submit("v1", { reason: "Fiyat aralığı güncel değil", field: "Fiyat aralığı", suggestedValue: "MID" });
+
+    expect(prisma.contributionQueue.create).toHaveBeenCalledWith({
+      data: {
+        type: "REPORT", venueId: "v1", submittedBy: null,
+        payload: { reason: "Fiyat aralığı güncel değil", field: "Fiyat aralığı", suggestedValue: "MID" },
+      },
+    });
+  });
+
   it("throws a clean 404 (not an FK-violation 500) when venueId is well-formed but no such venue exists (regression: was reaching contributionQueue.create() and failing the FK constraint)", async () => {
     const prisma = {
       venue: { findUnique: jest.fn().mockResolvedValue(null) },

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { CreateReportSchema } from "@gurmego/shared";
+import { CreateReportObjectSchema } from "@gurmego/shared";
 import { reportVenue } from "../lib/api";
 
 export default function ReportForm({ venueId }: { venueId: string }) {
@@ -13,7 +13,7 @@ export default function ReportForm({ venueId }: { venueId: string }) {
     // Denetim raporu (2026-09-25) "ReportForm'da client validasyon yok": validates against the
     // SAME `CreateReportSchema` the backend enforces (packages/shared), not a re-guessed rule, so
     // an empty/too-short/too-long reason never even reaches the network.
-    const validation = CreateReportSchema.shape.reason.safeParse(reason);
+    const validation = CreateReportObjectSchema.shape.reason.safeParse(reason);
     if (!validation.success) {
       const issue = validation.error.issues[0];
       // zod's built-in messages are English; the rest of this screen is Turkish, so the code

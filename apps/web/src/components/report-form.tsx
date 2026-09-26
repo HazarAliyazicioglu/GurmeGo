@@ -4,6 +4,9 @@ import { reportVenue } from "@/lib/api";
 
 export function ReportForm({ venueId }: { venueId: string }) {
   const [reason, setReason] = useState("");
+  const [correcting, setCorrecting] = useState(false);
+  const [field, setField] = useState("");
+  const [suggestedValue, setSuggestedValue] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +16,13 @@ export function ReportForm({ venueId }: { venueId: string }) {
     setSubmitting(true);
     setError(null);
     try {
-      await reportVenue(venueId, reason);
+      await reportVenue(
+        venueId,
+        reason,
+        correcting && field.trim()
+          ? { field: field.trim(), ...(suggestedValue.trim() ? { suggestedValue: suggestedValue.trim() } : {}) }
+          : undefined,
+      );
       setSubmitted(true);
     } catch {
       setError("Bildirim gönderilemedi, lütfen tekrar dene.");
@@ -53,6 +62,48 @@ export function ReportForm({ venueId }: { venueId: string }) {
             placeholder="Örn. fiyat aralığı güncel değil"
           />
         </div>
+
+        {correcting ? (
+          <div className="space-y-3 rounded-2xl border border-ink/10 bg-white/50 p-3">
+            <div>
+              <label htmlFor="field" className="text-sm font-semibold text-ink/60">
+                Hangi bilgi
+              </label>
+              <input
+                id="field"
+                type="text"
+                value={field}
+                onChange={(e) => setField(e.target.value)}
+                maxLength={100}
+                className="mt-2 w-full rounded-full border border-ink/15 bg-white px-3.5 py-2 text-sm font-medium text-ink placeholder:text-ink/35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta"
+                placeholder="Örn. Fiyat aralığı, Telefon, Adres"
+              />
+            </div>
+            <div>
+              <label htmlFor="suggested-value" className="text-sm font-semibold text-ink/60">
+                Doğrusu ne olmalı? (opsiyonel)
+              </label>
+              <input
+                id="suggested-value"
+                type="text"
+                value={suggestedValue}
+                onChange={(e) => setSuggestedValue(e.target.value)}
+                maxLength={100}
+                className="mt-2 w-full rounded-full border border-ink/15 bg-white px-3.5 py-2 text-sm font-medium text-ink placeholder:text-ink/35 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta"
+                placeholder="Örn. 0212 555 00 00"
+              />
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCorrecting(true)}
+            className="text-xs font-bold text-ink/55 underline-offset-2 hover:text-terracottaDeep hover:underline"
+          >
+            Düzeltme öner
+          </button>
+        )}
+
         {error && <p className="text-xs font-semibold text-terracottaDeep">{error}</p>}
         <button
           type="submit"
