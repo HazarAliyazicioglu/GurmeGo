@@ -47,3 +47,10 @@ describe("GirisPage", () => {
     expect(push).not.toHaveBeenCalled();
   });
 });
+
+describe("GirisPage — şifremi unuttum link", () => {
+  it("links to /sifre-unuttum", () => {
+    render(<GirisPage />);
+    expect(screen.getByRole("link", { name: "Şifremi unuttum" })).toHaveAttribute("href", "/sifre-unuttum");
+  });
+});
