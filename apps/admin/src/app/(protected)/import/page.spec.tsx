@@ -357,3 +357,21 @@ describe("ImportPage", () => {
     expect(screen.queryByRole("alert")).not.toHaveTextContent(/yetkiniz yok/i);
   });
 });
+
+describe("ImportPage — CSV format reference", () => {
+  it("lists the required and optional columns so a curator knows the CSV shape before uploading", () => {
+    render(<ImportPage />);
+    for (const column of ["name", "slug", "districtSlug", "category", "priceRange", "branchCount", "franchiseFlag", "lat", "lng", "openingHours"]) {
+      expect(screen.getByText(column)).toBeInTheDocument();
+    }
+    expect(screen.getByText("status")).toBeInTheDocument();
+    expect(screen.getByText("address")).toBeInTheDocument();
+  });
+
+  it("offers an example CSV to download", () => {
+    render(<ImportPage />);
+    const link = screen.getByRole("link", { name: /örnek csv/i });
+    expect(link).toHaveAttribute("download");
+    expect(link.getAttribute("href")).toMatch(/^blob:|^data:/);
+  });
+});
