@@ -14,6 +14,10 @@ export default function RollerPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  // Curator assignment has no revoke UI (backend's MVP_ASSIGNABLE_ROLES only allows "curator" --
+  // undoing a mistaken assign needs Prisma Studio/direct DB access), so a stray click is
+  // effectively a one-way door. This confirmation step is the only guard against that.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   // Guards against an out-of-order response: firing a second search before the first resolves
   // (e.g. user edits the term and re-submits quickly) must not let the FIRST response's later
   // arrival overwrite the SECOND, more recent one -- same pattern as (protected)/kuyruk/page.tsx's
@@ -58,6 +62,7 @@ export default function RollerPage() {
 
   async function handleAssign(userId: string) {
     if (!token) return;
+    setConfirmingId(null);
     setAssigningId(userId);
     setAssignError(null);
     try {
@@ -153,14 +158,34 @@ export default function RollerPage() {
                     <p className="text-sm font-semibold">{user.email}</p>
                     <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{user.role}</p>
                   </div>
-                  <button
-                    type="button"
-                    disabled={assigningId === user.id}
-                    onClick={() => void handleAssign(user.id)}
-                    className="border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    Küratör yap
-                  </button>
+                  {confirmingId === user.id ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-700">Emin misin?</span>
+                      <button
+                        type="button"
+                        disabled={assigningId === user.id}
+                        onClick={() => void handleAssign(user.id)}
+                        className="border border-blue-700 bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                      >
+                        Onayla
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(null)}
+                        className="border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-50"
+                      >
+                        Vazgeç
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingId(user.id)}
+                      className="border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Küratör yap
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
