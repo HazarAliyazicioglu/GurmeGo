@@ -2,13 +2,18 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { translateAuthError } from "./auth-errors";
 
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  // `needsConfirmation`: signUp succeeded but Supabase issued no session because the account's
+  // e-mail must be verified first -- the caller must tell the user to check their inbox.
+  signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<{ error: string | null }>;
 }
 
@@ -50,11 +55,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signIn: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      return { error: error?.message ?? null };
+      return { error: error ? translateAuthError(error.message) : null };
     },
     signUp: async (email, password) => {
-      const { error } = await supabase.auth.signUp({ email, password });
-      return { error: error?.message ?? null };
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) return { error: translateAuthError(error.message), needsConfirmation: false };
+      return { error: null, needsConfirmation: !data.session };
+    },
+    requestPasswordReset: async (email) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/sifre-yenile`,
+      });
+      return { error: error ? translateAuthError(error.message) : null };
+    },
+    updatePassword: async (password) => {
+      const { error } = await supabase.auth.updateUser({ password });
+      return { error: error ? translateAuthError(error.message) : null };
     },
     signOut: async () => {
       const { error } = await supabase.auth.signOut();
