@@ -7,6 +7,7 @@ import { VenuesModule } from "./venues/venues.module";
 import { AuthModule } from "./auth/auth.module";
 import { FavoritesModule } from "./favorites/favorites.module";
 import { ReportsModule } from "./reports/reports.module";
+import { VenueSuggestionsModule } from "./venue-suggestions/venue-suggestions.module";
 import { RuleEngineModule } from "./rule-engine/rule-engine.module";
 import { AdminModule } from "./admin/admin.module";
 import { CommonModule } from "./common/common.module";
@@ -54,6 +55,7 @@ class HealthController {
     AuthModule,
     FavoritesModule,
     ReportsModule,
+    VenueSuggestionsModule,
     RuleEngineModule,
     AdminModule,
     CommonModule,

@@ -16,6 +16,16 @@ export function QueueItem({
   pending?: boolean;
 }) {
   const reason = typeof item.payload.reason === "string" ? item.payload.reason : "(neden belirtilmemiş)";
+  const isNewVenue = item.type === "NEW_VENUE";
+  const suggestion = isNewVenue
+    ? {
+        name: typeof item.payload.name === "string" ? item.payload.name : "(isim belirtilmemiş)",
+        districtName: typeof item.payload.districtName === "string" ? item.payload.districtName : null,
+        category: typeof item.payload.category === "string" ? item.payload.category : null,
+        address: typeof item.payload.address === "string" ? item.payload.address : null,
+        note: typeof item.payload.note === "string" ? item.payload.note : null,
+      }
+    : null;
   return (
     <li
       data-testid="queue-item"
@@ -29,7 +39,7 @@ export function QueueItem({
       <div className="min-w-0">
         <div className="mb-1.5 flex flex-wrap items-center gap-2">
           <span className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-500">
-            Mekan
+            {isNewVenue ? "Yeni mekan önerisi" : "Mekan"}
           </span>
           {item.urgent && (
             <span className="inline-flex items-center gap-1 rounded-sm bg-rose-100 px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-rose-800">
@@ -40,7 +50,9 @@ export function QueueItem({
             </span>
           )}
         </div>
-        {item.venue ? (
+        {isNewVenue ? (
+          <p className="truncate text-sm font-semibold text-slate-950 sm:text-[0.95rem]">{suggestion!.name}</p>
+        ) : item.venue ? (
           <p className="truncate text-sm font-semibold text-slate-950 sm:text-[0.95rem]">
             {item.venue.name}
           </p>
@@ -55,10 +67,23 @@ export function QueueItem({
       </div>
 
       <div className="min-w-0 border-t border-slate-100 pt-3 lg:border-l lg:border-t-0 lg:py-1 lg:pl-6">
-        <p className="mb-1.5 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-500">
-          Bildirim nedeni
-        </p>
-        <p className="text-sm leading-5 text-slate-700">{reason}</p>
+        {isNewVenue ? (
+          <>
+            <p className="mb-1.5 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-500">Öneri detayı</p>
+            <p className="text-sm leading-5 text-slate-700">
+              {suggestion!.districtName ?? "(ilçe belirtilmemiş)"} · {suggestion!.category ?? "(kategori belirtilmemiş)"}
+            </p>
+            {suggestion!.address && <p className="mt-1 text-sm leading-5 text-slate-700">{suggestion!.address}</p>}
+            {suggestion!.note && <p className="mt-1 text-sm leading-5 text-slate-500 italic">{suggestion!.note}</p>}
+          </>
+        ) : (
+          <>
+            <p className="mb-1.5 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-slate-500">
+              Bildirim nedeni
+            </p>
+            <p className="text-sm leading-5 text-slate-700">{reason}</p>
+          </>
+        )}
       </div>
 
       {/* "Onayla" yalnızca bu kuyruk öğesinin kendi durumunu değiştirir (incelendi olarak işaretler) —
@@ -78,6 +103,12 @@ export function QueueItem({
           </svg>
           Onayla (yalnızca incelendi olarak işaretler)
         </button>
+        {isNewVenue && (
+          <p className="text-[0.68rem] leading-snug text-slate-500 lg:max-w-64">
+            Onaylamak bu öneriyi incelendi olarak işaretler, Venue kaydını otomatik oluşturmaz — mekanı CSV
+            import veya Prisma Studio ile eklemen gerekir.
+          </p>
+        )}
         <button
           type="button"
           onClick={() => onReject(item.id)}

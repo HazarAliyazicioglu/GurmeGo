@@ -65,6 +65,16 @@ describe("getQueue", () => {
     get.mockResolvedValue([{ ...VALID_ITEM, id: "not-a-valid-uuid" }]);
     await expect(getQueue("tok")).rejects.toThrow(ApiValidationError);
   });
+
+  // Venue-suggestion feature: the curator needs to review NEW_VENUE submissions too, not just
+  // REPORT rows. An explicit `type` in `filters` overrides the REPORT default above (which stays
+  // the default specifically so an existing call site with no `type` opinion keeps its old,
+  // narrower behavior unchanged).
+  it("requests the given type when filters.type is provided, instead of the REPORT default", async () => {
+    get.mockResolvedValue([{ ...VALID_ITEM, type: "NEW_VENUE", venueId: null, venue: null }]);
+    await getQueue("tok", { type: "NEW_VENUE" });
+    expect(get).toHaveBeenCalledWith(expect.stringContaining("type=NEW_VENUE"));
+  });
 });
 
 describe("approveQueueItem / rejectQueueItem", () => {

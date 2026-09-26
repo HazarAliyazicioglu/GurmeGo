@@ -2,10 +2,12 @@ import { z } from "zod";
 
 export const AdminQueueItemSchema = z.object({
   id: z.string().uuid(),
-  // list()/getQueue() still filters by type=REPORT by design (the queue UI is REPORT-focused, per
-  // the design doc) — that part is unchanged. But a single item fetched or mutated by id
-  // (approve()/reject()) can genuinely be an EDIT item, so this schema must accept both.
-  type: z.enum(["REPORT", "EDIT"]),
+  // Widened to the full `ContributionType` (schema.prisma) so a curator can filter the admin
+  // queue list by NEW_VENUE (venue-suggestion feature) without the response failing validation.
+  // `venue`/`venueId` are legitimately null for a NEW_VENUE row (no target Venue exists yet) --
+  // the admin UI (queue-item.tsx) branches on `type` to tell that apart from a REPORT/EDIT row
+  // whose venue was deleted out from under it.
+  type: z.enum(["REPORT", "NEW_VENUE", "EDIT", "OWNER_VERIFICATION"]),
   venueId: z.string().uuid().nullable(),
   payload: z.record(z.string(), z.unknown()),
   submittedBy: z.string().nullable(),
@@ -24,7 +26,7 @@ export const AdminQueueListSchema = z.array(AdminQueueItemSchema);
 // those are computed only inside list()'s mapping step, verified against admin-queue.service.ts).
 export const AdminQueueMutationResultSchema = z.object({
   id: z.string().uuid(),
-  type: z.enum(["REPORT", "EDIT"]),
+  type: z.enum(["REPORT", "NEW_VENUE", "EDIT", "OWNER_VERIFICATION"]),
   venueId: z.string().uuid().nullable(),
   payload: z.record(z.string(), z.unknown()),
   submittedBy: z.string().nullable(),

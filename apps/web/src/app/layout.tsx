@@ -63,6 +63,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <span className="size-1.5 rounded-full bg-terracotta" aria-hidden="true" />
                     {"Se\u00e7kiler"}
                   </Link>
+                  <Link
+                    href="/mekan-oner"
+                    className="hidden min-h-11 items-center gap-2 rounded-full border border-ink/15 bg-white/45 px-3.5 text-[0.68rem] font-bold uppercase tracking-[0.14em] transition-colors hover:border-ink/35 hover:bg-white/75 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream sm:inline-flex"
+                  >
+                    Mekan \u00f6ner
+                  </Link>
                   <AuthNav />
                 </nav>
               </div>
@@ -76,6 +82,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-6 text-xs font-semibold text-ink/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <p>GurmeGo · İstanbul&apos;un butik mekan rehberi</p>
                 <nav aria-label="Yasal" className="flex gap-4">
+                  <Link href="/mekan-oner" className="hover:text-terracottaDeep hover:underline">
+                    Mekan öner
+                  </Link>
                   <Link href="/gizlilik" className="hover:text-terracottaDeep hover:underline">
                     Gizlilik
                   </Link>

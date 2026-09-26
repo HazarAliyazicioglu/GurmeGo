@@ -22,6 +22,7 @@ import {
   createFavoriteList,
   addFavoriteVenue,
   reportVenue,
+  suggestVenue,
   locationHeaders,
   ApiValidationError,
 } from "./api";
@@ -296,6 +297,34 @@ describe("reportVenue", () => {
     await expect(reportVenue("3fa85f64-5717-4562-b3fc-2c963f66afa6", "spam")).rejects.toThrow(
       "Report failed: 500",
     );
+  });
+});
+
+describe("suggestVenue", () => {
+  const originalFetch = global.fetch;
+  const SUBMISSION = { name: "Moda Kahvecisi", districtSlug: "kadikoy", category: "cafe" };
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("posts the submission and returns the parsed response on success", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }) as unknown as typeof fetch;
+    await expect(suggestVenue(SUBMISSION)).resolves.toEqual({ ok: true });
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/venue-suggestions"),
+      expect.objectContaining({ method: "POST", body: JSON.stringify(SUBMISSION) }),
+    );
+  });
+
+  it("throws ApiValidationError on an invalid response shape", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: false }) }) as unknown as typeof fetch;
+    await expect(suggestVenue(SUBMISSION)).rejects.toThrow(ApiValidationError);
+  });
+
+  it("throws a plain Error when the HTTP response is not ok", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 429 }) as unknown as typeof fetch;
+    await expect(suggestVenue(SUBMISSION)).rejects.toThrow("Suggestion failed: 429");
   });
 });
 
