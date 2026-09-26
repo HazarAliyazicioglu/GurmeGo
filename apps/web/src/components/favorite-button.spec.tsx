@@ -18,7 +18,9 @@ vi.mock("@/lib/auth-context", () => ({
 const getFavoriteLists = vi.fn();
 const createFavoriteList = vi.fn();
 const addFavoriteVenue = vi.fn().mockResolvedValue(undefined);
+const removeFavoriteVenue = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/api", () => ({
+  removeFavoriteVenue: (...args: unknown[]) => removeFavoriteVenue(...args),
   getFavoriteLists: (...args: unknown[]) => getFavoriteLists(...args),
   createFavoriteList: (...args: unknown[]) => createFavoriteList(...args),
   addFavoriteVenue: (...args: unknown[]) => addFavoriteVenue(...args),
@@ -217,5 +219,73 @@ describe("FavoriteButton — reactivity and race conditions", () => {
     // Now the second (genuinely latest) request resolves — only now should it re-enable.
     resolveSecondAdd!();
     await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
+  });
+});
+
+describe("FavoriteButton — toggle off, error feedback, loading affordance", () => {
+  const favorited = (listId: string, venueId = "v1") => ({
+    id: listId, userId: "u1", name: "L", createdAt: "2026-01-01T00:00:00.000Z",
+    favorites: [{ id: `f-${listId}`, venueId, venue: { id: venueId, name: "X", slug: "x", category: "cafe", priceRange: "BUDGET", isBoutique: false } }],
+  });
+
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" } });
+    getFavoriteLists.mockReset();
+    createFavoriteList.mockReset();
+    addFavoriteVenue.mockReset().mockResolvedValue(undefined);
+    removeFavoriteVenue.mockReset().mockResolvedValue(undefined);
+  });
+
+  it("removes the venue from every list that contains it when clicked while already favorited", async () => {
+    getFavoriteLists.mockResolvedValue([favorited("l1"), favorited("l2"), { ...favorited("l3", "other") }]);
+    render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "true"));
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "false"));
+    expect(removeFavoriteVenue).toHaveBeenCalledTimes(2);
+    expect(removeFavoriteVenue).toHaveBeenCalledWith("tok", "l1", "v1");
+    expect(removeFavoriteVenue).toHaveBeenCalledWith("tok", "l2", "v1");
+    expect(addFavoriteVenue).not.toHaveBeenCalled();
+  });
+
+  it("keeps the button pressed and shows an error when removal fails", async () => {
+    getFavoriteLists.mockResolvedValue([favorited("l1")]);
+    removeFavoriteVenue.mockRejectedValue(new Error("boom"));
+    render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "true"));
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Favorilerden çıkarılamadı");
+    expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows an error and stays unpressed when adding fails", async () => {
+    getFavoriteLists.mockResolvedValue([{ id: "l1", userId: "u1", name: "L", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] }]);
+    addFavoriteVenue.mockRejectedValue(new Error("boom"));
+    render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Favorilere eklenemedi");
+    expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("clears a previous error when the user tries again", async () => {
+    getFavoriteLists.mockResolvedValue([{ id: "l1", userId: "u1", name: "L", createdAt: "2026-01-01T00:00:00.000Z", favorites: [] }]);
+    addFavoriteVenue.mockRejectedValueOnce(new Error("boom")).mockResolvedValue(undefined);
+    render(<FavoriteButton venueId="v1" />);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByTestId("favorite-button"));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  it("exposes aria-busy while the initial check or a request is in flight", async () => {
+    let resolveCheck: (v: unknown) => void;
+    getFavoriteLists.mockReturnValue(new Promise((r) => { resolveCheck = r; }));
+    render(<FavoriteButton venueId="v1" />);
+    expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-busy", "true");
+    resolveCheck!([]);
+    await waitFor(() => expect(screen.getByTestId("favorite-button")).toHaveAttribute("aria-busy", "false"));
   });
 });

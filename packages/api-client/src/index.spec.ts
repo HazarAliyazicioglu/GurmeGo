@@ -122,3 +122,25 @@ describe("createApiClient().put", () => {
     );
   });
 });
+
+describe("createApiClient().delete", () => {
+  it("sends a DELETE with the Authorization header and does not try to parse an empty body", async () => {
+    const json = vi.fn().mockRejectedValue(new SyntaxError("Unexpected end of JSON input"));
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json });
+    const client = createApiClient("http://api.test", () => "tok123");
+    await expect(client.delete("/me/lists/l1/venues/v1")).resolves.toBeUndefined();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://api.test/me/lists/l1/venues/v1",
+      expect.objectContaining({ method: "DELETE", headers: { Authorization: "Bearer tok123" } }),
+    );
+    expect(json).not.toHaveBeenCalled();
+  });
+
+  it("throws an ApiHttpError with the response's status on a non-2xx", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, text: async () => "Not found" });
+    const client = createApiClient("http://api.test");
+    const error = await client.delete("/me/lists/l1/venues/v1").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiHttpError);
+    expect((error as ApiHttpError).status).toBe(404);
+  });
+});

@@ -2,7 +2,7 @@ import { Profiler, type ProfilerOnRenderCallback } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import FavorilerPage from "./page";
-import { getFavoriteLists, createFavoriteList } from "@/lib/api";
+import { getFavoriteLists, createFavoriteList, removeFavoriteVenue } from "@/lib/api";
 
 const push = vi.fn();
 const router = { push };
@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 const useAuthMock = vi.fn();
 vi.mock("@/lib/auth-context", () => ({ useAuth: () => useAuthMock() }));
 
-vi.mock("@/lib/api", () => ({ getFavoriteLists: vi.fn(), createFavoriteList: vi.fn() }));
+vi.mock("@/lib/api", () => ({ getFavoriteLists: vi.fn(), createFavoriteList: vi.fn(), removeFavoriteVenue: vi.fn() }));
 
 describe("FavorilerPage", () => {
   beforeEach(() => {
@@ -498,5 +498,41 @@ describe("Favoriler page — create a new list", () => {
 
     await waitFor(() => expect(createFavoriteList).toHaveBeenCalledWith("token-123", "Kadıköy Kahveleri"));
     expect(await screen.findByText("Kadıköy Kahveleri")).toBeInTheDocument();
+  });
+});
+
+describe("Favoriler page — remove a venue from a list", () => {
+  const listWithVenues = () => [{
+    id: "l1", userId: "u1", name: "Kahveler", createdAt: "2026-01-01T00:00:00.000Z",
+    favorites: [
+      { id: "f1", venueId: "v1", venue: { id: "v1", name: "Moda Kahvecisi", slug: "moda-kahvecisi", category: "cafe", priceRange: "BUDGET", isBoutique: true } },
+      { id: "f2", venueId: "v2", venue: { id: "v2", name: "Kadıköy Meyhanesi", slug: "kadikoy-meyhanesi", category: "restaurant", priceRange: "MID", isBoutique: true } },
+    ],
+  }];
+
+  beforeEach(() => {
+    push.mockClear();
+    vi.mocked(getFavoriteLists).mockReset();
+    vi.mocked(removeFavoriteVenue).mockReset().mockResolvedValue(undefined);
+    useAuthMock.mockReset();
+    useAuthMock.mockReturnValue({ user: { id: "u1" }, loading: false, session: { access_token: "tok" } });
+  });
+
+  it("removes the venue via removeFavoriteVenue(token, listId, venueId) and drops it from the card", async () => {
+    vi.mocked(getFavoriteLists).mockResolvedValue(listWithVenues() as never);
+    render(<FavorilerPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Moda Kahvecisi favorilerden kaldır" }));
+    await waitFor(() => expect(screen.queryByText("Moda Kahvecisi")).toBeNull());
+    expect(removeFavoriteVenue).toHaveBeenCalledWith("tok", "l1", "v1");
+    expect(screen.getByText("Kadıköy Meyhanesi")).toBeInTheDocument();
+  });
+
+  it("keeps the venue and shows an error when removal fails", async () => {
+    vi.mocked(getFavoriteLists).mockResolvedValue(listWithVenues() as never);
+    vi.mocked(removeFavoriteVenue).mockRejectedValue(new Error("boom"));
+    render(<FavorilerPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Moda Kahvecisi favorilerden kaldır" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Favorilerden çıkarılamadı");
+    expect(screen.getByText("Moda Kahvecisi")).toBeInTheDocument();
   });
 });

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
-import { getFavoriteLists, createFavoriteList, addFavoriteVenue } from "@/lib/api";
+import { getFavoriteLists, createFavoriteList, addFavoriteVenue, removeFavoriteVenue } from "@/lib/api";
 
 const DEFAULT_LIST_NAME = "Favorilerim";
 
@@ -12,6 +12,7 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
   const [added, setAdded] = useState(false);
   const [pending, setPending] = useState(false);
   const [initialCheckPending, setInitialCheckPending] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const latestClickRequest = useRef(0);
   // Separate from `latestClickRequest`: that counter is also bumped by the effect below on
   // every `venueId`/user/session change, which is the right thing for guarding `setAdded`
@@ -42,6 +43,7 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
     // separate refs, bumped independently, each still guarding only its own concern.
     latestPendingRequest.current += 1;
     setPending(false);
+    setError(null);
     if (!user || !session?.access_token) {
       setAdded(false);
       setInitialCheckPending(false);
@@ -82,16 +84,27 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
     const requestId = ++latestClickRequest.current;
     const pendingRequestId = ++latestPendingRequest.current;
     setPending(true);
+    setError(null);
+    const removing = added;
     try {
       const lists = await getFavoriteLists(session.access_token);
-      const list = lists[0] ?? (await createFavoriteList(session.access_token, DEFAULT_LIST_NAME));
-      await addFavoriteVenue(session.access_token, list.id, venueId);
-      if (requestId === latestClickRequest.current) setAdded(true);
+      if (removing) {
+        // The venue may sit in more than one list (the mount-time check looks across all of them),
+        // so removal must clear every list that holds it or the button would flip back on reload.
+        const holding = lists.filter((list) => list.favorites.some((favorite) => favorite.venueId === venueId));
+        await Promise.all(holding.map((list) => removeFavoriteVenue(session.access_token, list.id, venueId)));
+        if (requestId === latestClickRequest.current) setAdded(false);
+      } else {
+        const list = lists[0] ?? (await createFavoriteList(session.access_token, DEFAULT_LIST_NAME));
+        await addFavoriteVenue(session.access_token, list.id, venueId);
+        if (requestId === latestClickRequest.current) setAdded(true);
+      }
     } catch {
-      // Add-to-favorites failed (network/API error) — there is no error-display UI in
-      // this component to route it to; swallow so the rejection doesn't propagate as an
-      // unhandled promise rejection. The button re-enables via `finally` below so the
-      // user can retry.
+      // Network/API failure: keep `added` as it was and tell the user, so a failed click is never
+      // silent. The button re-enables via `finally` below so they can retry.
+      if (requestId === latestClickRequest.current) {
+        setError(removing ? "Favorilerden çıkarılamadı. Tekrar dene." : "Favorilere eklenemedi. Tekrar dene.");
+      }
     } finally {
       // Only reset `pending` when this is still the LATEST click request. If the user
       // clicked again before this one resolved, `latestPendingRequest.current` has since
@@ -105,12 +118,15 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
   }
 
   return (
+    <div>
     <button
+      type="button"
       data-testid="favorite-button"
       onClick={handleClick}
       disabled={pending || initialCheckPending}
       aria-pressed={added}
-      className={`group inline-flex min-h-12 w-full items-center justify-between gap-4 rounded-full border px-5 text-sm font-black transition-all duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${
+      aria-busy={pending || initialCheckPending}
+      className={`group inline-flex cursor-pointer select-none disabled:cursor-wait disabled:opacity-60 active:scale-[0.98] min-h-12 w-full items-center justify-between gap-4 rounded-full border px-5 text-sm font-black transition-all duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${
         added
           ? "border-terracotta bg-terracotta text-white shadow-[0_8px_22px_rgba(158,66,43,0.24)]"
           : "border-ink/15 bg-creamLight text-ink hover:-translate-y-0.5 hover:border-terracotta/55 hover:text-terracottaDeep hover:shadow-[0_10px_28px_rgba(71,52,35,0.09)]"
@@ -140,5 +156,11 @@ export function FavoriteButton({ venueId }: { venueId: string }) {
         {added ? "Eklendi" : "Kaydet"}
       </span>
     </button>
+    {error && (
+      <p role="alert" className="mt-2 px-2 text-xs font-semibold text-rose-700">
+        {error}
+      </p>
+    )}
+    </div>
   );
 }

@@ -96,6 +96,11 @@ export async function addFavoriteVenue(token: string, listId: string, venueId: s
   if (!result.success) throw new ApiValidationError(`/me/lists/${listId}/venues`, result.error.issues);
 }
 
+export async function removeFavoriteVenue(token: string, listId: string, venueId: string): Promise<void> {
+  const authedClient = createApiClient(API_BASE, () => token);
+  await authedClient.delete(`/me/lists/${listId}/venues/${venueId}`);
+}
+
 export async function reportVenue(venueId: string, reason: string) {
   const res = await fetch(`${API_BASE}/venues/${venueId}/report`, {
     method: "POST",
