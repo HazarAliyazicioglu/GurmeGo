@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { VenueCard } from "./venue-card";
 import type { VenueListItem } from "@/lib/api";
 
@@ -12,6 +13,12 @@ export function VenueList({ venues }: { venues: VenueListItem[] }) {
         </span>
         <p className="mt-4 font-serif text-2xl font-semibold tracking-[-0.025em]">Bu filtrelerle mekan bulunamadı.</p>
         <p className="mx-auto mt-2 max-w-xs text-sm font-medium leading-relaxed text-ink/50">Seçeneklerden birini kaldırıp editör seçkisine yeniden göz atabilirsin.</p>
+        <Link
+          href="/mekan-oner"
+          className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-5 text-sm font-bold text-ink transition-colors hover:border-terracotta/55 hover:text-terracottaDeep focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        >
+          Aradığını bulamadın mı? Mekan öner
+        </Link>
       </div>
     );
 
