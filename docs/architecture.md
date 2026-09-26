@@ -89,10 +89,10 @@ Venue (1) ──< VenueVersion    # versiyonlama (FR-MV-05)
 Venue (1) ──< MediaRef        # Faz 2 Reels için esneklik
 User  (1) ──< Favorite, (Faz 2: Review, GourmetRating, Contribution)
 User  (1) ──< FavoriteList (koleksiyon) ──< Favorite >── Venue
-ContributionQueue: MVP'de yalnızca genel "bilgi yanlış" şikayeti (`report` tipi, kimlik doğrulaması
-                   gerektirmez — yorum şikayeti değil, herhangi bir ziyaretçinin bildirimi); yeni mekan
-                   önerisi + düzeltme önerisi + mekan-sahibi-doğrulama tipleri Faz 2'de aktive olur
-                   (şema baştan hazır, `type` enum'unda duruyor)
+ContributionQueue: MVP'de üç akış aktif — genel "bilgi yanlış" şikayeti + opsiyonel yapısal düzeltme
+                   (`REPORT` tipi, kimlik doğrulaması gerektirmez), ve yeni mekan önerisi (`NEW_VENUE`
+                   tipi, kimlik gerektirmez, `POST /venue-suggestions`, 2026-09-26). Mekan-sahibi-
+                   doğrulama (`OWNER_VERIFICATION`) hâlâ Faz 2 (şema hazır, `type` enum'unda duruyor).
 Tag/Collection: mekanlara dış etiket — ileri faz influencer listeleri için esneklik (FR-IL-03)
 ```
 
@@ -122,23 +122,27 @@ Tag/Collection: mekanlara dış etiket — ileri faz influencer listeleri için 
 
 **GourmetRating (Faz 2, MVP'de tablo migration'da durur ama hiç yazılmaz):** user_id, venue_id, score (1-5), weight (rol bazlı — AK-01 hangi yönde çözülürse çözülsün destekler), created_at. Unique(user_id, venue_id) → tek kullanıcı-tek mekan-tek puan (FR-GP-04).
 
-**ContributionQueue:** id, type (new_venue/edit/report/owner_verification), payload (jsonb), submitted_by (nullable — `report` kimlik gerektirmez), status (pending/approved/rejected), reviewed_by, reviewed_at. MVP'de yalnızca `report` tipi aktif akışta kullanılır (genel "bilgi yanlış" bildirimi, FR-KG-03 — yorum şikayeti değil, MVP'de yorum yok); `new_venue`/`edit`/`owner_verification` tipleri Faz 2'de kullanıcı katkısı ve mekan-sahibi-girişi açılınca devreye girer — onaysız yayın yok kuralı (PRD teknik karar #3) o zaman da geçerli.
+**ContributionQueue:** id, type (new_venue/edit/report/owner_verification), payload (jsonb), submitted_by (nullable — hiçbiri kimlik gerektirmez), status (pending/approved/rejected), reviewed_by, reviewed_at. MVP'de `report` (opsiyonel `field`/`suggestedValue` ile düzeltme önerisi de taşıyabiliyor, packages/shared'ın `CreateReportSchema`'sı) ve `new_venue` tipleri aktif akışta kullanılır; `owner_verification` hâlâ Faz 2'de kullanıcı katkısı ve mekan-sahibi-girişi açılınca devreye girer — onaysız yayın yok kuralı (PRD teknik karar #3) o zaman da geçerli.
 
 ## 5. Kürasyon Kuyruğu Akışı
 
 **MVP'de** kürasyon ekibi mekanları doğrudan admin panelden girer/günceller (FR-AP-02 CSV import +
-manuel CRUD); `ContributionQueue`'ya yalnızca **şikayetler** düşer. Kullanıcı önerisi/düzeltme akışı
-Faz 2'de aktive olur (aşağıdaki diyagramdaki ilk iki dal).
+manuel CRUD), ama `ContributionQueue`'ya artık üç akış da düşüyor (2026-09-26'da açıldı: yeni mekan
+önerisi + düzeltme önerisi). **Onaylamak hiçbir durumda Venue'ye otomatik yazmaz** — kürasyon ekibi
+gerçek değişikliği (yeni mekan oluşturma veya alan düzeltmesi) kendi elleriyle CSV import/Prisma
+Studio/`AdminVenuesService.update()` ile uygular; bu panelde manuel mekan düzenleme UI'ı yok,
+bilinçli bir kapsam kararı.
 
 ```
-Kullanıcı önerisi ──┐  (Faz 2)
+Yeni mekan önerisi ─┐  (MVP, 2026-09-26: web /mekan-oner → NEW_VENUE, venueId null)
 Düzeltme önerisi ───┼──► ContributionQueue (pending)
-Şikayet ────────────┘         │              (MVP'de yalnızca bu dal aktif)
+Şikayet ────────────┘         │              (üçü de MVP'de aktif)
                               ▼
-                    Admin panel inceleme
-                    ├─ approve → Venue'ye uygula + VenueVersion kaydet + verified_at güncelle
+                    Admin panel inceleme (kuyruk sayfası: Şikayetler / Yeni mekan önerileri sekmesi)
+                    ├─ approve → yalnızca incelendi olarak işaretler (REPORT/NEW_VENUE);
+                    │            EDIT (re_verify) ise Venue'ye uygula + VenueVersion + verified_at
                     └─ reject  → gerekçeyle kapat
-Cron: verified_at > N gün ──► kürasyon kuyruğuna "re-verify" görevi (FR-MV-03)
+Cron: verified_at > N gün ──► kürasyon kuyruğuna "re-verify" görevi (FR-MV-03, type: EDIT)
 ```
 
 ## 6. Arama Katmanı — MVP'de tek parçalı, Faz 2'te iki parçalı olacak
