@@ -45,7 +45,19 @@ describe("RollerPage", () => {
     expect(searchUsers).toHaveBeenCalledWith("tok", "hazar");
   });
 
-  it("assigns curator role on click and refetches the search", async () => {
+  it("does not assign on the first click -- shows a confirm step first, since there is no revoke UI", async () => {
+    searchUsers.mockResolvedValueOnce([USER]);
+    render(<RollerPage />);
+    fireEvent.change(screen.getByLabelText(/e-posta ara/i), { target: { value: "hazar" } });
+    fireEvent.click(screen.getByRole("button", { name: /ara/i }));
+    await waitFor(() => expect(screen.getByText("hazar@example.com")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /küratör yap/i }));
+    expect(assignRole).not.toHaveBeenCalled();
+    expect(screen.getByText(/emin misin/i)).toBeInTheDocument();
+  });
+
+  it("assigns curator role only after confirming, and refetches the search", async () => {
     searchUsers.mockResolvedValueOnce([USER]).mockResolvedValueOnce([{ ...USER, role: "CURATOR" }]);
     render(<RollerPage />);
     fireEvent.change(screen.getByLabelText(/e-posta ara/i), { target: { value: "hazar" } });
@@ -53,8 +65,22 @@ describe("RollerPage", () => {
     await waitFor(() => expect(screen.getByText("hazar@example.com")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /küratör yap/i }));
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
     await waitFor(() => expect(assignRole).toHaveBeenCalledWith("tok", USER.id, "curator"));
     await waitFor(() => expect(screen.getByText("CURATOR")).toBeInTheDocument());
+  });
+
+  it("cancels the confirm step without assigning", async () => {
+    searchUsers.mockResolvedValueOnce([USER]);
+    render(<RollerPage />);
+    fireEvent.change(screen.getByLabelText(/e-posta ara/i), { target: { value: "hazar" } });
+    fireEvent.click(screen.getByRole("button", { name: /ara/i }));
+    await waitFor(() => expect(screen.getByText("hazar@example.com")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /küratör yap/i }));
+    fireEvent.click(screen.getByRole("button", { name: /vazgeç/i }));
+    expect(assignRole).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /küratör yap/i })).toBeInTheDocument();
   });
 
   it("shows an empty state when the search returns no matches", async () => {
@@ -82,6 +108,7 @@ describe("RollerPage", () => {
     await waitFor(() => expect(screen.getByText("hazar@example.com")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /küratör yap/i }));
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
     // Turkish İ/i case-folding pitfall (docs/STATE.md): JS regex `/i` doesn't lowercase "İ" to
     // plain "i", so a pattern starting with "işlem" never matches "İşlem gerçekleştirilemedi" --
     // match a substring that avoids the capital İ instead.
@@ -98,6 +125,7 @@ describe("RollerPage", () => {
     await waitFor(() => expect(screen.getByText("hazar@example.com")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /küratör yap/i }));
+    fireEvent.click(screen.getByRole("button", { name: /onayla/i }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
     // Must NOT claim the assign itself failed -- it succeeded; only the list refresh did.
     expect(screen.queryByRole("alert")).not.toHaveTextContent(/gerçekleştirilemedi/i);
