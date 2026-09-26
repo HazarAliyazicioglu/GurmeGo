@@ -32,6 +32,31 @@ describe("QueueItem — REPORT (existing behavior)", () => {
   });
 });
 
+describe("QueueItem — REPORT with a structured correction (field/suggestedValue)", () => {
+  it("shows the flagged field and suggested value alongside the reason", () => {
+    const item: AdminQueueItem = {
+      ...BASE, type: "REPORT", venueId: "v1",
+      payload: { reason: "Fiyat aralığı güncel değil", field: "Fiyat aralığı", suggestedValue: "MID" },
+      venue: { name: "Test Cafe", slug: "test-cafe" },
+    };
+    render(<QueueItem item={item} onApprove={vi.fn()} onReject={vi.fn()} />);
+    expect(screen.getByText("Fiyat aralığı güncel değil")).toBeInTheDocument();
+    expect(screen.getAllByText(/Fiyat aralığı/).length).toBeGreaterThan(1);
+    expect(screen.getByText(/MID/)).toBeInTheDocument();
+  });
+
+  it("does not show a suggested-value line when only field was given", () => {
+    const item: AdminQueueItem = {
+      ...BASE, type: "REPORT", venueId: "v1",
+      payload: { reason: "Telefon yanlış", field: "Telefon" },
+      venue: { name: "Test Cafe", slug: "test-cafe" },
+    };
+    render(<QueueItem item={item} onApprove={vi.fn()} onReject={vi.fn()} />);
+    expect(screen.getAllByText(/Telefon/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Önerilen/)).toBeNull();
+  });
+});
+
 describe("QueueItem — NEW_VENUE (venue-suggestion submissions)", () => {
   const item: AdminQueueItem = {
     ...BASE, type: "NEW_VENUE", venueId: null, venue: null,

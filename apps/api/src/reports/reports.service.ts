@@ -22,8 +22,11 @@ export class ReportsService {
       notFound.message = "Mekan bulunamadı";
       throw notFound;
     }
+    const payload: Record<string, string> = { reason: dto.reason };
+    if (dto.field) payload.field = dto.field;
+    if (dto.suggestedValue) payload.suggestedValue = dto.suggestedValue;
     await this.prisma.contributionQueue.create({
-      data: { type: "REPORT", venueId, payload: { reason: dto.reason }, submittedBy: null },
+      data: { type: "REPORT", venueId, payload, submittedBy: null },
     });
     const pendingCount = await this.prisma.contributionQueue.count({
       where: { venueId, type: "REPORT", status: "PENDING" },

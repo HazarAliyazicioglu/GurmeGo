@@ -298,6 +298,15 @@ describe("reportVenue", () => {
       "Report failed: 500",
     );
   });
+
+  it("includes field/suggestedValue in the request body when given (structured correction)", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ urgent: false }) }) as unknown as typeof fetch;
+    await reportVenue("3fa85f64-5717-4562-b3fc-2c963f66afa6", "yanlış", { field: "Fiyat aralığı", suggestedValue: "MID" });
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/report"),
+      expect.objectContaining({ body: JSON.stringify({ reason: "yanlış", field: "Fiyat aralığı", suggestedValue: "MID" }) }),
+    );
+  });
 });
 
 describe("suggestVenue", () => {

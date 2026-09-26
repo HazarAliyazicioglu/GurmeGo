@@ -16,6 +16,8 @@ export function QueueItem({
   pending?: boolean;
 }) {
   const reason = typeof item.payload.reason === "string" ? item.payload.reason : "(neden belirtilmemiş)";
+  const correctionField = typeof item.payload.field === "string" ? item.payload.field : null;
+  const correctionValue = typeof item.payload.suggestedValue === "string" ? item.payload.suggestedValue : null;
   const isNewVenue = item.type === "NEW_VENUE";
   const suggestion = isNewVenue
     ? {
@@ -82,6 +84,12 @@ export function QueueItem({
               Bildirim nedeni
             </p>
             <p className="text-sm leading-5 text-slate-700">{reason}</p>
+            {correctionField && (
+              <p className="mt-1.5 text-sm leading-5 text-slate-700">
+                <span className="font-semibold">{correctionField}</span>
+                {correctionValue && <> · Önerilen: <span className="font-semibold">{correctionValue}</span></>}
+              </p>
+            )}
           </>
         )}
       </div>
