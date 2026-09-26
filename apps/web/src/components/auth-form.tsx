@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
@@ -10,18 +11,38 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const fn = mode === "signin" ? signIn : signUp;
-      const { error } = await fn(email, password);
+      setError(null);
+      if (mode === "signup") {
+        const { error, needsConfirmation } = await signUp(email, password);
+        if (error) setError(error);
+        else if (needsConfirmation) setConfirmEmail(email);
+        else router.push("/favoriler");
+        return;
+      }
+      const { error } = await signIn(email, password);
       if (error) setError(error);
       else router.push("/favoriler");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (confirmEmail) {
+    return (
+      <div role="status" className="space-y-3 text-center">
+        <p className="font-serif text-2xl font-semibold text-ink">E-postanı kontrol et</p>
+        <p className="text-sm font-medium leading-relaxed text-ink/60">
+          <strong className="font-bold text-ink">{confirmEmail}</strong> adresine bir doğrulama linki gönderdik. Linke
+          tıkladıktan sonra giriş yapabilirsin. Gelmediyse spam klasörüne de bak.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -68,6 +89,11 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
           autoComplete={mode === "signin" ? "current-password" : "new-password"}
           className="min-h-12 w-full rounded-xl border border-ink/15 bg-creamPale/75 px-4 text-base font-medium tracking-[0.08em] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-hidden transition placeholder:tracking-[0.14em] placeholder:text-ink/25 hover:border-ink/30 focus:border-terracotta focus:bg-creamPale focus:ring-4 focus:ring-terracotta/10"
         />
+        {mode === "signin" && (
+          <Link href="/sifre-unuttum" className="inline-block text-xs font-semibold text-ink/55 underline-offset-2 hover:text-terracottaDeep hover:underline">
+            Şifremi unuttum
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -106,6 +132,20 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
           />
         </svg>
       </button>
+
+      {mode === "signup" && (
+        <p className="text-center text-xs font-medium leading-relaxed text-ink/50">
+          Kayıt olarak{" "}
+          <Link href="/kullanim-kosullari" className="font-semibold underline underline-offset-2 hover:text-terracottaDeep">
+            Kullanım Koşulları
+          </Link>
+          &apos;nı ve{" "}
+          <Link href="/gizlilik" className="font-semibold underline underline-offset-2 hover:text-terracottaDeep">
+            Gizlilik Politikası
+          </Link>
+          &apos;nı kabul etmiş olursun.
+        </p>
+      )}
     </form>
   );
 }

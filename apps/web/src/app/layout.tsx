@@ -4,6 +4,7 @@ import Link from "next/link";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ServiceWorkerRegister } from "@/components/sw-register";
+import { AuthNav } from "@/components/auth-nav";
 import { PRIMITIVE_COLORS } from "@/lib/colors";
 
 // Self-hosted by next/font (no request to Google at runtime, no CLS) -- only the heading font
@@ -54,7 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </span>
                 </Link>
 
-                <nav aria-label="Ana navigasyon">
+                <nav aria-label="Ana navigasyon" className="flex items-center gap-2">
                   <Link
                     href="/"
                     className="inline-flex min-h-11 items-center gap-2 rounded-full border border-ink/15 bg-white/45 px-3.5 text-[0.68rem] font-bold uppercase tracking-[0.14em] transition-colors hover:border-ink/35 hover:bg-white/75 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <span className="size-1.5 rounded-full bg-terracotta" aria-hidden="true" />
                     {"Se\u00e7kiler"}
                   </Link>
+                  <AuthNav />
                 </nav>
               </div>
             </header>
@@ -69,6 +71,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="mx-auto w-full max-w-6xl [&>main]:min-h-[calc(100dvh-4rem)] [&>main]:px-4 [&>main]:pb-16 [&>main]:sm:px-6 [&>main>h1]:mt-10 [&>main>h1]:font-serif [&>main>h1]:text-5xl [&>main>h1]:font-semibold [&>main>h1]:tracking-[-0.04em] [&>main>p]:mt-3 [&>main>p]:text-sm [&>main>p]:font-medium [&>main>p]:text-ink/55">
               {children}
             </div>
+
+            <footer className="border-t border-ink/10">
+              <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-6 text-xs font-semibold text-ink/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <p>GurmeGo · İstanbul&apos;un butik mekan rehberi</p>
+                <nav aria-label="Yasal" className="flex gap-4">
+                  <Link href="/gizlilik" className="hover:text-terracottaDeep hover:underline">
+                    Gizlilik
+                  </Link>
+                  <Link href="/kullanim-kosullari" className="hover:text-terracottaDeep hover:underline">
+                    Kullanım Koşulları
+                  </Link>
+                </nav>
+              </div>
+            </footer>
           </div>
         </AuthProvider>
       </body>

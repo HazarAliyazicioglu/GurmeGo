@@ -11,6 +11,10 @@ vi.mock("./supabase", () => ({
       getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
       onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn(),
+      signInWithPassword: vi.fn(),
+      resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
+      updateUser: vi.fn().mockResolvedValue({ error: null }),
     },
   },
 }));
@@ -106,5 +110,56 @@ describe("AuthProvider — getSession() failure", () => {
     }
     render(<AuthProvider><Probe /></AuthProvider>);
     await waitFor(() => expect(screen.getByTestId("loading-state")).toHaveTextContent("false"));
+  });
+});
+
+function ActionsProbe() {
+  const { signUp, signIn, requestPasswordReset, updatePassword } = useAuth();
+  const [out, setOut] = useState("idle");
+  return (
+    <div>
+      <span data-testid="out">{out}</span>
+      <button onClick={async () => setOut(JSON.stringify(await signUp("a@b.com", "secret1")))}>signup</button>
+      <button onClick={async () => setOut(JSON.stringify(await signIn("a@b.com", "bad")))}>signin</button>
+      <button onClick={async () => setOut(JSON.stringify(await requestPasswordReset("a@b.com")))}>reset</button>
+      <button onClick={async () => setOut(JSON.stringify(await updatePassword("newsecret")))}>update</button>
+    </div>
+  );
+}
+
+describe("AuthProvider — signUp confirmation, Turkish errors, password reset", () => {
+  it("reports needsConfirmation when signUp returns a user but no session (email confirmation on)", async () => {
+    vi.mocked(supabase.auth.signUp).mockResolvedValue({ data: { user: { id: "u1" }, session: null }, error: null } as never);
+    render(<AuthProvider><ActionsProbe /></AuthProvider>);
+    fireEvent.click(screen.getByText("signup"));
+    await waitFor(() => expect(screen.getByTestId("out")).toHaveTextContent('{"error":null,"needsConfirmation":true}'));
+  });
+
+  it("reports needsConfirmation false when signUp returns a live session", async () => {
+    vi.mocked(supabase.auth.signUp).mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null } as never);
+    render(<AuthProvider><ActionsProbe /></AuthProvider>);
+    fireEvent.click(screen.getByText("signup"));
+    await waitFor(() => expect(screen.getByTestId("out")).toHaveTextContent('{"error":null,"needsConfirmation":false}'));
+  });
+
+  it("translates a Supabase sign-in error to Turkish", async () => {
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ data: {}, error: { message: "Invalid login credentials" } } as never);
+    render(<AuthProvider><ActionsProbe /></AuthProvider>);
+    fireEvent.click(screen.getByText("signin"));
+    await waitFor(() => expect(screen.getByTestId("out")).toHaveTextContent("E-posta veya şifre hatalı."));
+  });
+
+  it("requestPasswordReset sends the recovery link back to /sifre-yenile on this origin", async () => {
+    render(<AuthProvider><ActionsProbe /></AuthProvider>);
+    fireEvent.click(screen.getByText("reset"));
+    await waitFor(() =>
+      expect(supabase.auth.resetPasswordForEmail).toHaveBeenCalledWith("a@b.com", { redirectTo: `${window.location.origin}/sifre-yenile` }),
+    );
+  });
+
+  it("updatePassword calls supabase.auth.updateUser with the new password", async () => {
+    render(<AuthProvider><ActionsProbe /></AuthProvider>);
+    fireEvent.click(screen.getByText("update"));
+    await waitFor(() => expect(supabase.auth.updateUser).toHaveBeenCalledWith({ password: "newsecret" }));
   });
 });
