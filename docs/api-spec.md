@@ -66,19 +66,19 @@ Tüm yanıtlarda güvenlik başlıkları (`X-Content-Type-Options`, `X-Frame-Opt
 Yol tarifi (FR-MD-03) ve mekan paylaşımı (FR-MD-06, WhatsApp) istemci tarafı deep link — API ucu
 gerekmez; detay yanıtı `location` içerir.
 
-## 4. Public API — Bildirim, Favoriler (MVP) / Yorum, Puan, Katkı (Faz 2)
+## 4. Public API — Bildirim, Öneri, Favoriler (MVP) / Yorum, Puan, Sahip Doğrulama (Faz 2)
 
 | Method | Path | Auth | Açıklama |
 |---|---|---|---|
-| POST | `/venues/:id/report` | — (kimlik gerektirmez) | **MVP.** Genel "bu bilgi yanlış" bildirimi → `ContributionQueue` (`report` tipi), rate limit IP bazlı (FR-KG-03) |
+| POST | `/venues/:id/report` | — (kimlik gerektirmez) | **MVP.** Genel "bu bilgi yanlış" bildirimi → `ContributionQueue` (`REPORT` tipi), rate limit IP bazlı (FR-KG-03). Opsiyonel `field`/`suggestedValue` ile yapısal düzeltme önerisi de taşır (2026-09-26, FR-KG-02 — ayrı bir uç DEĞİL, aynı endpoint'in gövdesinde) |
+| POST | `/venue-suggestions` | — (kimlik gerektirmez) | **MVP (2026-09-26).** Yeni mekan önerisi → `ContributionQueue` (`NEW_VENUE` tipi, `venueId: null`), aynı rate limit bütçesi (FR-KG-01). PRD'nin planladığı `/contributions/venues` değil bu path — gerçek implementasyon |
 | GET/POST | `/me/lists` · `/me/lists/:id/venues` | `user` | **MVP.** Favori koleksiyonları (FR-KA-04) |
+| DELETE | `/me/lists/:id/venues/:venueId` | `user` | **MVP (2026-09-26).** Favoriden çıkar |
 | POST | `/venues/:id/reviews` | `user` | **Faz 2, MVP'de yok.** Yorum + yıldız. Anında yayın, şikayet üzerine inceleme (FR-KG-03) |
 | POST | `/reviews/:id/report` | `user` | **Faz 2, MVP'de yok.** Yorum şikayeti → moderasyon kuyruğu |
 | PUT | `/venues/:id/gourmet-rating` | `approved_rater` | **Faz 2, MVP'de yok.** Gurme Puanı oyu (1-5). Rol kontrolü AK-01 konfigürasyonuna göre. Unique upsert → tek kullanıcı-tek mekan-tek puan (FR-GP-04) |
 | POST | `/venues/:id/owner-verification` | — (tek kullanımlı token) | **Faz 2, MVP'de yok.** Mekan sahibi doğrulama/itiraz akışı |
-| POST | `/contributions/venues` | `user` | **Faz 2, MVP'de yok.** Yeni mekan önerisi → ContributionQueue (FR-KG-01) |
-| POST | `/venues/:id/contributions` | `user` | **Faz 2, MVP'de yok.** Düzeltme önerisi (fiyat/kapandı) → kuyruk (FR-KG-02) |
-| GET | `/me/contributions` | `user` | **Faz 2, MVP'de yok.** Kullanıcının önerileri + durumları |
+| GET | `/me/contributions` | `user` | **Faz 2, MVP'de yok.** Kullanıcının önerileri + durumları — MVP'de öneriler kimliksiz gönderildiği için zaten takip edilemez |
 
 ## 5. Admin API — `/v1/admin/*` (curator/admin role guard)
 
@@ -86,8 +86,8 @@ Tek NestJS app içinde; ayrı servis yok (MVP kararı).
 
 | Method | Path | Açıklama |
 |---|---|---|
-| GET | `/admin/queue?type=&status=` | Onay kuyruğu: MVP'de yalnızca şikayetler; öneri/düzeltme tipleri Faz 2'de aynı kuyruğa eklenir (FR-AP-01) |
-| POST | `/admin/queue/:id/approve` · `/reject` | Onay → Venue'ye uygula + VenueVersion + `verified_at` güncelle |
+| GET | `/admin/queue?type=&status=` | Onay kuyruğu: MVP'de `REPORT` (düzeltme önerileri dahil) ve `NEW_VENUE`; `OWNER_VERIFICATION` Faz 2'de eklenir (FR-AP-01). Admin panelinin kuyruk sayfası bunları ayrı sekmelerde gösterir |
+| POST | `/admin/queue/:id/approve` · `/reject` | Onay: yalnızca `EDIT` (re_verify) tipi Venue'ye uygular + VenueVersion + `verified_at` günceller — `REPORT`/`NEW_VENUE` onayı yalnızca incelendi olarak işaretler, Venue'ye otomatik yazmaz (gerçek değişikliği kürasyon ekibi CSV import/manuel CRUD ile kendi uygular) |
 | POST | `/admin/venues` · PUT `/admin/venues/:id` | Manuel kürasyon CRUD |
 | POST | `/admin/venues/:id/revert/:versionId` | Versiyon geri alma (FR-MV-05) |
 | POST | `/admin/import` | CSV toplu import (FR-AP-02); satır bazlı hata raporu döner. En fazla `CSV_IMPORT_MAX_ROWS` (varsayılan 2000) satır: aşımda dosya **tümden** reddedilir, `400 CSV_TOO_MANY_ROWS`, hiçbir kayıt yazılmaz. Ayrıca kendi kotası var (bkz. §6) |
@@ -103,13 +103,13 @@ Değerler config'te (`RATE_LIMIT_*` env), başlangıç seti:
 | Kapsam | Limit | Anahtar |
 |---|---|---|
 | Okuma uçları | 100 istek/dk | IP |
-| Bilgi yanlış bildirimi (MVP) | 10/gün | IP (kimlik gerektirmez) |
-| Favori yazma uçları (liste oluştur/mekan ekle-çıkar) | 20/dk | IP (`RATE_LIMIT_WRITE_PER_MINUTE`) |
+| Bilgi yanlış bildirimi + düzeltme önerisi (MVP, `POST /venues/:id/report`) | 10/gün | IP (kimlik gerektirmez) |
+| Yeni mekan önerisi (MVP, `POST /venue-suggestions`) | 10/gün, **ayrı kova** | IP — limit değeri `RATE_LIMITS.report`'la aynı ama `@RateLimit`'e `bucket` verilmediği için sayaç uç başına, `/venues/:id/report`'unkini paylaşmaz |
+| Favori yazma uçları (liste oluştur/mekan ekle-çıkar-sil) | 20/dk | IP (`RATE_LIMIT_WRITE_PER_MINUTE`) |
 | **Tüm admin uçları** (`/admin/**`) | 60/dk, **tek ortak kova** | IP (`RATE_LIMIT_ADMIN_PER_MINUTE`) — uç başına değil, admin API genelinde toplam |
 | `POST /admin/import` | 5/saat, **ayrı kova** | IP (`RATE_LIMIT_ADMIN_IMPORT_PER_HOUR`) — genel admin kovasını harcamaz |
 | Yorum yazma (**Faz 2**) | 5/saat | kullanıcı |
 | Gurme Puanı (**Faz 2**) | 20/gün | kullanıcı |
-| Öneri/düzeltme (**Faz 2**) | 10/gün | kullanıcı |
 | NL arama (**Faz 2**, `/search`) | 30/gün | kullanıcı (anonim: 10/gün IP) — AI maliyet disiplini (NFR-05) |
 
 Aşımda `429` + `Retry-After` header. Kural gerekçeleri: [rule-engine.md](rule-engine.md).
