@@ -134,3 +134,23 @@ describe("AuthScreen", () => {
     expect(signIn).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("AuthScreen — şifremi unuttum", () => {
+  it("shows a 'Şifremi unuttum' link only in sign-in mode", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ signIn: jest.fn(), signUp: jest.fn(), requestPasswordReset: jest.fn() });
+    await render(<AuthScreen />);
+    expect(screen.getByText("Şifremi unuttum")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Hesabın yok mu? Kayıt ol"));
+    expect(screen.queryByText("Şifremi unuttum")).toBeNull();
+  });
+
+  it("sends the reset e-mail and shows a confirmation naming the address", async () => {
+    const requestPasswordReset = jest.fn().mockResolvedValue({ error: null });
+    (useAuth as jest.Mock).mockReturnValue({ signIn: jest.fn(), signUp: jest.fn(), requestPasswordReset });
+    await render(<AuthScreen />);
+    await fireEvent.changeText(screen.getByPlaceholderText("E-posta"), "me@x.com");
+    await fireEvent.press(screen.getByText("Şifremi unuttum"));
+    await waitFor(() => expect(requestPasswordReset).toHaveBeenCalledWith("me@x.com"));
+    expect(await screen.findByText(/me@x.com/)).toBeTruthy();
+  });
+});

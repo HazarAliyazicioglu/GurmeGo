@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { translateAuthError } from "./auth-errors";
 
 interface AuthContextValue {
   user: User | null;
@@ -9,6 +10,11 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<{ error: string | null }>;
+  // No `redirectTo` override: this app has no deep-link scheme configured (app.json), so the
+  // recovery e-mail's link falls back to Supabase's Site URL, which is the web app -- a mobile
+  // user resets their password on web (apps/web's /sifre-yenile, PR #34) and logs back into the
+  // app afterward. Real in-app recovery would need expo-linking + a scheme, tracked separately.
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -49,15 +55,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signIn: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      return { error: error?.message ?? null };
+      return { error: error ? translateAuthError(error.message) : null };
     },
     signUp: async (email, password) => {
       const { error } = await supabase.auth.signUp({ email, password });
-      return { error: error?.message ?? null };
+      return { error: error ? translateAuthError(error.message) : null };
     },
     signOut: async () => {
       const { error } = await supabase.auth.signOut();
-      return { error: error?.message ?? null };
+      return { error: error ? translateAuthError(error.message) : null };
+    },
+    requestPasswordReset: async (email) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      return { error: error ? translateAuthError(error.message) : null };
     },
   };
 
