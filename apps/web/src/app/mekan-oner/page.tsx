@@ -7,6 +7,13 @@ export const metadata: Metadata = {
   description: "Bildiğin bir butik mekanı GurmeGo'ya öner, kürasyon ekibi incelesin.",
 };
 
+// Same fix as sitemap.ts: this is a static route (no params) with a server-side fetch, so Next
+// tries to prerender it at BUILD time by default -- which fails with no live backend reachable
+// during `next build` (this repo's CI has none, by design). `force-dynamic` defers the
+// getDistricts() call to request time instead; getDistricts() already carries its own
+// DISTRICTS_REVALIDATE_S data-cache TTL, so this doesn't turn into an uncached fetch per request.
+export const dynamic = "force-dynamic";
+
 export default async function MekanOnerPage() {
   const districts = await getDistricts();
   return (
