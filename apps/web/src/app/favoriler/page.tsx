@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { getFavoriteLists, createFavoriteList } from "@/lib/api";
+import { getFavoriteLists, createFavoriteList, removeFavoriteVenue } from "@/lib/api";
 import type { FavoriteList } from "@gurmego/shared";
 
 export default function FavorilerPage() {
@@ -13,6 +13,7 @@ export default function FavorilerPage() {
   const [newListName, setNewListName] = useState("");
   const [creating, setCreating] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   // Guards against the privacy-sensitive race where a `getFavoriteLists` request (or a
   // `createFavoriteList` submission) is still in flight when the session changes (e.g. logout
   // followed by a different user logging back in before the first request settles) -- without
@@ -59,6 +60,7 @@ export default function FavorilerPage() {
     // in this component, not just `lists`.
     if (newListName !== "") setNewListName("");
     if (creating) setCreating(false);
+    if (removeError !== null) setRemoveError(null);
   }
 
   async function handleSignOut() {
@@ -75,6 +77,26 @@ export default function FavorilerPage() {
       router.push("/giris");
     } catch {
       setSignOutError("Çıkış yapılamadı. Tekrar deneyin.");
+    }
+  }
+
+  async function handleRemoveVenue(listId: string, venueId: string) {
+    if (!session?.access_token) return;
+    const requestId = latestCreateRequest.current;
+    setRemoveError(null);
+    try {
+      await removeFavoriteVenue(session.access_token, listId, venueId);
+      // Same session-change guard as handleCreateList: never mutate a different user's lists.
+      if (requestId !== latestCreateRequest.current) return;
+      setLists((prev) =>
+        prev
+          ? prev.map((list) =>
+              list.id === listId ? { ...list, favorites: list.favorites.filter((favorite) => favorite.venueId !== venueId) } : list,
+            )
+          : prev,
+      );
+    } catch {
+      if (requestId === latestCreateRequest.current) setRemoveError("Favorilerden çıkarılamadı. Tekrar dene.");
     }
   }
 
@@ -219,6 +241,12 @@ export default function FavorilerPage() {
         </form>
       )}
 
+      {removeError && (
+        <p role="alert" className="mt-4 text-xs font-semibold text-rose-700">
+          {removeError}
+        </p>
+      )}
+
       {lists === null ? (
         <section className="grid gap-3 py-6 sm:grid-cols-2 sm:gap-4 sm:py-8" aria-label="Favoriler yükleniyor" aria-busy="true">
           {[0, 1].map((item) => (
@@ -285,13 +313,23 @@ export default function FavorilerPage() {
                 {list.favorites.length > 0 ? (
                   <ul className="mt-3 flex flex-col gap-1.5">
                     {list.favorites.map((favorite) => (
-                      <li key={favorite.id}>
+                      <li key={favorite.id} className="flex items-center justify-between gap-3">
                         <Link
                           href={`/mekan/${favorite.venue.slug}`}
                           className="text-sm font-semibold text-ink/70 underline decoration-terracotta/40 underline-offset-2 hover:text-terracottaDeep"
                         >
                           {favorite.venue.name}
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveVenue(list.id, favorite.venueId)}
+                          aria-label={`${favorite.venue.name} favorilerden kaldır`}
+                          className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-full text-ink/40 transition-colors hover:bg-terracotta/10 hover:text-terracottaDeep focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta"
+                        >
+                          <svg viewBox="0 0 20 20" className="size-4 fill-none" aria-hidden="true">
+                            <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                          </svg>
+                        </button>
                       </li>
                     ))}
                   </ul>

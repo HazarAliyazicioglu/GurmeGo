@@ -53,6 +53,16 @@ export function createApiClient(baseUrl: string, getToken?: () => string | undef
       if (!res.ok) throw new ApiHttpError(res.status, `API error ${res.status}: ${await res.text().catch(() => "")}`);
       return res.json();
     },
+    // DELETE endpoints in apps/api return an empty body (200/204) -- deliberately not parsed, or
+    // `res.json()` would throw on a successful delete.
+    async delete(path: string): Promise<void> {
+      const token = getToken?.();
+      const res = await fetch(`${baseUrl}${path}`, {
+        method: "DELETE",
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!res.ok) throw new ApiHttpError(res.status, `API error ${res.status}: ${await res.text().catch(() => "")}`);
+    },
     async put<T>(path: string, body: unknown): Promise<T> {
       const token = getToken?.();
       const res = await fetch(`${baseUrl}${path}`, {
