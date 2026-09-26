@@ -1,4 +1,4 @@
-# Durum — 2026-09-26
+# Durum — 2026-09-26 (2. tur)
 
 ## Veri sınırı
 Codex: izinli ama **kota bitti, 2026-09-28'e kadar geri dönmüyor**. GLM: izinli. Kaynak: 2026-09-08 + bugünkü kota hatası.
@@ -18,7 +18,9 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 - `https://gurme-go-web.vercel.app/kadikoy` test edildi — gerçek mekan isimleri (Moda Meyhanesi, Kadıköy Kahvecisi) görünüyor, SSR çalışıyor.
 
 ## Sıradaki adım
-**2026-09-26: tam yetki yeniden verildi ("kullanıcı kullanabilecek seviyeye getir").** CORS düzeldi (doğrulandı). Canlıya giden: PR #33 (favori toggle/hata/loading + favoriler sayfasında kaldır), PR #34 (header giriş/favoriler linki, kayıt sonrası e-posta doğrulama paneli, şifremi unuttum, TR hata mesajları, /gizlilik + /kullanim-kosullari + footer). Sıradaki tarama maddeleri: (1) API gecikmesi ~1 sn/istek — Supabase Sydney ↔ Railway bölgesi uyumsuz, KULLANICI kararı (Supabase'i Frankfurt'a taşımak = yeni proje + migration), (2) `NEXT_PUBLIC_SITE_URL` Vercel'de set mi? Yoksa sitemap/canonical `gurmego.com`'a işaret eder, (3) /gizlilik'te veri sorumlusu/başvuru kanalı yok — kullanıcı iletişim bilgisini verince eklenecek, (4) arama sayfası/mobil/admin tarama.
+**PR #36 canlıda: "mekan öner" özelliği uçtan uca çalışıyor** (shared şema + `POST /venue-suggestions` + admin kuyrukta Şikayetler/Yeni-mekan-önerileri sekmesi + web `/mekan-oner` sayfası, header+footer'dan linkli). Prod'da canlı doğrulama sırasında gerçek bir test kaydı düştü: admin panelde "Yeni mekan önerileri" sekmesinde "Test Ping Kahvecisi" (Kadıköy/cafe) görünecek — **reddet yeterli**, Venue tablosuna hiç yazılmadı.
+
+Kullanıcı "ürün hâlâ kullanışlı değil, geliştirmeye devam" dedi (2026-09-26). REVIEW-PLAN.md'nin çoğu bulgusu stale çıktı (zaten çözülmüş: helmet, rate-limit, security header'lar, error/not-found sayfaları, SEO). Gerçek boşluk mimari denetimden çıkmadı, kod okumaktan çıktı: `architecture.md`'nin vaat ettiği "kürasyon kuyruğu = yeni mekan önerisi + düzeltme + şikayet" üçlüsünden sadece şikayet vardı. Şimdi ikisi var (öneri + şikayet); **"düzeltme" (mevcut mekan bilgisini kullanıcının düzeltme önermesi, ContributionType.EDIT) hâlâ yok** — sıradaki aday bu. Ayrıca mobil app ve arama/harita akışları henüz gerçek kullanıcı gözüyle taranmadı.
 
 ## Bloke olanlar
 - **Codex kotası** (2026-09-28'e kadar).
