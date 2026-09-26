@@ -7,8 +7,10 @@ import {
   VenueListResponseSchema,
   MapVenueListSchema,
   ReportResponseSchema,
+  SuggestVenueResponseSchema,
   type VenueDetail,
   type District,
+  type SuggestVenue,
 } from "@gurmego/shared";
 export type { VenueListItem, MapVenue } from "@gurmego/shared";
 import { z } from "zod";
@@ -111,5 +113,18 @@ export async function reportVenue(venueId: string, reason: string) {
   const raw = await res.json();
   const result = ReportResponseSchema.safeParse(raw);
   if (!result.success) throw new ApiValidationError(`/venues/${venueId}/report`, result.error.issues);
+  return result.data;
+}
+
+export async function suggestVenue(submission: SuggestVenue) {
+  const res = await fetch(`${API_BASE}/venue-suggestions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(submission),
+  });
+  if (!res.ok) throw new Error(`Suggestion failed: ${res.status}`);
+  const raw = await res.json();
+  const result = SuggestVenueResponseSchema.safeParse(raw);
+  if (!result.success) throw new ApiValidationError("/venue-suggestions", result.error.issues);
   return result.data;
 }

@@ -19,6 +19,19 @@ describe("AdminQueueItemSchema / AdminQueueMutationResultSchema type enum", () =
   it("AdminQueueMutationResultSchema accepts type EDIT, not just REPORT", () => {
     expect(AdminQueueMutationResultSchema.safeParse({ ...mutationBase, type: "EDIT" }).success).toBe(true);
   });
+
+  // A NEW_VENUE row has no target Venue yet (that's the point of the submission), so `venue` is
+  // legitimately null here -- unlike REPORT/EDIT where a null `venue` means the venue was deleted
+  // out from under a pending item. The item schema itself doesn't (and can't) distinguish the two
+  // reasons; the admin UI does that by branching on `type`, not on `venue === null` alone.
+  it("AdminQueueItemSchema accepts type NEW_VENUE with venueId/venue both null", () => {
+    expect(
+      AdminQueueItemSchema.safeParse({ ...itemBase, type: "NEW_VENUE", venueId: null, venue: null }).success,
+    ).toBe(true);
+  });
+  it("AdminQueueMutationResultSchema accepts type NEW_VENUE", () => {
+    expect(AdminQueueMutationResultSchema.safeParse({ ...mutationBase, type: "NEW_VENUE", venueId: null }).success).toBe(true);
+  });
 });
 
 // Final whole-branch review finding: AdminQueueController's `list()` cast raw `type`/`status`

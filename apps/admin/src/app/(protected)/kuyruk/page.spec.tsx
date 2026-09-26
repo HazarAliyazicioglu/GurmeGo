@@ -390,7 +390,7 @@ describe("KuyrukPage", () => {
       signOut,
     });
     rerender(<KuyrukPage />);
-    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING" }));
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING", type: "REPORT" }));
 
     await act(async () => {
       rejectApprove!(new ApiHttpError(401, "unauthorized"));
@@ -430,7 +430,7 @@ describe("KuyrukPage", () => {
       signOut,
     });
     rerender(<KuyrukPage />);
-    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING" }));
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING", type: "REPORT" }));
 
     // The stale approve (still holding the OLD "tok" closure) now succeeds, triggering its own
     // `refetch()` call -- which uses "tok", not "tok-2" -- and that call gets a 401.
@@ -473,7 +473,7 @@ describe("KuyrukPage", () => {
       signOut,
     });
     rerender(<KuyrukPage />);
-    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING" }));
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-2", { status: "PENDING", type: "REPORT" }));
     const getQueueCallsBeforeStaleResolve = getQueue.mock.calls.length;
 
     // The stale approve (still holding the OLD "tok" closure) now succeeds, triggering its own
@@ -523,7 +523,7 @@ describe("KuyrukPage", () => {
       signOut,
     });
     rerender(<KuyrukPage />);
-    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING" }));
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING", type: "REPORT" }));
 
     // The approve (still holding the OLD "tok" closure) now succeeds, triggering its own
     // `refetch()` call -- this must NOT be discarded, since identity never changed. Ninth Codex
@@ -535,7 +535,7 @@ describe("KuyrukPage", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(getQueue).toHaveBeenLastCalledWith("tok-refreshed", { status: "PENDING" });
+    expect(getQueue).toHaveBeenLastCalledWith("tok-refreshed", { status: "PENDING", type: "REPORT" });
     expect(screen.getByTestId("empty-state")).toBeInTheDocument();
   });
 
@@ -565,7 +565,7 @@ describe("KuyrukPage", () => {
       signOut,
     });
     rerender(<KuyrukPage />);
-    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING" }));
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING", type: "REPORT" }));
 
     // The approve itself (still using the OLD, now-superseded "tok") fails with a 401 -- this must
     // NOT sign out the still-validly-signed-in curator.
@@ -604,7 +604,7 @@ describe("KuyrukPage", () => {
       signOut,
     });
     rerender(<KuyrukPage />);
-    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING" }));
+    await waitFor(() => expect(getQueue).toHaveBeenCalledWith("tok-refreshed", { status: "PENDING", type: "REPORT" }));
 
     // The approve succeeds, triggering its own follow-up refetch() -- which now uses the CURRENT
     // "tok-refreshed" token, not the stale "tok" the click originally captured. That call 401s.
@@ -614,7 +614,7 @@ describe("KuyrukPage", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(getQueue).toHaveBeenLastCalledWith("tok-refreshed", { status: "PENDING" });
+    expect(getQueue).toHaveBeenLastCalledWith("tok-refreshed", { status: "PENDING", type: "REPORT" });
     expect(signOut).toHaveBeenCalled();
     expect(push).toHaveBeenCalledWith("/giris");
   });
@@ -638,5 +638,44 @@ describe("KuyrukPage — visible loading state while the queue itself is loading
     render(<KuyrukPage />);
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent(/yükleniyor/i);
+  });
+});
+
+describe("KuyrukPage — type toggle (venue-suggestion feature)", () => {
+  const NEW_VENUE_ITEM = {
+    id: "s1", type: "NEW_VENUE" as const, venueId: null, venue: null, submittedBy: null,
+    status: "PENDING" as const, reviewedBy: null, reviewedAt: null, createdAt: "2026-01-01T00:00:00.000Z",
+    urgent: false, payload: { name: "Moda Kahvecisi", districtName: "Kadıköy", category: "cafe" },
+  };
+
+  it("fetches REPORT rows by default", async () => {
+    getQueue.mockResolvedValue([]);
+    render(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalled());
+    expect(getQueue.mock.calls[0][1]).toMatchObject({ type: "REPORT" });
+  });
+
+  it("switches to NEW_VENUE rows when the curator selects that tab, and shows the suggestion", async () => {
+    getQueue.mockResolvedValueOnce([]).mockResolvedValueOnce([NEW_VENUE_ITEM]);
+    render(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Yeni mekan önerileri" }));
+
+    await waitFor(() => expect(getQueue).toHaveBeenCalledTimes(2));
+    expect(getQueue.mock.calls[1][1]).toMatchObject({ type: "NEW_VENUE" });
+    await waitFor(() => expect(screen.getByText("Moda Kahvecisi")).toBeInTheDocument());
+  });
+
+  it("switching back to 'Şikayetler' refetches REPORT rows", async () => {
+    getQueue.mockResolvedValueOnce([]).mockResolvedValueOnce([NEW_VENUE_ITEM]).mockResolvedValueOnce([BASE_ITEM]);
+    render(<KuyrukPage />);
+    await waitFor(() => expect(getQueue).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Yeni mekan önerileri" }));
+    await waitFor(() => expect(getQueue).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "Şikayetler" }));
+    await waitFor(() => expect(getQueue).toHaveBeenCalledTimes(3));
+    expect(getQueue.mock.calls[2][1]).toMatchObject({ type: "REPORT" });
+    await waitFor(() => expect(screen.getByText("Test Cafe")).toBeInTheDocument());
   });
 });

@@ -12,6 +12,12 @@ export default function KuyrukPage() {
   const router = useRouter();
   const [items, setItems] = useState<AdminQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // Which ContributionType this page is showing. Kept as a ref alongside the state (same pattern
+  // as `currentTokenRef`/`identityRef` below) so `refetch`'s useCallback identity/deps don't need
+  // to change when the curator switches tabs -- `handleTypeChange` updates the ref synchronously
+  // (before `refetch` reads it), then triggers `refetch` itself.
+  const [queueType, setQueueType] = useState<"REPORT" | "NEW_VENUE">("REPORT");
+  const queueTypeRef = useRef(queueType);
   // Two DISTINCT error states, deliberately not merged into one:
   // - loadError: the initial getQueue() failed. There is no data to show, so it is correct to hide
   //   the entire list/empty-state block while this is set.
@@ -117,7 +123,7 @@ export default function KuyrukPage() {
     // closure that triggered it was.
     const tokenForThisCall = currentTokenRef.current ?? token;
     try {
-      const data = await getQueue(tokenForThisCall, { status: "PENDING" });
+      const data = await getQueue(tokenForThisCall, { status: "PENDING", type: queueTypeRef.current });
       if (requestId !== latestQueueRequest.current) return; // a newer refetch has since started — discard this stale response
       setItems(data);
       setLoadError(null);
@@ -158,6 +164,16 @@ export default function KuyrukPage() {
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  function handleTypeChange(type: "REPORT" | "NEW_VENUE") {
+    if (type === queueType) return;
+    queueTypeRef.current = type;
+    setQueueType(type);
+    setItems([]);
+    setLoading(true);
+    setLoadError(null);
+    void refetch();
+  }
 
   function addMutatingId(id: string) {
     setMutatingIds((prev) => new Set(prev).add(id));
@@ -262,6 +278,21 @@ export default function KuyrukPage() {
               <p className="mt-1.5 max-w-2xl text-sm leading-5 text-slate-600">
                 Bekleyen mekan bildirimlerini inceleyin ve sonuçlandırın.
               </p>
+              <div className="mt-3 inline-flex rounded-md border border-slate-300 bg-white p-0.5 shadow-sm" role="group" aria-label="Kuyruk türü">
+                {(["REPORT", "NEW_VENUE"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleTypeChange(type)}
+                    aria-pressed={queueType === type}
+                    className={`rounded-[5px] px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      queueType === type ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    {type === "REPORT" ? "Şikayetler" : "Yeni mekan önerileri"}
+                  </button>
+                ))}
+              </div>
             </div>
             {/* Gated on !loadError: `items.length` is still 0 while a load failure is showing (there's
                 no data at all, not a known-empty queue), so rendering "Bekleyen 0 bildirim" here would

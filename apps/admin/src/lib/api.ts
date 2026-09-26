@@ -24,16 +24,12 @@ export class ApiValidationError extends Error {
   }
 }
 
-// `type` is NOT a caller-supplied option — this app only ever displays REPORT items (see the
-// AdminQueueItemSchema comment), so the filter is hardcoded here, structurally, rather than left to
-// every call site to remember. A pending EDIT/re_verify item elsewhere in the real queue must never
-// be able to break this app's one page.
-//
-// This deliberately narrows the plan's Task 3 "Produces" signature (`getQueue(token, {type?,
-// status?})`, docs/superpowers/plans/2026-07-25-admin-panel.md) — `type` was dropped, not left
-// optional, specifically so a caller can never override the REPORT-only lock above. Contract note,
-// not a behavior gap: this signature is final for this app's narrowed 2-page scope.
-export async function getQueue(token: string, filters: { status?: string } = {}): Promise<AdminQueueItem[]> {
+// `type` defaults to REPORT (unchanged from the original REPORT-only scope,
+// docs/superpowers/plans/2026-07-25-admin-panel.md) but can now be overridden — the venue-suggestion
+// feature (kuyruk page's type toggle) needs to fetch NEW_VENUE rows through this same function.
+// `AdminQueueItemSchema`/`AdminQueueMutationResultSchema` were widened to the full ContributionType
+// enum for exactly this reason (see their own comments).
+export async function getQueue(token: string, filters: { status?: string; type?: string } = {}): Promise<AdminQueueItem[]> {
   const client = createApiClient(API_BASE, () => token);
   const params = new URLSearchParams({ type: "REPORT", ...filters }).toString();
   const raw = await client.get<unknown>(`/admin/queue?${params}`);
