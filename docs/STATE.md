@@ -1,4 +1,4 @@
-# Durum — 2026-09-26 (5. tur)
+# Durum — 2026-09-26 (6. tur)
 
 ## Veri sınırı
 Codex: izinli ama **kota bitti, 2026-09-28'e kadar geri dönmüyor**. GLM: izinli. Kaynak: 2026-09-08 + bugünkü kota hatası.
@@ -18,16 +18,9 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 - `https://gurme-go-web.vercel.app/kadikoy` test edildi — gerçek mekan isimleri (Moda Meyhanesi, Kadıköy Kahvecisi) görünüyor, SSR çalışıyor.
 
 ## Sıradaki adım
-**PR #42 canlıda: admin panele şifremi unuttum/sıfırlama eklendi.** Admin davetle kayıt (sign-up yok) — kilitlenen bir curator'ın önceden hiç kendi kendine kurtulma yolu yoktu. Web/mobil ile aynı desen (Türkçe hata çevirisi + kendi `/sifre-yenile`'si).
+**Kullanıcı "duracak mısın, devam et, projenin başında sen varsın" dedi (2026-09-26) — bundan sonra iş bitince kapanış sorusu YOK, sıradaki en değerli işe kendiliğinden geç.** Bu turda: PR #44 (rule-engine/architecture/api-spec dokümantasyonu #36/#38 ile senkronize edildi — mimari değişiklik yapıp docs güncellememek CLAUDE.md ihlaliydi, düzeltildi), PR #45 (admin CSV import sayfasına sütun formatı referansı + örnek indirme), PR #46 (roller sayfasında curator atamadan önce onay adımı — geri alma UI'ı olmadığı için tek tıkla geri dönüşsüzdü).
 
-**Gurme Puanı'na ELLE SÜRÜLMEDİ** — kullanıcı "öncelik sırasını sen belirle" dedi ama `rule-engine.md`'de "Faz 2'ye ertelendi, MVP'de yok" diye açıkça yazan bir kapsam kararı var (2026-07-24 tarihli). Bu, benim isteğe bağlı eleyebileceğim bir öncelik değil, önceden verilmiş bir ürün kararı — tek taraflı geri açmadım.
-
-Web → mobil → admin sırasıyla üç istemcinin de "gerçek kullanıcı kullanabilir mi" taraması bu turda tamamlandı (toplam 8 PR: #33-42). Kalan gerçek adaylar hâlâ aynı üçü, hiçbiri "hızlı düzeltme" değil, ikisi kullanıcı kararı/kapsam konuşması istiyor:
-- Mobil deep-linking (gerçek cihaz gerektiriyor).
-- Mobil tasarım sistemi (büyük, ayrı iş).
-- Gurme Puanı / semantic search — kullanıcı Faz 2 kapsamını açmak isterse.
-
-Sıradaki oturumda kullanıcıya sor: MVP'de tarayacak başka bir yüzey mi var (ör. rate-limit/güvenlik ayarları, CSV import akışı, moderasyon kuralları), yoksa Faz 2 kapsamını mı açalım?
+Admin panelinin 6 sayfasından (kuyruk, import, roller taranmış; mekan-gecmisi, veri-kalitesi, erisim-yok hızlıca göz gezdirildi, ciddi bir sorun görülmedi) tarama tamamlandı. Sıradaki: **backend'in kendisini** (rate-limit config, audit log gerçekten çalışıyor mu, `/health` dışı observability) tara — üç istemciyi bitirdik ama API'nin operasyonel olgunluğuna hiç bakmadık.
 
 ## Bloke olanlar
 - **Codex kotası** (2026-09-28'e kadar).
