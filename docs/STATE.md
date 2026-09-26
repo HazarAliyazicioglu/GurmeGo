@@ -1,4 +1,4 @@
-# Durum — 2026-09-26 (2. tur)
+# Durum — 2026-09-26 (3. tur)
 
 ## Veri sınırı
 Codex: izinli ama **kota bitti, 2026-09-28'e kadar geri dönmüyor**. GLM: izinli. Kaynak: 2026-09-08 + bugünkü kota hatası.
@@ -18,9 +18,9 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 - `https://gurme-go-web.vercel.app/kadikoy` test edildi — gerçek mekan isimleri (Moda Meyhanesi, Kadıköy Kahvecisi) görünüyor, SSR çalışıyor.
 
 ## Sıradaki adım
-**PR #36 canlıda: "mekan öner" özelliği uçtan uca çalışıyor** (shared şema + `POST /venue-suggestions` + admin kuyrukta Şikayetler/Yeni-mekan-önerileri sekmesi + web `/mekan-oner` sayfası, header+footer'dan linkli). Prod'da canlı doğrulama sırasında gerçek bir test kaydı düştü: admin panelde "Yeni mekan önerileri" sekmesinde "Test Ping Kahvecisi" (Kadıköy/cafe) görünecek — **reddet yeterli**, Venue tablosuna hiç yazılmadı.
+**PR #38 canlıda: REPORT'a yapısal düzeltme (field/suggestedValue) eklendi.** `EDIT` tipini kasıtlı KULLANMADIM — approve(EDIT) otomatik `verifiedAt` günceller + venue-başına-tek-PENDING-EDIT unique index'i re-verify cron'una ait, kullanıcı düzeltmesiyle çakışırdı. Web'de ReportForm'a "Düzeltme öner" toggle'ı, admin'de queue-item'da gösterim eklendi.
 
-Kullanıcı "ürün hâlâ kullanışlı değil, geliştirmeye devam" dedi (2026-09-26). REVIEW-PLAN.md'nin çoğu bulgusu stale çıktı (zaten çözülmüş: helmet, rate-limit, security header'lar, error/not-found sayfaları, SEO). Gerçek boşluk mimari denetimden çıkmadı, kod okumaktan çıktı: `architecture.md`'nin vaat ettiği "kürasyon kuyruğu = yeni mekan önerisi + düzeltme + şikayet" üçlüsünden sadece şikayet vardı. Şimdi ikisi var (öneri + şikayet); **"düzeltme" (mevcut mekan bilgisini kullanıcının düzeltme önermesi, ContributionType.EDIT) hâlâ yok** — sıradaki aday bu. Ayrıca mobil app ve arama/harita akışları henüz gerçek kullanıcı gözüyle taranmadı.
+Bu turda kürasyon kuyruğunun üç girişi de (yeni mekan önerisi #36, düzeltme #38, şikayet zaten vardı) tamam. Sıradaki adaylar, öncelik sırasıyla değil: (1) mobil app'i gerçek kullanıcı gözüyle tara (henüz bu turda hiç bakılmadı), (2) arama/harita akışlarını canlıda uçtan uca test et, (3) `NEXT_PUBLIC_SITE_URL` Vercel'de set mi kontrol et (kullanıcı kararı — önceki turda not edildi), (4) tasarım tokenı sistemi (180 hardcode hex, REVIEW-PLAN §2.3) — kozmetik, düşük öncelik.
 
 ## Bloke olanlar
 - **Codex kotası** (2026-09-28'e kadar).
