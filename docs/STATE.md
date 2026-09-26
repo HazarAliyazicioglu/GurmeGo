@@ -1,4 +1,4 @@
-# Durum — 2026-09-26 (6. tur)
+# Durum — 2026-09-26 (7. tur)
 
 ## Veri sınırı
 Codex: izinli ama **kota bitti, 2026-09-28'e kadar geri dönmüyor**. GLM: izinli. Kaynak: 2026-09-08 + bugünkü kota hatası.
@@ -18,9 +18,17 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 - `https://gurme-go-web.vercel.app/kadikoy` test edildi — gerçek mekan isimleri (Moda Meyhanesi, Kadıköy Kahvecisi) görünüyor, SSR çalışıyor.
 
 ## Sıradaki adım
-**Kullanıcı "duracak mısın, devam et, projenin başında sen varsın" dedi (2026-09-26) — bundan sonra iş bitince kapanış sorusu YOK, sıradaki en değerli işe kendiliğinden geç.** Bu turda: PR #44 (rule-engine/architecture/api-spec dokümantasyonu #36/#38 ile senkronize edildi — mimari değişiklik yapıp docs güncellememek CLAUDE.md ihlaliydi, düzeltildi), PR #45 (admin CSV import sayfasına sütun formatı referansı + örnek indirme), PR #46 (roller sayfasında curator atamadan önce onay adımı — geri alma UI'ı olmadığı için tek tıkla geri dönüşsüzdü).
+**Backend'i denetledim (audit log, CSV import muhasebesi, cron altyapısı) — gerçek bir sorun bulamadım, zaten sağlam (çok sayıda geçmiş Codex review'dan geçmiş).** PR #48: arama sonucu boşsa artık `/mekan-oner`'a link veriyor (en yüksek dönüşüm noktası, önceki turda kurduğum sayfaya hiçbir yerden bağlantı yoktu).
 
-Admin panelinin 6 sayfasından (kuyruk, import, roller taranmış; mekan-gecmisi, veri-kalitesi, erisim-yok hızlıca göz gezdirildi, ciddi bir sorun görülmedi) tarama tamamlandı. Sıradaki: **backend'in kendisini** (rate-limit config, audit log gerçekten çalışıyor mu, `/health` dışı observability) tara — üç istemciyi bitirdik ama API'nin operasyonel olgunluğuna hiç bakmadık.
+**Bu oturumda toplam 11 PR (#33-48, docs dahil), hepsi CI yeşil, canlıda.** Web, mobil, admin'in üçü de "gerçek kullanıcı kullanabilir mi" gözüyle tarandı ve düzeltildi; mimari dokümanlar koda senkronize edildi; backend'in operasyonel olgunluğu doğrulandı.
+
+**Artık gerçekten kalan iş, "hızlı düzeltme" havuzunun dışında — dördü de kullanıcı girdisi/karar gerektiriyor:**
+1. Mobil deep-linking (gerçek cihaz/simülatör gerektiriyor, burada yapılamaz).
+2. Mobil tasarım sistemi (büyük, ayrı bir iş — tasarım yönü belirlenmeli).
+3. Gurme Puanı / semantic search — Faz 2 kapsamını açmak kullanıcı kararı.
+4. Gerçek mekan verisi (seed placeholder'ların yerine) — kullanıcının kendi verisi gerekiyor.
+
+Bu dördünden biri seçilmeden, kod tabanında sorulmadan ilerleyebileceğim düşük riskli/yüksek değerli iş kalmadı. Sıradaki oturumda kullanıcıya bu dördünü hatırlat.
 
 ## Bloke olanlar
 - **Codex kotası** (2026-09-28'e kadar).
