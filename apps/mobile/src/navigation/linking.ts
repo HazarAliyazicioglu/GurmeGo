@@ -20,6 +20,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       },
       VenueDetail: "mekan/:slug",
       Auth: "giris",
+      SuggestVenue: "mekan-oner",
     },
   },
 };

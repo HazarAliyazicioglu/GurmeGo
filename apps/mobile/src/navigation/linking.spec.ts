@@ -26,6 +26,11 @@ describe("linking config", () => {
     expect(state?.routes.map((r) => r.name)).toEqual(["Tabs", "Auth"]);
   });
 
+  it("routes the venue-suggestion path to SuggestVenue, matching web's /mekan-oner", () => {
+    const state = getStateFromPath("mekan-oner", linking.config);
+    expect(state?.routes.map((r) => r.name)).toEqual(["Tabs", "SuggestVenue"]);
+  });
+
   it("declares the custom scheme and the production web origin as prefixes", () => {
     expect(linking.prefixes).toContain("gurmego://");
     expect(linking.prefixes).toContain("https://gurme-go-web.vercel.app");

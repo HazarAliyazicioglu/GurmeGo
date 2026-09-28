@@ -1,4 +1,4 @@
-import { getVenues, reportVenue, ApiValidationError } from "./api";
+import { getVenues, reportVenue, suggestVenue, ApiValidationError } from "./api";
 
 const originalFetch = globalThis.fetch;
 
@@ -29,6 +29,38 @@ describe("reportVenue", () => {
       expect.stringContaining("/report"),
       expect.objectContaining({ body: JSON.stringify({ reason: "yanlış", field: "Fiyat aralığı", suggestedValue: "MID" }) }),
     );
+  });
+});
+
+// Web parity audit (2026-09-28): apps/web's /mekan-oner already posts to /venue-suggestions
+// (PR #36); mobile had no equivalent client function at all.
+describe("suggestVenue", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const SUBMISSION = { name: "Moda Kahvecisi", districtSlug: "kadikoy", category: "cafe" };
+
+  it("posts the submission and returns the parsed response on success", async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }) as jest.Mock;
+
+    await expect(suggestVenue(SUBMISSION)).resolves.toEqual({ ok: true });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/venue-suggestions"),
+      expect.objectContaining({ method: "POST", body: JSON.stringify(SUBMISSION) }),
+    );
+  });
+
+  it("throws ApiValidationError on an invalid response shape", async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: false }) }) as jest.Mock;
+
+    await expect(suggestVenue(SUBMISSION)).rejects.toThrow(ApiValidationError);
+  });
+
+  it("throws a plain Error when the HTTP response is not ok", async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429 }) as jest.Mock;
+
+    await expect(suggestVenue(SUBMISSION)).rejects.toThrow("Suggestion failed: 429");
   });
 });
 

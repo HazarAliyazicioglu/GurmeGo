@@ -3,12 +3,14 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import TabNavigator from "./TabNavigator";
 import VenueDetailScreen from "../screens/VenueDetailScreen";
 import AuthScreen from "../screens/AuthScreen";
+import SuggestVenueScreen from "../screens/SuggestVenueScreen";
 import { linking } from "./linking";
 
 export type RootStackParamList = {
   Tabs: undefined;
   VenueDetail: { slug: string };
   Auth: undefined;
+  SuggestVenue: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -20,6 +22,7 @@ export default function RootNavigator() {
         <Stack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
         <Stack.Screen name="VenueDetail" component={VenueDetailScreen} options={{ title: "Mekan" }} />
         <Stack.Screen name="Auth" component={AuthScreen} options={{ title: "Giriş yap" }} />
+        <Stack.Screen name="SuggestVenue" component={SuggestVenueScreen} options={{ title: "Mekan öner" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
