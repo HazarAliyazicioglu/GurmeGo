@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,14 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
   const [submitting, setSubmitting] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
+
+  // /giris toggles `mode` on a single mounted AuthForm instance rather than navigating, so state
+  // survives a mode switch by default. Without this, checking consent in one signup attempt,
+  // tabbing to signin and back would carry that checked state into a fresh attempt the user never
+  // affirmed for.
+  useEffect(() => {
+    setConsent(false);
+  }, [mode]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

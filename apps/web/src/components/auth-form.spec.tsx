@@ -106,4 +106,17 @@ describe("AuthForm — explicit KVKK/terms consent on signup", () => {
     render(<AuthForm mode="signin" />);
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
+
+  // Cross-model review (Codex): /giris renders a single AuthForm instance and toggles its `mode`
+  // prop client-side (not a route change) -- without a reset, checking consent in one signup
+  // attempt, switching to signin and back would silently carry the old checkbox state into a
+  // fresh attempt the user never affirmed.
+  it("resets consent when mode toggles away from signup and back", () => {
+    const { rerender } = render(<AuthForm mode="signup" />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /kabul ediyorum/i }));
+    expect(screen.getByRole("checkbox", { name: /kabul ediyorum/i })).toBeChecked();
+    rerender(<AuthForm mode="signin" />);
+    rerender(<AuthForm mode="signup" />);
+    expect(screen.getByRole("checkbox", { name: /kabul ediyorum/i })).not.toBeChecked();
+  });
 });
