@@ -36,6 +36,7 @@ describe("AuthForm — signup email confirmation and forgot-password link", () =
   function fill() {
     fireEvent.change(screen.getByLabelText("E-posta"), { target: { value: "new@user.com" } });
     fireEvent.change(screen.getByLabelText("Şifre"), { target: { value: "secret12" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /kabul ediyorum/i }));
   }
 
   it("shows a 'check your email' panel (and does not navigate) when signup needs confirmation", async () => {
@@ -69,5 +70,53 @@ describe("AuthForm — signup email confirmation and forgot-password link", () =
     render(<AuthForm mode="signup" />);
     expect(screen.getByRole("link", { name: "Gizlilik Politikası" })).toHaveAttribute("href", "/gizlilik");
     expect(screen.getByRole("link", { name: "Kullanım Koşulları" })).toHaveAttribute("href", "/kullanim-kosullari");
+  });
+});
+
+// KVKK/compliance audit (2026-09-28): a passive footer link isn't explicit consent under KVKK
+// art. 5/6 for processing that needs it (location, user-submitted content) -- an unchecked,
+// required checkbox makes acceptance an affirmative act tied to a specific submission, not just
+// page traffic past a link.
+describe("AuthForm — explicit KVKK/terms consent on signup", () => {
+  function fill() {
+    fireEvent.change(screen.getByLabelText("E-posta"), { target: { value: "new@user.com" } });
+    fireEvent.change(screen.getByLabelText("Şifre"), { target: { value: "secret12" } });
+  }
+
+  it("does not call signUp and shows an error when the consent checkbox is unchecked", async () => {
+    signUp.mockClear();
+    render(<AuthForm mode="signup" />);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: "Kayıt ol" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/kabul/i);
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it("calls signUp once the consent checkbox is checked", async () => {
+    signUp.mockClear();
+    signUp.mockResolvedValue({ error: null, needsConfirmation: true });
+    render(<AuthForm mode="signup" />);
+    fill();
+    fireEvent.click(screen.getByRole("checkbox", { name: /kabul ediyorum/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Kayıt ol" }));
+    await waitFor(() => expect(signUp).toHaveBeenCalledWith("new@user.com", "secret12"));
+  });
+
+  it("has no consent checkbox in signin mode", () => {
+    render(<AuthForm mode="signin" />);
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  // Cross-model review (Codex): /giris renders a single AuthForm instance and toggles its `mode`
+  // prop client-side (not a route change) -- without a reset, checking consent in one signup
+  // attempt, switching to signin and back would silently carry the old checkbox state into a
+  // fresh attempt the user never affirmed.
+  it("resets consent when mode toggles away from signup and back", () => {
+    const { rerender } = render(<AuthForm mode="signup" />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /kabul ediyorum/i }));
+    expect(screen.getByRole("checkbox", { name: /kabul ediyorum/i })).toBeChecked();
+    rerender(<AuthForm mode="signin" />);
+    rerender(<AuthForm mode="signup" />);
+    expect(screen.getByRole("checkbox", { name: /kabul ediyorum/i })).not.toBeChecked();
   });
 });

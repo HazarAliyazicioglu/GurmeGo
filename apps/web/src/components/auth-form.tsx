@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,15 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+  const [consent, setConsent] = useState(false);
+
+  // /giris toggles `mode` on a single mounted AuthForm instance rather than navigating, so state
+  // survives a mode switch by default. Without this, checking consent in one signup attempt,
+  // tabbing to signin and back would carry that checked state into a fresh attempt the user never
+  // affirmed for.
+  useEffect(() => {
+    setConsent(false);
+  }, [mode]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,6 +28,13 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
     try {
       setError(null);
       if (mode === "signup") {
+        // KVKK art. 5/6 needs an affirmative act, not just a page-footer link a user may never
+        // have clicked -- reject here rather than relying solely on the checkbox's `required`
+        // attribute, which some browsers surface as a silent native tooltip easy to miss.
+        if (!consent) {
+          setError("Devam etmek için Kullanım Koşulları ve Gizlilik Politikası'nı kabul etmelisin.");
+          return;
+        }
         const { error, needsConfirmation } = await signUp(email, password);
         if (error) setError(error);
         else if (needsConfirmation) setConfirmEmail(email);
@@ -134,17 +150,24 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
       </button>
 
       {mode === "signup" && (
-        <p className="text-center text-xs font-medium leading-relaxed text-ink/50">
-          Kayıt olarak{" "}
-          <Link href="/kullanim-kosullari" className="font-semibold underline underline-offset-2 hover:text-terracottaDeep">
-            Kullanım Koşulları
-          </Link>
-          &apos;nı ve{" "}
-          <Link href="/gizlilik" className="font-semibold underline underline-offset-2 hover:text-terracottaDeep">
-            Gizlilik Politikası
-          </Link>
-          &apos;nı kabul etmiş olursun.
-        </p>
+        <label className="flex items-start gap-2.5 text-xs font-medium leading-relaxed text-ink/60">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 rounded border-ink/30 text-terracotta focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-terracotta focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+          />
+          <span>
+            <Link href="/kullanim-kosullari" className="font-semibold underline underline-offset-2 hover:text-terracottaDeep">
+              Kullanım Koşulları
+            </Link>
+            &apos;nı ve{" "}
+            <Link href="/gizlilik" className="font-semibold underline underline-offset-2 hover:text-terracottaDeep">
+              Gizlilik Politikası
+            </Link>
+            &apos;nı okudum, kabul ediyorum.
+          </span>
+        </label>
       )}
     </form>
   );
