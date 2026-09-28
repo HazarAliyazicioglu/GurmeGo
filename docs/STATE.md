@@ -31,6 +31,7 @@ Hedef: yerli gurme+turist+genç+"semte gidince ne yesem" arayan herkes. Ölçek:
 Bu dördünden biri seçilmeden, kod tabanında sorulmadan ilerleyebileceğim düşük riskli/yüksek değerli iş kalmadı. Sıradaki oturumda kullanıcıya bu dördünü hatırlat.
 
 ## Bloke olanlar
+- **2026-09-28 haftalık kontrol: PR #18 ve #24 hâlâ bloklu, tekrar kontrol edildi.** #18 (fastify minor-and-patch): `@fastify/helmet`, `@fastify/compress`, `@fastify/multipart` npm'de hâlâ aynı sürümde (13.1.1 / 9.2.0 / 10.1.1 — repodaki pin'lerle birebir aynı), fastify 5.12.x'e uyumlu yeni bir plugin sürümü yayınlanmamış → dokunulmadı. #24 (zod v3→v4): zod 4.6.5'e kadarki changelog'da `.partial()`+default alan enjeksiyonu davranışını değiştiren bir fix bulunamadı → NO-GO geçerli, dokunulmadı.
 - **Codex kotası** (2026-09-28'e kadar).
 - CSP header, maskable icon, root OG görseli — tarayıcı/tasarım doğrulaması gerektiriyor.
 - Seed placeholder verisi gerçek mekan verisiyle değiştirilmeli (kullanıcı kararı bekliyor, acil değil).
