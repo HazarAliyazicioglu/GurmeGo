@@ -5,6 +5,9 @@ import { reportVenue } from "../lib/api";
 
 export default function ReportForm({ venueId }: { venueId: string }) {
   const [reason, setReason] = useState("");
+  const [correcting, setCorrecting] = useState(false);
+  const [field, setField] = useState("");
+  const [suggestedValue, setSuggestedValue] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +32,16 @@ export default function ReportForm({ venueId }: { venueId: string }) {
     setSubmitting(true);
     setError(null);
     try {
-      await reportVenue(venueId, reason);
+      // Mirrors apps/web's report-form.tsx: a correction is only attached when the user actually
+      // opened it AND named a field -- suggestedValue alone (no field) matches
+      // CreateReportSchema's own refine() rejection, so it's dropped rather than sent to fail.
+      await reportVenue(
+        venueId,
+        reason,
+        correcting && field.trim()
+          ? { field: field.trim(), ...(suggestedValue.trim() ? { suggestedValue: suggestedValue.trim() } : {}) }
+          : undefined,
+      );
       setSubmitted(true);
     } catch {
       setError("Bildirim gönderilemedi, lütfen tekrar dene.");
@@ -56,6 +68,30 @@ export default function ReportForm({ venueId }: { venueId: string }) {
         placeholder="Örn. fiyat aralığı güncel değil"
         multiline
       />
+      {correcting ? (
+        <View>
+          <Text>Hangi bilgi</Text>
+          <TextInput
+            testID="report-field"
+            value={field}
+            onChangeText={setField}
+            maxLength={100}
+            placeholder="Örn. Fiyat aralığı, Telefon, Adres"
+          />
+          <Text>Doğrusu ne olmalı? (opsiyonel)</Text>
+          <TextInput
+            testID="report-suggested-value"
+            value={suggestedValue}
+            onChangeText={setSuggestedValue}
+            maxLength={100}
+            placeholder="Örn. 0212 555 00 00"
+          />
+        </View>
+      ) : (
+        <Pressable onPress={() => setCorrecting(true)}>
+          <Text>Düzeltme öner</Text>
+        </Pressable>
+      )}
       {error && <Text>{error}</Text>}
       <Pressable onPress={handleSubmit} disabled={submitting}>
         <Text>{submitting ? "Gönderiliyor…" : "Gönder"}</Text>

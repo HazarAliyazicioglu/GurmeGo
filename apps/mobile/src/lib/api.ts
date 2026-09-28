@@ -99,11 +99,15 @@ export async function removeFavoriteVenue(token: string, listId: string, venueId
   if (!res.ok) throw new Error(`API error ${res.status} for DELETE /me/lists/${listId}/venues/${venueId}`);
 }
 
-export async function reportVenue(venueId: string, reason: string) {
+export async function reportVenue(
+  venueId: string,
+  reason: string,
+  correction?: { field?: string; suggestedValue?: string },
+) {
   const res = await fetch(`${API_BASE_URL}/venues/${venueId}/report`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason, ...correction }),
   });
   if (!res.ok) throw new Error(`Report failed: ${res.status}`);
   const raw: unknown = await res.json();
