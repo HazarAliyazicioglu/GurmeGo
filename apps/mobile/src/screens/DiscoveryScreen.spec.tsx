@@ -96,6 +96,17 @@ describe("DiscoveryScreen", () => {
       resolveNext({ data: [], meta: { next_cursor: null, has_more: false } });
       await Promise.resolve();
     });
+    expect(screen.queryByTestId("venues-loading")).toBeFalsy();
+  });
+
+  // Cross-model review: the initial-load test only proved the spinner hides on success --
+  // getVenues()'s .catch branch also sets venuesLoaded(true), and that path needs its own proof.
+  it("hides the loading indicator even when the request fails", async () => {
+    (getVenues as jest.Mock).mockRejectedValue(new Error("network"));
+
+    await render(<DiscoveryScreen />);
+
+    await waitFor(() => expect(screen.queryByTestId("venues-loading")).toBeFalsy(), { timeout: 5000 });
   });
 
   it("lists venues returned by getVenues and navigates to detail on press", async () => {

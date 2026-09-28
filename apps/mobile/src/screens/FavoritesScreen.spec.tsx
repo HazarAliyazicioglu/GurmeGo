@@ -136,6 +136,15 @@ describe("FavoritesScreen", () => {
     expect(screen.queryByTestId("favorites-loading")).toBeFalsy();
   });
 
+  it("hides the loading indicator even when the request fails", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" } });
+    (getFavoriteLists as jest.Mock).mockRejectedValue(new Error("network"));
+
+    await renderScreen();
+
+    await waitFor(() => expect(screen.queryByTestId("favorites-loading")).toBeFalsy(), { timeout: 5000 });
+  });
+
   it("shows a 'Çıkış yap' button that calls signOut when pressed", async () => {
     const signOut = jest.fn().mockResolvedValue({ error: null });
     (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" }, signOut });
