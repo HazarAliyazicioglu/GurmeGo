@@ -51,9 +51,16 @@ const JWKS = createRemoteJWKSet(new URL(requireEnv("SUPABASE_JWKS_URL")));
 // happens to expose.
 const ALLOWED_ALGORITHMS = ["RS256", "ES256"];
 
-// No real Supabase project exists yet (Plan 4 provisions one) — until SUPABASE_JWT_ISSUER /
-// SUPABASE_JWT_AUDIENCE are set, skip those specific checks so local dev/tests keep working.
-// Once the real project exists, set both env vars and this guard starts enforcing them.
+// Security audit (2026-09-28): silently skipping issuer/audience whenever these are unset was
+// meant for pre-launch dev, when no real Supabase project existed. A real project has been live
+// since 2026-09-25 -- an unset var in production would let any Supabase-signed JWT from ANY
+// Supabase project (not just this one) pass verification. Fail fast at module load in production;
+// dev/test/CI don't set these and stay permissive, matching the RATE_LIMIT_* precedent in main.ts.
+if (process.env.NODE_ENV === "production") {
+  requireEnv("SUPABASE_JWT_ISSUER");
+  requireEnv("SUPABASE_JWT_AUDIENCE");
+}
+
 function buildVerifyOptions(): JWTVerifyOptions {
   const options: JWTVerifyOptions = { algorithms: ALLOWED_ALGORITHMS };
   if (process.env.SUPABASE_JWT_ISSUER) {
