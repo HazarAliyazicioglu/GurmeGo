@@ -6,23 +6,24 @@ import { linking } from "./linking";
 // incoming URL -- so these assertions exercise the real routing table without needing a
 // device or simulator to receive an actual deep link.
 describe("linking config", () => {
-  it("routes a venue path to VenueDetail with the slug param", () => {
+  it("routes a venue path to VenueDetail with the slug param, keeping Tabs underneath so back navigation works", () => {
     const state = getStateFromPath("mekan/moda-meyhanesi", linking.config);
-    const route = state?.routes[0];
-    expect(route?.name).toBe("VenueDetail");
-    expect(route?.params).toEqual({ slug: "moda-meyhanesi" });
+    expect(state?.routes.map((r) => r.name)).toEqual(["Tabs", "VenueDetail"]);
+    const detailRoute = state?.routes[state.routes.length - 1];
+    expect(detailRoute?.params).toEqual({ slug: "moda-meyhanesi" });
   });
 
-  it("routes the discovery path to the Tabs/Discovery screen", () => {
+  it("routes the discovery path to the Tabs navigator's Discovery screen specifically", () => {
     const state = getStateFromPath("kesfet", linking.config);
-    const route = state?.routes[0];
-    expect(route?.name).toBe("Tabs");
+    const tabsRoute = state?.routes[0];
+    expect(tabsRoute?.name).toBe("Tabs");
+    const tabsState = tabsRoute && "state" in tabsRoute ? tabsRoute.state : undefined;
+    expect(tabsState?.routes[tabsState.routes.length - 1].name).toBe("Discovery");
   });
 
-  it("routes the auth path to Auth", () => {
+  it("routes the auth path to Auth, also keeping Tabs underneath", () => {
     const state = getStateFromPath("giris", linking.config);
-    const route = state?.routes[0];
-    expect(route?.name).toBe("Auth");
+    expect(state?.routes.map((r) => r.name)).toEqual(["Tabs", "Auth"]);
   });
 
   it("declares the custom scheme and the production web origin as prefixes", () => {
