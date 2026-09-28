@@ -1,6 +1,36 @@
-import { getVenues, ApiValidationError } from "./api";
+import { getVenues, reportVenue, ApiValidationError } from "./api";
 
 const originalFetch = globalThis.fetch;
+
+// Web parity audit (2026-09-28): apps/web's reportVenue already supported an optional structured
+// correction (field/suggestedValue) since PR #38; mobile's was left at reason-only.
+describe("reportVenue", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("sends only reason when no correction is given", async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ urgent: false }) }) as jest.Mock;
+
+    await reportVenue("v1", "spam");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/report"),
+      expect.objectContaining({ body: JSON.stringify({ reason: "spam" }) }),
+    );
+  });
+
+  it("includes field/suggestedValue in the request body when given (structured correction)", async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ urgent: false }) }) as jest.Mock;
+
+    await reportVenue("v1", "yanlış", { field: "Fiyat aralığı", suggestedValue: "MID" });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/report"),
+      expect.objectContaining({ body: JSON.stringify({ reason: "yanlış", field: "Fiyat aralığı", suggestedValue: "MID" }) }),
+    );
+  });
+});
 
 describe("getVenues", () => {
   afterEach(() => {

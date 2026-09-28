@@ -25,7 +25,7 @@ describe("ReportForm", () => {
       fireEvent.press(screen.getByText("Gönder"));
     });
 
-    await waitFor(() => expect(reportVenue).toHaveBeenCalledWith("v1", "Fiyat yanlış"));
+    await waitFor(() => expect(reportVenue).toHaveBeenCalledWith("v1", "Fiyat yanlış", undefined));
     await waitFor(() => expect(screen.getByText(/kürasyon ekibine iletildi/)).toBeTruthy());
   });
 
@@ -67,5 +67,62 @@ describe("ReportForm", () => {
 
     await waitFor(() => expect(screen.getByText(/en az 5 karakter/i)).toBeTruthy());
     expect(reportVenue).not.toHaveBeenCalled();
+  });
+});
+
+// Web parity audit (2026-09-28): apps/web's ReportForm already had a "Düzeltme öner" structured
+// correction toggle (field/suggestedValue) since PR #38; mobile's ReportForm was left reason-only.
+describe("ReportForm — structured correction (field + suggested value)", () => {
+  it("shows field/suggested-value inputs only after 'Düzeltme öner' is pressed", async () => {
+    await render(<ReportForm venueId="v1" />);
+
+    expect(screen.queryByTestId("report-field")).toBeNull();
+    await act(async () => {
+      fireEvent.press(screen.getByText("Düzeltme öner"));
+    });
+    expect(screen.getByTestId("report-field")).toBeTruthy();
+    expect(screen.getByTestId("report-suggested-value")).toBeTruthy();
+  });
+
+  it("submits field/suggestedValue alongside the reason when filled in", async () => {
+    (reportVenue as jest.Mock).mockResolvedValue({ urgent: false });
+
+    await render(<ReportForm venueId="v1" />);
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("report-reason"), "Fiyat aralığı güncel değil");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Düzeltme öner"));
+    });
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("report-field"), "Fiyat aralığı");
+      fireEvent.changeText(screen.getByTestId("report-suggested-value"), "MID");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Gönder"));
+    });
+
+    await waitFor(() =>
+      expect(reportVenue).toHaveBeenCalledWith("v1", "Fiyat aralığı güncel değil", {
+        field: "Fiyat aralığı",
+        suggestedValue: "MID",
+      }),
+    );
+  });
+
+  it("omits the correction entirely when 'Düzeltme öner' was never opened", async () => {
+    (reportVenue as jest.Mock).mockResolvedValue({ urgent: false });
+
+    await render(<ReportForm venueId="v1" />);
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("report-reason"), "Fiyat yanlış");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Gönder"));
+    });
+
+    await waitFor(() => expect(reportVenue).toHaveBeenCalledWith("v1", "Fiyat yanlış", undefined));
   });
 });
