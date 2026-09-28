@@ -77,9 +77,9 @@ prod DB rolü kısıtlaması (yukarıdaki §3 maddesi) uygulanmalı.
 
 | Alan | Araç | Not |
 |---|---|---|
-| Hata takibi | Sentry (free katman) | API + web tek projede (mobil Faz 2'de eklenir) |
+| Hata takibi | Sentry (free katman) | **API tarafı koda bağlandı (2026-09-28)** — `apps/api/src/instrument.ts` + `common/sentry.ts`, `SENTRY_DSN` set edilmeden no-op; NFR-04 için `beforeSend` ile `x-user-location`/`authorization` header'ları temizleniyor. Gerçek DSN/hesap açma kullanıcının adımı. Web + mobil (ADR 005 sonrası MVP kapsamında) tarafı henüz yok. |
 | API log | Railway log + yapılandırılmış JSON log (pino) | Kullanıcı koordinatı loglanmaz (NFR-04) |
-| Uptime | Better Stack / UptimeRobot free | `/health` ucu |
+| Uptime | Better Stack / UptimeRobot free | `/health` ucu — Railway `healthcheckPath` (`railway.json`) + Docker `HEALTHCHECK` zaten var (2026-09-28); harici uptime izleme (Better Stack/UptimeRobot) henüz kurulmadı |
 | DB | Supabase dashboard + `get_advisors` | Yavaş sorgu incelemesi |
 | AI maliyeti | Günlük LLM çağrı sayısı + token metriği → basit dashboard | `ai_fallback_rate` ve cache hit oranı dahil ([ai-prompt-design.md §5](ai-prompt-design.md)) |
 
