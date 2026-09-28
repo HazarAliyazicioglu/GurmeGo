@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import TabNavigator from "./TabNavigator";
 import VenueDetailScreen from "../screens/VenueDetailScreen";
 import AuthScreen from "../screens/AuthScreen";
+import { linking } from "./linking";
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -14,7 +15,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator>
         <Stack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
         <Stack.Screen name="VenueDetail" component={VenueDetailScreen} options={{ title: "Mekan" }} />
