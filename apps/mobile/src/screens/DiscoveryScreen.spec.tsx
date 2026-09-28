@@ -50,6 +50,19 @@ describe("DiscoveryScreen", () => {
     await waitFor(() => expect(screen.getByText(/bu kriterlere uygun mekan bulunamadı/i)).toBeTruthy(), { timeout: 5000 });
   });
 
+  // Web parity (PR #48): apps/web's empty search result already links to /mekan-oner -- mobile's
+  // empty state was a dead end with no way for the user to act on "the venue I want isn't here".
+  it("navigates to SuggestVenue when the empty-state suggestion link is pressed", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+
+    await render(<DiscoveryScreen />);
+
+    const link = await screen.findByText("Aradığını bulamadın mı? Mekan öner", {}, { timeout: 5000 });
+    fireEvent.press(link);
+
+    expect(mockNavigate).toHaveBeenCalledWith("SuggestVenue");
+  });
+
   it("does NOT show the 'no results' message while venues are still loading", async () => {
     let resolveVenues!: (v: unknown) => void;
     (getVenues as jest.Mock).mockReturnValue(new Promise((resolve) => { resolveVenues = resolve; }));
