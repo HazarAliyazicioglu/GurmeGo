@@ -111,6 +111,14 @@ describe("AllExceptionsFilter", () => {
     superCatchSpy.mockRestore();
   });
 
+  it("does NOT report a Fastify-raised plain-Error 4xx to Sentry either (clientErrorStatus branch, not the HttpException one)", () => {
+    const { filter, host, superCatchSpy } = harness();
+    const fastifyErr = Object.assign(new Error("request file too large"), { statusCode: 413, code: "FST_REQ_FILE_TOO_LARGE" });
+    filter.catch(fastifyErr, host);
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    superCatchSpy.mockRestore();
+  });
+
   it("still treats a plain Error with a 5xx-or-absent statusCode as INTERNAL_ERROR", () => {
     const { filter, host, status, send, superCatchSpy } = harness();
     filter.catch(Object.assign(new Error("db down"), { statusCode: 503 }), host);

@@ -1,3 +1,7 @@
+// Must be the first import: initializes Sentry (no-op without SENTRY_DSN) before anything else in
+// the app's module graph -- including AppModule's own dependencies -- gets a chance to throw
+// during load (see instrument.ts).
+import "./instrument";
 import { HttpAdapterHost, NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
@@ -9,7 +13,6 @@ import fastifyCors from "@fastify/cors";
 import { writeFileSync } from "fs";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/all-exceptions.filter";
-import { initSentry } from "./common/sentry";
 
 // Fastify's `req.ip` is the raw socket address unless `trustProxy` is configured -- behind ANY
 // reverse proxy (which this app will run behind in every real deployment), that raw address is
@@ -119,7 +122,6 @@ export async function configureApp(app: NestFastifyApplication): Promise<void> {
 }
 
 export async function bootstrap() {
-  initSentry();
   // `bufferLogs: true` holds Nest's own startup logs (module init, route mapping) until
   // `useLogger` swaps in the real pino-backed logger just below, instead of losing them to the
   // default console logger.
