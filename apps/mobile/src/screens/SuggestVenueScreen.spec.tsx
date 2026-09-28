@@ -47,7 +47,83 @@ describe("SuggestVenueScreen", () => {
     await waitFor(() => expect(screen.getByText(/kürasyon ekibine iletildi/)).toBeTruthy());
   });
 
-  it("includes trimmed address/note only when filled in", async () => {
+  it("auto-selects the first district once loaded, without any press", async () => {
+    (suggestVenue as jest.Mock).mockResolvedValue({ ok: true });
+
+    await render(<SuggestVenueScreen />);
+    await waitFor(() => expect(screen.getByText("Kadıköy")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("suggest-name"), "Moda Kahvecisi");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Gönder"));
+    });
+
+    await waitFor(() =>
+      expect(suggestVenue).toHaveBeenCalledWith(expect.objectContaining({ districtSlug: "kadikoy" })),
+    );
+  });
+
+  it("switches district and category when a different chip is pressed", async () => {
+    (suggestVenue as jest.Mock).mockResolvedValue({ ok: true });
+
+    await render(<SuggestVenueScreen />);
+    await waitFor(() => expect(screen.getByText("Beşiktaş")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("suggest-name"), "Beşiktaş Cafe");
+      fireEvent.press(screen.getByText("Beşiktaş"));
+      fireEvent.press(screen.getByText("Restoran"));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Gönder"));
+    });
+
+    await waitFor(() =>
+      expect(suggestVenue).toHaveBeenCalledWith(
+        expect.objectContaining({ districtSlug: "besiktas", category: "restaurant" }),
+      ),
+    );
+  });
+
+  it("rejects a whitespace-only name the same as a too-short one", async () => {
+    await render(<SuggestVenueScreen />);
+    await waitFor(() => expect(screen.getByText("Kadıköy")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("suggest-name"), "   ");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Gönder"));
+    });
+
+    await waitFor(() => expect(screen.getByText(/en az 2 karakter/i)).toBeTruthy());
+    expect(suggestVenue).not.toHaveBeenCalled();
+  });
+
+  it("disables the submit button while the request is in flight", async () => {
+    let resolveSuggest!: (v: unknown) => void;
+    (suggestVenue as jest.Mock).mockReturnValue(new Promise((resolve) => { resolveSuggest = resolve; }));
+
+    await render(<SuggestVenueScreen />);
+    await waitFor(() => expect(screen.getByText("Kadıköy")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("suggest-name"), "Moda Kahvecisi");
+    });
+    fireEvent.press(screen.getByText("Gönder"));
+
+    await waitFor(() => expect(screen.getByText("Gönderiliyor…")).toBeTruthy());
+    expect(screen.getByTestId("suggest-submit").props.accessibilityState?.disabled).toBe(true);
+
+    await act(async () => {
+      resolveSuggest({ ok: true });
+      await Promise.resolve();
+    });
+  });
+
+  it("includes trimmed address and note when both are filled in", async () => {
     (suggestVenue as jest.Mock).mockResolvedValue({ ok: true });
 
     await render(<SuggestVenueScreen />);
@@ -57,6 +133,7 @@ describe("SuggestVenueScreen", () => {
       fireEvent.changeText(screen.getByTestId("suggest-name"), "Moda Kahvecisi");
       fireEvent.press(screen.getByText("Kadıköy"));
       fireEvent.changeText(screen.getByTestId("suggest-address"), "  Moda Cd. No:1  ");
+      fireEvent.changeText(screen.getByTestId("suggest-note"), "  Kahveleri harika  ");
     });
     await act(async () => {
       fireEvent.press(screen.getByText("Gönder"));
@@ -64,10 +141,28 @@ describe("SuggestVenueScreen", () => {
 
     await waitFor(() =>
       expect(suggestVenue).toHaveBeenCalledWith(
-        expect.objectContaining({ address: "Moda Cd. No:1" }),
+        expect.objectContaining({ address: "Moda Cd. No:1", note: "Kahveleri harika" }),
       ),
     );
+  });
+
+  it("omits address and note entirely when left blank", async () => {
+    (suggestVenue as jest.Mock).mockResolvedValue({ ok: true });
+
+    await render(<SuggestVenueScreen />);
+    await waitFor(() => expect(screen.getByText("Kadıköy")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("suggest-name"), "Moda Kahvecisi");
+      fireEvent.press(screen.getByText("Kadıköy"));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Gönder"));
+    });
+
+    await waitFor(() => expect(suggestVenue).toHaveBeenCalled());
     const call = (suggestVenue as jest.Mock).mock.calls[0][0];
+    expect(call).not.toHaveProperty("address");
     expect(call).not.toHaveProperty("note");
   });
 

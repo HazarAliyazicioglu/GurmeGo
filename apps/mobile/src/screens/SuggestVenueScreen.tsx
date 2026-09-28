@@ -48,7 +48,7 @@ export default function SuggestVenueScreen() {
     setError(null);
     try {
       await suggestVenue({
-        name,
+        name: name.trim(),
         districtSlug,
         category,
         ...(address.trim() ? { address: address.trim() } : {}),
@@ -84,7 +84,12 @@ export default function SuggestVenueScreen() {
       <Text>İlçe</Text>
       <View testID="suggest-districts">
         {districts.map((d) => (
-          <Pressable key={d.id} onPress={() => setDistrictSlug(d.slug)}>
+          <Pressable
+            key={d.id}
+            onPress={() => setDistrictSlug(d.slug)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: districtSlug === d.slug }}
+          >
             <Text style={{ fontWeight: districtSlug === d.slug ? "bold" : "normal" }}>{d.name}</Text>
           </Pressable>
         ))}
@@ -93,7 +98,12 @@ export default function SuggestVenueScreen() {
       <Text>Kategori</Text>
       <View testID="suggest-categories">
         {CATEGORIES.map((c) => (
-          <Pressable key={c.value} onPress={() => setCategory(c.value)}>
+          <Pressable
+            key={c.value}
+            onPress={() => setCategory(c.value)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: category === c.value }}
+          >
             <Text style={{ fontWeight: category === c.value ? "bold" : "normal" }}>{c.label}</Text>
           </Pressable>
         ))}
@@ -119,7 +129,7 @@ export default function SuggestVenueScreen() {
       />
 
       {error && <Text>{error}</Text>}
-      <Pressable onPress={handleSubmit} disabled={submitting}>
+      <Pressable testID="suggest-submit" onPress={handleSubmit} disabled={submitting}>
         <Text>{submitting ? "Gönderiliyor…" : "Gönder"}</Text>
       </Pressable>
     </ScrollView>
