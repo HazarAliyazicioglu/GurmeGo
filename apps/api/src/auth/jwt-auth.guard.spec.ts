@@ -272,4 +272,22 @@ describe("JwtAuthGuard", () => {
     process.env.NODE_ENV = "test";
     await expect(import("./jwt-auth.guard")).resolves.toBeDefined();
   });
+
+  it("imports successfully in production when both are set, and still passes them to jwtVerify", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.SUPABASE_JWT_ISSUER = "https://proj.supabase.co/auth/v1";
+    process.env.SUPABASE_JWT_AUDIENCE = "authenticated";
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com" } });
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard(makePrismaMock() as any);
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await guard.canActivate(makeContext(req));
+
+    expect(jwtVerifyMock).toHaveBeenCalledWith("sometoken", "JWKS_KEYSET", {
+      algorithms: ["RS256", "ES256"],
+      issuer: "https://proj.supabase.co/auth/v1",
+      audience: "authenticated",
+    });
+  });
 });
