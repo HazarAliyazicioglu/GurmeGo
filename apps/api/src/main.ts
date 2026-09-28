@@ -1,3 +1,7 @@
+// Must be the first import: initializes Sentry (no-op without SENTRY_DSN) before anything else in
+// the app's module graph -- including AppModule's own dependencies -- gets a chance to throw
+// during load (see instrument.ts).
+import "./instrument";
 import { HttpAdapterHost, NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
