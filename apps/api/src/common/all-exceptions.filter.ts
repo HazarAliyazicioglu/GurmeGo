@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch, HttpException, HttpStatus, Logger } from "@nestjs/common";
 import { BaseExceptionFilter, HttpAdapterHost } from "@nestjs/core";
+import * as Sentry from "@sentry/node";
 import type { FastifyReply } from "fastify";
 
 // docs/api-spec.md: every error body is `{ error: { code, message } }`.
@@ -61,6 +62,10 @@ export class AllExceptionsFilter extends BaseExceptionFilter<unknown> {
       return;
     }
     this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+    // No-op without SENTRY_DSN (common/sentry.ts) -- safe to call unconditionally rather than
+    // re-checking the env var here too. Only unexpected crashes reach this branch; deliberate
+    // HttpExceptions and client-fault 4xx never do.
+    Sentry.captureException(exception);
     this.sendEnvelope(host, HttpStatus.INTERNAL_SERVER_ERROR, "Beklenmeyen bir hata oluştu", "INTERNAL_ERROR");
   }
 

@@ -1,8 +1,47 @@
 import { ArgumentsHost, HttpException, HttpStatus, NotFoundException, PayloadTooLargeException } from "@nestjs/common";
 import { BaseExceptionFilter, HttpAdapterHost } from "@nestjs/core";
+
+const captureExceptionMock = jest.fn();
+jest.mock("@sentry/node", () => ({ captureException: (...args: unknown[]) => captureExceptionMock(...args) }));
+
 import { AllExceptionsFilter } from "./all-exceptions.filter";
 
 describe("AllExceptionsFilter", () => {
+  beforeEach(() => {
+    captureExceptionMock.mockReset();
+  });
+
+  // Ops audit (2026-09-28): an unexpected 500 previously only reached a Railway log line no one
+  // watches -- Sentry.captureException() is a no-op without SENTRY_DSN (see common/sentry.ts), so
+  // this is safe to call unconditionally rather than re-checking the env var here too.
+  it("reports an unexpected non-HttpException error to Sentry", () => {
+    const superCatchSpy = jest.spyOn(BaseExceptionFilter.prototype, "catch").mockImplementation(() => {});
+    const send = jest.fn();
+    const status = jest.fn().mockReturnValue({ send });
+    const host = { switchToHttp: () => ({ getResponse: () => ({ status }) }) } as unknown as ArgumentsHost;
+    const filter = new AllExceptionsFilter({ httpAdapter: {} } as HttpAdapterHost);
+    const error = new Error("boom");
+    filter.catch(error, host);
+    expect(captureExceptionMock).toHaveBeenCalledWith(error);
+    superCatchSpy.mockRestore();
+  });
+
+  it("does NOT report a deliberate HttpException (handled by the app) to Sentry", () => {
+    const superCatchSpy = jest.spyOn(BaseExceptionFilter.prototype, "catch").mockImplementation(() => {});
+    const filter = new AllExceptionsFilter({ httpAdapter: {} } as HttpAdapterHost);
+    const original = new HttpException({ error: { code: "TOO_MANY_REQUESTS", message: "Yavaşlayın" } }, HttpStatus.TOO_MANY_REQUESTS);
+    filter.catch(original, {} as ArgumentsHost);
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    superCatchSpy.mockRestore();
+  });
+
+  it("does NOT report a client-fault 4xx (e.g. oversized body) to Sentry", () => {
+    const { filter, host, superCatchSpy } = harness();
+    filter.catch(new PayloadTooLargeException("too big"), host);
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    superCatchSpy.mockRestore();
+  });
+
   it("delegates HttpException handling to BaseExceptionFilter.catch (Nest's own pipeline)", () => {
     const superCatchSpy = jest.spyOn(BaseExceptionFilter.prototype, "catch").mockImplementation(() => {});
     const filter = new AllExceptionsFilter({ httpAdapter: {} } as HttpAdapterHost);
