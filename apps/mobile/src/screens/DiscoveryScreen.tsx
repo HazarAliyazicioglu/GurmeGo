@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -157,19 +157,23 @@ export default function DiscoveryScreen() {
           </Pressable>
         )}
       />
-      <FlatList
-        testID="venues-list"
-        data={venues}
-        keyExtractor={(v) => v.id}
-        ListEmptyComponent={venuesLoaded ? <Text>Bu kriterlere uygun mekan bulunamadı</Text> : null}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
-            <Text>{item.name}</Text>
-          </Pressable>
-        )}
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.5}
-      />
+      {venuesLoaded ? (
+        <FlatList
+          testID="venues-list"
+          data={venues}
+          keyExtractor={(v) => v.id}
+          ListEmptyComponent={<Text>Bu kriterlere uygun mekan bulunamadı</Text>}
+          renderItem={({ item }) => (
+            <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
+              <Text>{item.name}</Text>
+            </Pressable>
+          )}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+        />
+      ) : (
+        <ActivityIndicator testID="venues-loading" />
+      )}
     </View>
   );
 }

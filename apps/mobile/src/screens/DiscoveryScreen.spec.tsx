@@ -63,6 +63,41 @@ describe("DiscoveryScreen", () => {
     });
   });
 
+  // Usability audit (2026-09-28), Genç persona: no loading feedback meant an empty list looked
+  // identical to "still loading" and "no results" until venuesLoaded flipped, which only gated
+  // the empty-state text -- nothing told the user a request was in flight.
+  it("shows a loading indicator while the initial venues request is in flight, then hides it", async () => {
+    let resolveVenues!: (v: unknown) => void;
+    (getVenues as jest.Mock).mockReturnValue(new Promise((resolve) => { resolveVenues = resolve; }));
+
+    await render(<DiscoveryScreen />);
+
+    expect(screen.getByTestId("venues-loading")).toBeTruthy();
+    await act(async () => {
+      resolveVenues({ data: [], meta: { next_cursor: null, has_more: false } });
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId("venues-loading")).toBeFalsy();
+  });
+
+  it("shows the loading indicator again when a filter change triggers a refetch", async () => {
+    (getVenues as jest.Mock).mockResolvedValue({ data: [], meta: { next_cursor: null, has_more: false } });
+
+    await render(<DiscoveryScreen />);
+    await waitFor(() => expect(screen.getByText("Kahve")).toBeTruthy());
+    expect(screen.queryByTestId("venues-loading")).toBeFalsy();
+
+    let resolveNext!: (v: unknown) => void;
+    (getVenues as jest.Mock).mockReturnValue(new Promise((resolve) => { resolveNext = resolve; }));
+    fireEvent.press(screen.getByText("Kahve"));
+
+    await waitFor(() => expect(screen.getByTestId("venues-loading")).toBeTruthy());
+    await act(async () => {
+      resolveNext({ data: [], meta: { next_cursor: null, has_more: false } });
+      await Promise.resolve();
+    });
+  });
+
   it("lists venues returned by getVenues and navigates to detail on press", async () => {
     (getVenues as jest.Mock).mockResolvedValue({
       data: [

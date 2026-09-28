@@ -119,6 +119,23 @@ describe("FavoritesScreen", () => {
     });
   });
 
+  // Usability audit (2026-09-28), Genç persona: same gap as DiscoveryScreen -- nothing told the
+  // user a request was in flight, an empty list looked identical to "still loading".
+  it("shows a loading indicator while favorites are still loading, then hides it", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" } });
+    let resolveLists!: (v: unknown) => void;
+    (getFavoriteLists as jest.Mock).mockReturnValue(new Promise((resolve) => { resolveLists = resolve; }));
+
+    await renderScreen();
+
+    expect(screen.getByTestId("favorites-loading")).toBeTruthy();
+    await act(async () => {
+      resolveLists(ONE_LIST);
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId("favorites-loading")).toBeFalsy();
+  });
+
   it("shows a 'Çıkış yap' button that calls signOut when pressed", async () => {
     const signOut = jest.fn().mockResolvedValue({ error: null });
     (useAuth as jest.Mock).mockReturnValue({ user: { id: "u1" }, session: { access_token: "tok" }, signOut });
