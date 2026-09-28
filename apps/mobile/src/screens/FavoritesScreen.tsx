@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -114,26 +114,31 @@ export default function FavoritesScreen() {
           {signOutError}
         </Text>
       )}
-      <FlatList
-        data={favorites}
-        keyExtractor={(item) => item.venueId}
-        // Denetim raporu §4.2 "Favoriler listesi boşsa hiçbir şey görünmüyor": a blank white area
-        // looked broken, not "no favorites yet". No in-page navigation button -- the bottom tab
-        // bar (with the "Mekanlar" tab) is always visible on this screen, so a second way to get
-        // there would be redundant, not worth the cross-navigator typing (Discovery isn't a route
-        // in this screen's own RootStackParamList, only in the sibling TabParamList).
-        ListEmptyComponent={loaded ? <Text>Henüz favorin yok, keşfetmeye başla</Text> : null}
-        renderItem={({ item }) => (
-          <View>
-            <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
-              <Text>{item.name}</Text>
-            </Pressable>
-            <Pressable onPress={() => handleRemove(item.listId, item.venueId)}>
-              <Text>Kaldır</Text>
-            </Pressable>
-          </View>
-        )}
-      />
+      {loaded ? (
+        <FlatList
+          data={favorites}
+          keyExtractor={(item) => item.venueId}
+          // Denetim raporu §4.2 "Favoriler listesi boşsa hiçbir şey görünmüyor": a blank white
+          // area looked broken, not "no favorites yet". No in-page navigation button -- the
+          // bottom tab bar (with the "Mekanlar" tab) is always visible on this screen, so a
+          // second way to get there would be redundant, not worth the cross-navigator typing
+          // (Discovery isn't a route in this screen's own RootStackParamList, only in the
+          // sibling TabParamList).
+          ListEmptyComponent={<Text>Henüz favorin yok, keşfetmeye başla</Text>}
+          renderItem={({ item }) => (
+            <View>
+              <Pressable onPress={() => navigation.navigate("VenueDetail", { slug: item.slug })}>
+                <Text>{item.name}</Text>
+              </Pressable>
+              <Pressable onPress={() => handleRemove(item.listId, item.venueId)}>
+                <Text>Kaldır</Text>
+              </Pressable>
+            </View>
+          )}
+        />
+      ) : (
+        <ActivityIndicator testID="favorites-loading" />
+      )}
     </View>
   );
 }
