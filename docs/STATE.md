@@ -1,49 +1,50 @@
-# Durum — 2026-09-28 (9. tur)
+# Durum — 2026-09-28 (10. tur)
 
 ## Veri sınırı
 Codex: izinli, kota aktif. GLM: izinli. TypeSafe (typesafe-ai skill) kuruldu ama **hiçbir gerçek veri akışına bağlanmadı** — kullanılırsa (ör. semantic search) ayrı bir mimari karar+onay gerekir.
 
 ## Aktif plan
-**Yetki:** A-Z, kapanış sorusu sormadan ilerle. Bugün ilk kez gerçek bir "hard-to-reverse" aksiyonda (JWT prod fail-fast, PR #52) durup kullanıcı onayı istendi — prod outage riski Railway'de doğrulanamadığı için. Gerekçe: STATE.md'nin kendi yetki notu da "gerçek prod erişimi... kullanıcı kendisi yapıyor" diyor.
+**Yetki:** A-Z, kapanış sorusu sormadan ilerle. İki istisna bu turda uygulandı: (1) Railway prod outage riski (PR #52, doğrulayamadığım env var) — merge edilmedi, kullanıcı onayı bekliyor. (2) TypeSafe skill kurulumu — bilinmeyen 3. parti kaynak olduğu için tek soru soruldu, onay alındı, kuruldu.
 
 ## Şu an ne yapıyoruz
-**Tam kapsamlı A-Z proje denetimi (4 paralel fork: güvenlik/uyum, kullanılabilirlik/persona, gereksinim kapsamı, ulaşılabilirlik/ops) + bulgulara göre 5 PR shipped (#50-51 önceki mesajda, #53-55 bu turda), 1 PR açık bekliyor (#52).**
+**9. turun A-Z denetiminden sonra bulgulara göre 9 PR daha shipped (#53-61), 1 PR açık bekliyor (#52).**
 
-**Shipped (merge edildi):**
-- #53: Railway `healthcheckPath: /health` + Dockerfile `HEALTHCHECK` — Docker'da build+run ile doğrulandı (healthy).
-- #54: Web signup'ta pasif link yerine zorunlu onay checkbox'ı (KVKK açık rıza iyileştirmesi) + mode-toggle reset bug fix (cross-model review buldu).
-- #55: `prd.md`/`architecture.md` — aylardır stale "mobil Faz 2'de" iddiası ADR 005'e (2026-09-07, kullanıcı bilerek NO-GO'yu reddetti) senkronize edildi, 3 tur cross-model review ile.
+**Shipped (merge edildi, bu turda):**
+- #53 healthcheck, #54 KVKK checkbox, #55 docs/ADR005 senkronu (önceki mesajda özetlendi)
+- #57: mobil Discovery/Favorites'a loading indicator
+- #58: mobil `ReportForm`'a yapısal düzeltme (field/suggestedValue) — web parite
+- #59: mobil `SuggestVenueScreen` — web'in `/mekan-oner`'ının mobil karşılığı, hiç yoktu
+- #60: API'ye Sentry entegrasyonu — `SENTRY_DSN` yoksa no-op, NFR-04 için header scrub (`beforeSend`)
+- #61: infrastructure.md senkronu
 
 **Açık, MERGE EDİLMEDİ — kullanıcı onayı bekliyor:**
-- **PR #52 (fix/jwt-prod-fail-fast):** `SUPABASE_JWT_ISSUER`/`AUDIENCE` prod'da unset ise artık fail-fast. CI yeşil, kod/test sağlam (Codex high-effort review'dan geçti). **Ama Railway'de bu iki env var gerçekten set değilse, merge sonrası API hiç açılmaz.** Railway CLI/dashboard erişimim yok, doğrulayamadım. **Merge etmeden önce Railway'de bu ikisini kontrol et/ayarla.**
+- **PR #52 (fix/jwt-prod-fail-fast):** Railway'de `SUPABASE_JWT_ISSUER`/`AUDIENCE` gerçekten set değilse merge API'yi çökertir. Railway CLI'a login olamadım (`railway login` interaktif). **Railway dashboard'dan bu ikisini kontrol et/ayarla, sonra merge et.**
 
-**Denetimde bulunan ama YANLIŞ ÇIKAN fork bulguları (düzeltme notu, tekrar gündeme getirme):**
-- "`/health` yok" → **yanlış**, zaten var (`app.module.ts`), sadece Railway'e bildirilmemişti (şimdi #53 ile düzeltildi).
-- "Kullanım Koşulları sayfası yok" → **yanlış**, `apps/web/src/app/kullanim-kosullari` zaten var ve test edilmiş.
+**Her PR'da cross-model review gerçek bulgu buldu** — örnek: docs reconciliation 3 tur gerektirdi, Sentry entegrasyonunda NFR-04 ihlali riski (header scrub yoksa), mobil suggest-venue'de a11y + trim eksikliği. Süreç işliyor.
 
-**Gerçek, henüz ELE ALINMAMIŞ bulgular (öncelik sırasıyla):**
-1. i18n sıfır (BLOCKER, turist persona'sı için) — büyük iş, kapsam konuşulmalı.
-2. KVKK: aydınlatma ile açık rıza ayrı tutulmalı (KVKK Kurulu 2026/347) — checkbox iyileştirme yeterli değil, **gerçek hukuki görüş gerekiyor**, ben karar veremem.
-3. Consent kaydı persist edilmiyor (audit log'a bağlanabilir, ADR 006 altyapısı var) — ayrı backend işi.
-4. Mobil kullanıcı katkı UI'sı web'in gerisinde (`ReportForm.tsx` yalnızca serbest metin, yapısal field/suggestedValue yok, yeni mekan önerisi yok).
-5. Mobilde loading spinner eksik (Discovery/Favorites), mobil tasarım sistemi eksik (bilinen, büyük iş).
-6. Sentry yok (hatalar sessizce kayboluyor), analytics yok (görünürlük yok ama NFR-04 riski de yok).
-7. Gurme Puanı/semantic search Faz 2 kapsamı — kullanıcı kararı.
-8. Gerçek mekan verisi (seed placeholder yerine) — kullanıcının kendi verisi gerekiyor.
+## Sıradaki adım
+**Kod tabanında bağımsız, güvenli iş tükendi. Kalanların hepsi kullanıcı girdisi/kararı gerektiriyor:**
+1. **i18n** (BLOCKER, turist persona) — hangi diller, çeviri kalitesi/maliyeti kullanıcı kararı; büyük mimari iş, kendi brainstorming+plan turu gerekir.
+2. **KVKK: aydınlatma/açık rıza ayrımı** (KVKK Kurulu 2026/347) — checkbox (#54) iyileştirme ama yeterli değil, gerçek hukuki görüş gerekiyor.
+3. **Consent kaydının persist edilmesi** — mevcut audit_log (ADR 006) bilerek KULLANILMADI: o tablo admin hesap verebilirliği için tasarlandı, PII sınırı (actorId=personel) kullanıcı consent event'i için uygun değil. Ayrı bir tasarım gerekiyor, #2 netleşmeden başlanmayacak.
+4. **Mobil tasarım sistemi** — büyük, tasarım yönü kullanıcı kararı.
+5. **Web/mobil Sentry** — API tarafı bitti (#60), web (@sentry/nextjs, daha karmaşık kurulum) ve mobil taraf yapılmadı, gerçek DSN yoksa zaten aktif olmuyor — acil değil.
+6. **Analytics** — hâlâ yok, talep de yok, dokunmadım.
+7. **Gurme Puanı/semantic search Faz 2** — kapsamı açmak kullanıcı kararı.
+8. **Gerçek mekan verisi** — kullanıcının kendi verisi gerekiyor.
 
 ## Bloke olanlar
-- **PR #52 — yukarıya bkz., Railway env var doğrulaması bekliyor.**
-- railway.json: Railway'in Config as Code formatı deprecated (2026-12-01'e kadar legacy'de çalışır) — o tarihten önce yeni formata bakılmalı.
-- Yerel test DB: `docker run -d --name gurmego-test-pg -e POSTGRES_PASSWORD=postgres -p 5555:5432 postgis/postgis:15-3.4` + `prisma migrate deploy` ile kuruldu, hâlâ ayakta — sonraki oturumda tekrar kurmaya gerek yok.
-- Yukarıdaki 8 madde — kod tabanında bağımsız güvenli iş kalmadı, biri seçilmeli veya kullanıcı girdisi gerekiyor.
+- **PR #52 — yukarıya bkz.**
+- railway.json: Config as Code formatı 2026-12-01'e kadar legacy'de çalışır, o tarihten önce yeni formata bak.
+- Yerel test DB hâlâ ayakta: `docker start gurmego-test-pg` (5555 portu) — `docker ps` ile `bayotomotiv-*` konteynerlarıyla karıştırma, onlara dokunma.
+- Yukarıdaki 8 madde.
 
 ## Yakın kararlar
-- ADR 006: audit log · ADR 005: native mobile (bugün prd.md/architecture.md'ye senkronize edildi, PR #55).
+- ADR 006: audit log (kullanıcı consent event'i için KULLANILMAMALI, yukarı bkz.) · ADR 005: native mobile (prd.md/architecture.md'ye senkronize, PR #55).
 
 ## Denenmiş ve ELENMİŞ yaklaşımlar (KALICI dersler)
 - Railway + Railpack otomatik tespit: ELENDİ → kendi Dockerfile'ını yaz.
-- Supabase direct connection IPv6-only → pooler'a geç.
-- React Navigation linking config'de `initialRouteName` unutmak: deep-link geri navigasyonunu kırar.
-- Native `required` + custom JS validasyon mesajı birlikte: `required` submit event'i engelliyor, custom mesaj hiç görünmüyor — ya `noValidate` ekle ya da yalnızca birini kullan.
-- Fork denetim bulgularını doğrulamadan STATE'e yazma: bu turda 2 fork bulgusu (`/health` yok, ToS yok) yanlış çıktı — kodu her zaman kendin oku, "muhtemelen" diyen bulguyu özellikle.
-- Codex'in ilk "TEMİZ" veya tek-turlu review'ı yeterli sayma: docs reconciliation'da 3 tur gerekti, her turda gerçek MAJOR çıktı.
+- Native `required` + custom JS validasyon mesajı birlikte: `required` submit event'i engelliyor, `noValidate` gerekir.
+- Fork/review bulgusunu doğrulamadan STATE'e yazma: bu turda da tekrarlandı — kendi eklediğim "kalıntı" notu kendi diff'imle çelişti, Codex 2. turda yakaladı. Her review bulgusunu gerçek kodu okuyarak doğrula, ilk "TEMİZ" cevabına güvenme.
+- Sentry gibi hata-izleme SDK'ları pino/log redact'ından TAMAMEN BAĞIMSIZ bir pipe'tır — NFR-04 gibi "hiçbir yere yazılmaz" invariantları her yeni telemetri kanalında ayrıca uygulanmalı, "zaten redact var" varsayımı yanlış.
+- Var olan bir audit/log tablosunu amacı dışında (farklı PII sınırı olan) bir iş için yeniden kullanma isteğine direnç göster — ADR'nin PII sınırı kararı bilinçliydi, genişletmek yeni bir ADR/tasarım gerektirir.
