@@ -73,6 +73,10 @@ describe("ReportForm", () => {
 // Web parity audit (2026-09-28): apps/web's ReportForm already had a "Düzeltme öner" structured
 // correction toggle (field/suggestedValue) since PR #38; mobile's ReportForm was left reason-only.
 describe("ReportForm — structured correction (field + suggested value)", () => {
+  beforeEach(() => {
+    (reportVenue as jest.Mock).mockReset();
+  });
+
   it("shows field/suggested-value inputs only after 'Düzeltme öner' is pressed", async () => {
     await render(<ReportForm venueId="v1" />);
 
@@ -109,6 +113,53 @@ describe("ReportForm — structured correction (field + suggested value)", () =>
         suggestedValue: "MID",
       }),
     );
+  });
+
+  it("sends field without suggestedValue when only field is filled in", async () => {
+    (reportVenue as jest.Mock).mockResolvedValue({ urgent: false });
+
+    await render(<ReportForm venueId="v1" />);
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("report-reason"), "Telefon yanlış");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Düzeltme öner"));
+    });
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("report-field"), "Telefon");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Gönder"));
+    });
+
+    await waitFor(() =>
+      expect(reportVenue).toHaveBeenCalledWith("v1", "Telefon yanlış", { field: "Telefon" }),
+    );
+  });
+
+  it("trims whitespace and treats a whitespace-only field as not provided", async () => {
+    (reportVenue as jest.Mock).mockResolvedValue({ urgent: false });
+
+    await render(<ReportForm venueId="v1" />);
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("report-reason"), "Adres yanlış");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Düzeltme öner"));
+    });
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("report-field"), "   ");
+      fireEvent.changeText(screen.getByTestId("report-suggested-value"), "  Yeni adres  ");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Gönder"));
+    });
+
+    // Whitespace-only field means "not provided" -- suggestedValue alone (no field) would violate
+    // CreateReportSchema's own refine(), so the whole correction is dropped, not just trimmed.
+    await waitFor(() => expect(reportVenue).toHaveBeenCalledWith("v1", "Adres yanlış", undefined));
   });
 
   it("omits the correction entirely when 'Düzeltme öner' was never opened", async () => {
