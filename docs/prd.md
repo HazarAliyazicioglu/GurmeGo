@@ -8,12 +8,12 @@
 
 ## 1. Kapsam
 
-**MVP:** İstanbul — Kadıköy, Beşiktaş, Beyoğlu. Hedef: 30-45 mekan, 6 haftalık gerçek kullanıcı pilotu (bkz. §5 Pilot Karar Sözleşmesi). **Yalnızca web/PWA** — React Native mobil uygulama pilot doğrulaması sonrasına ertelendi.
+**MVP:** İstanbul — Kadıköy, Beşiktaş, Beyoğlu. Hedef: 30-45 mekan, 6 haftalık gerçek kullanıcı pilotu (bkz. §5 Pilot Karar Sözleşmesi). **Native mobil (React Native/Expo) + web/PWA** — bkz. [ADR 005](adr/005-native-mobile-app-for-mvp.md) (2026-09-07): kullanıcı, `idea-red-team`'in NO-GO verdiktini bilerek reddederek MVP tüketici deneyimini web/PWA'dan native app'e çevirdi (mağaza güveni/görünürlüğü gerekçesiyle). Bu doküman aşağıda hâlâ "Faz 2" diye mobili listeliyorsa bu ADR 005 öncesi metnin senkronize edilmemiş kalıntısıdır, ADR geçerli olan.
 
 | Faz | İçerik |
 |---|---|
-| **MVP (pilot)** | Mekan veri modeli (fiyat aralığı + favori ürünler) + kürasyon, keşif & arama (tamamen yapısal filtre), mekan detay (+ Google puanı özet rozeti + deep-link, + WhatsApp paylaşım), imzalı editöryal öneri, admin panel |
-| **Faz 2 (pilot GO sonrası)** | React Native mobil uygulama, kullanıcı yorum/puanlama + Gurme Puanı, mekan sahibi doğrulama/itiraz akışı, kullanıcı katkı (yeni mekan önerisi/düzeltme), mekan sahibi kendi bilgisini girme, tam menü sistemi (kalem+fiyat), arama iyileştirme (doğal dil → filtre çevirisi + semantic search/pgvector), Keşif Reels, otomatik veri toplama, rozet/itibar sistemi, gelir modeli aktivasyonu, ikinci şehir |
+| **MVP (pilot)** | Mekan veri modeli (fiyat aralığı + favori ürünler) + kürasyon, keşif & arama (tamamen yapısal filtre), mekan detay (+ Google puanı özet rozeti + deep-link, + WhatsApp paylaşım), imzalı editöryal öneri, admin panel, **native mobil app (ADR 005) — favoriler, auth, discovery, mekan detay, deep-linking (PR #50); katkı UI'sı kısmi, bkz. sonraki madde**, **kullanıcı katkı akışı — yeni mekan önerisi (PR #36) + alan/değer düzeltme bildirimi (PR #38), ContributionQueue üzerinden onaylı; şu an yalnızca web'de, mobilde yalnızca genel serbest-metin bildirim var (bkz. §2.4)** |
+| **Faz 2 (pilot GO sonrası)** | Kullanıcı yorum/puanlama + Gurme Puanı, mekan sahibi doğrulama/itiraz akışı, mekan sahibi kendi bilgisini girme, tam menü sistemi (kalem+fiyat), arama iyileştirme (doğal dil → filtre çevirisi + semantic search/pgvector), Keşif Reels, otomatik veri toplama, rozet/itibar sistemi, gelir modeli aktivasyonu, ikinci şehir |
 | **İleri faz** | Influencer listeleri, B2B akışlar (mekan sahibi paneli, ücretli) |
 
 ### v3.0'dan kapsam değişiklikleri (2026-07-24, round 3 panel + `idea-red-team` round 3 sonrası)
@@ -87,9 +87,11 @@ gerekçe tablosu: [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16.
   koordinat, ulaşım notu, çalışma saatleri, **fiyat aralığı (₺/₺₺/₺₺₺)**, **favori ürünler (serbest
   metin listesi, örn. "kaşarlı tost, filtre kahve")**, fotoğraflar, kısa editöryal not. Kalem+fiyat
   bazlı tam menü sistemi **Faz 2**.
-- **FR-MV-02 (revize 2026-07-16):** MVP veri kaynağı **yalnızca manuel kürasyon** (kürasyon ekibi:
-  Hazar + 1-2 kişi). Kullanıcı katkısı ve otomatik toplama Faz 2. Her kayıt `source` alanı taşır;
-  kaynak bazlı kalite raporu admin panelde (FR-AP-03).
+- **FR-MV-02 (revize 2026-07-16; kullanıcı katkısı kısmen MVP'ye geri alındı 2026-09, bkz. FR-KG-01/02):**
+  Mekan verisinin **yayınlanması** yalnızca kürasyon ekibi onayıyla olur (Hazar + 1-2 kişi) — hiçbir
+  kullanıcı katkısı onaysız `Venue`'ye yazılmaz. Kullanıcı, önerileri `ContributionQueue`'ya girebilir
+  (FR-KG-01/02, MVP); otomatik veri toplama hâlâ Faz 2. Her kayıt `source` alanı
+  taşır; kaynak bazlı kalite raporu admin panelde (FR-AP-03).
 - **FR-MV-03:** Her kayıt **veri güncellik damgası** taşır (son doğrulama tarihi); N günden eski kayıtlar kürasyon kuyruğuna düşer. N değeri: [rule-engine.md](rule-engine.md).
 - **FR-MV-04 (revize 2026-07-16):** "Butik" tanımı gerçek dünya kategorisine dayanır — zincir/franchise
   değil, en fazla 2-3 şubeli, Instagram/TikTok'ta mekan önerisi olarak dolaşan yerler (Burger King,
@@ -128,18 +130,22 @@ gerekçe tablosu: [docs/CHANGELOG.md](CHANGELOG.md) 2026-07-16.
 - **FR-MD-06 (yeni 2026-07-16):** Mekan paylaşımı: kullanıcı mekan sayfasını WhatsApp'a (ve platform
   paylaşım sheet'ine) tek dokunuşla gönderebilir — organik dağıtım mekanizması.
 
-### 2.4 Kullanıcı Katkı & Geri Bildirim — Faz 2 (MVP'de yalnızca moderasyon)
+### 2.4 Kullanıcı Katkı & Geri Bildirim — MVP'de kısmi (2026-09, bkz. FR-KG-01/02), owner verification hâlâ Faz 2
 
-- **FR-KG-01 (Faz 2'ye taşındı 2026-07-16):** Yeni mekan önerisi (temel bilgiler); kürasyon kuyruğuna
-  düşer, onaysız yayınlanmaz. Gerekçe: MVP'de kullanıcı kitlesi yokken katkı akışı çalışmaz.
-- **FR-KG-02 (Faz 2'ye taşındı 2026-07-16):** Mevcut mekan için düzeltme önerisi (fiyat değişti, kapandı
-  vb.); kürasyon onaylı.
+- **FR-KG-01 (Faz 2'ye taşınmıştı 2026-07-16, MVP'ye geri alındı 2026-09, PR #36):** Yeni mekan önerisi
+  (temel bilgiler, web `/mekan-oner`); `ContributionQueue`'ya `new_venue` tipiyle düşer, onaysız
+  yayınlanmaz. Mobilde henüz UI yok — yalnızca web.
+- **FR-KG-02 (Faz 2'ye taşınmıştı 2026-07-16, MVP'ye geri alındı 2026-09, PR #38):** Mevcut mekan için
+  düzeltme önerisi (fiyat değişti, kapandı vb.); `ContributionQueue`'ya `report` tipiyle, opsiyonel
+  `field`/`suggestedValue` ile düşer, kürasyon onaylı. Mobilde de var ama yalnızca genel gerekçe alanı
+  (FR-KG-03'teki `ReportForm`) — yapısal `field`/`suggestedValue` seçimi henüz web'e özgü.
 - **FR-KG-02b (yeni, Faz 2):** Mekan sahibi kendi bilgisini girme/güncelleme — kürasyon onaylı.
-- **FR-KG-03 (revize 2026-07-24, MVP'de kalır, daraltılmış):** Yorum sistemi MVP'de yok (bkz. FR-MD-02),
-  dolayısıyla yorum moderasyonu da yok. MVP'de kalan tek mekanizma: herhangi bir ziyaretçinin "bu bilgi
-  yanlış" bildirimi — **rate limit + admin moderasyon kuyruğu**, kimlik doğrulaması gerektirmez, mekan
-  sahibi olduğunu iddia eden ayrı bir akış değildir (o Faz 2, bkz. FR-KG-02b). `ContributionQueue`
-  MVP'de yalnızca bu genel şikayet tipini işler.
+- **FR-KG-03 (revize 2026-07-24, genişletildi 2026-09):** Yorum sistemi MVP'de yok (bkz. FR-MD-02),
+  dolayısıyla yorum moderasyonu da yok. MVP'de her ziyaretçi kimlik doğrulaması gerektirmeden "bu bilgi
+  yanlış" bildirebilir — **rate limit + admin moderasyon kuyruğu**, mekan sahibi olduğunu iddia eden
+  ayrı bir akış değildir (o Faz 2, bkz. FR-KG-02b). `ContributionQueue` MVP'de `report` (bu genel
+  bildirim + FR-KG-02'nin yapısal düzeltmesi, ikisi de aynı tip) ve `new_venue` (FR-KG-01) tiplerini
+  işler; `owner_verification` hâlâ Faz 2.
 - **FR-KG-04:** Rozet/itibar sistemi → **Faz 2**.
 
 ### 2.5 Gurme Puanı — Faz 2'ye ertelendi (2026-07-24)
@@ -171,15 +177,19 @@ mekanlık MVP hacminde semantic search gereksiz karmaşıklık.
 - **FR-AP-03:** Veri kalite raporu: ilçe başına mekan sayısı, N günden eski kayıtlar, kaynak dağılımı.
 - **FR-AP-04:** Gurme Puanı yetkilendirme yönetimi (AK-01 kararı sonrası) bu panelden.
 
-### 2.8 Web/PWA Uygulama Katmanı — MVP (revize 2026-07-24)
+### 2.8 Web/PWA + Native Mobil Uygulama Katmanı — MVP (revize 2026-09-07, ADR 005)
 
-- **FR-MW-01 (revize 2026-07-24):** Tek backend/API → **yalnızca Next.js web (SSR/SSG + PWA)**. React
-  Native mobil uygulama Faz 2'ye ertelendi (bkz. §1 madde 1) — pilot GO sonrası devreye girer, API zaten
-  istemci-agnostik tasarlandığı için bu geçiş şema/servis sınırı değiştirmez.
+- **FR-MW-01 (revize 2026-09-07, ADR 005):** Tek backend/API → Next.js web (SSR/SSG + PWA, SEO/marketing
+  kanalı) **ve** React Native/Expo native mobil (ADR 005 — MVP tüketici ana deneyimi, `idea-red-team`'in
+  NO-GO verdikti kullanıcı tarafından bilinçli reddedilerek). API zaten istemci-agnostik tasarlandığı için
+  bu iki istemcili yapı şema/servis sınırı değiştirmedi — `packages/shared` zod şemaları ikisi arasında
+  paylaşılıyor.
 - **FR-MW-02:** Konum izin akışı tarayıcı standartlarına uygun, reddedilebilir; reddedilirse manuel ilçe
-  seçimiyle tam işlevsellik korunur (NFR-04).
-- **FR-MW-03:** Web mekan sayfaları SEO-uyumlu (SSR/SSG) + PWA manifest/service worker — ana deneyim
-  aynı zamanda organik keşif kanalı.
+  seçimiyle tam işlevsellik korunur (NFR-04). (Native izin davranışı mobil için ayrı — Expo'nun kendi
+  `expo-location` izin akışı, bu FR'nin kapsamı dışında.)
+- **FR-MW-03 (revize 2026-09-07, ADR 005):** Web mekan sayfaları SEO-uyumlu (SSR/SSG) + PWA manifest/
+  service worker — ADR 005 sonrası **organik keşif/marketing kanalı**, ana kullanıcı deneyimi değil
+  (o mobilde, bkz. FR-MW-01).
 
 ### 2.9 Keşif Reels — Faz 2
 
@@ -246,7 +256,7 @@ dair bir sistem/tasarım henüz yok — Faz 2 planlamasında netleştirilmeli.
 | Veri kapsamı | 3 MVP ilçesinde ilçe başına butik mekan sayısı | Eşik belirlenecek (kürasyon ekibi kapasitesine göre — bkz. §1) |
 | Veri doğruluğu | "bilgi yanlış" şikayeti / mekan görüntülenme | Eşik belirlenecek |
 | Retention proxy | Haftalık ≥1 keşif ekranı dönüşü | Kohort bazlı izlenir |
-| Kürasyon kuyruğu sağlığı | Şikayet → karar süresi (MVP'de yalnızca moderasyon; öneri/düzeltme kuyruğu Faz 2) | Eşik belirlenecek (öneri: ≤72 saat) |
+| Kürasyon kuyruğu sağlığı | Şikayet → karar süresi (moderasyon + öneri/düzeltme kuyruğu, ikisi de MVP'de shipped — PR #36/#38) | Eşik belirlenecek (öneri: ≤72 saat) |
 | Şehir genişleme hazırlığı | 2. şehre geçiş mühendislik eforu | Minimum (şema değişikliği yok) |
 | Gurme Puanı güvenilirliği | Anormal puanlama oranı; puan dağılımının ayırt ediciliği | AK-01 kararı sonrası eşik |
 

@@ -9,11 +9,20 @@ pgvector/embedding'e dair maddeler Faz 2 olarak işaretlendi, MVP mimarisinden �
 extension'ı migration'a baştan eklemek (kullanmadan) ileride şema değişikliği gerektirmiyor; asıl
 maliyet olan LLM çağrısı + embedding pipeline'ı MVP'de kurulmuyor.
 
-**Not (2026-07-24, round 3):** React Native mobil uygulama, kullanıcı yorum/puanlama ve Gurme Puanı
-MVP'den çıkarılıp Faz 2'e alındı (bkz. [prd.md §1](prd.md), [docs/CHANGELOG.md](CHANGELOG.md)).
-**MVP'nin tek istemcisi web/PWA'dır (Next.js).** Aynı gerekçeyle bu dokümandaki mobil/Gurme
-Puanı/Review maddeleri de MVP mimarisinden silinmedi, Faz 2 olarak işaretlendi — şema/servis sınırları
-zaten istemci-agnostik tasarlandığı için Faz 2'ye geçiş ek mimari değişikliği gerektirmiyor.
+**Not (2026-07-24, round 3, SÜPERSEDE EDİLDİ — bkz. altındaki not):** React Native mobil uygulama,
+kullanıcı yorum/puanlama ve Gurme Puanı MVP'den çıkarılıp Faz 2'e alınmıştı. Kullanıcı yorum/puanlama
+ve Gurme Puanı hâlâ Faz 2'de — o kısım geçerli. Mobil için değil.
+
+**Not (2026-09-07, [ADR 005](adr/005-native-mobile-app-for-mvp.md)):** Kullanıcı, `idea-red-team`'in
+NO-GO verdiktini bilerek reddederek MVP tüketici deneyimini web/PWA'dan **native mobil (React Native/
+Expo) + web/PWA**'ya çevirdi. `apps/mobile` MVP'nin parçası, Faz 2 değil — favoriler, auth, discovery,
+mekan detay, deep-linking (PR #50) shipped ve üretimde. Kullanıcı katkısı **kısmi parite**: yeni mekan
+önerisi + yapısal düzeltme (field/suggestedValue) yalnızca web'de (PR #36/#38); mobilde yalnızca genel
+serbest-metin "bilgi yanlış" bildirimi var (`ReportForm.tsx`), yapısal katkı UI'sı yok — bkz.
+[prd.md §2.4](prd.md). Gurme Puanı/Review/pgvector/semantic search maddeleri (bu dokümanda aşağıda)
+hâlâ doğru şekilde Faz 2, yalnızca mobilin kendisi ve web'deki katkı akışları MVP kapsamına alındı;
+2026-09-07 öncesi metinde kalan "mobil Faz 2" referansları bu diff'te güncellendi (stack tablosu,
+diyagram, monorepo ağacı, §7 rol tanımı).
 
 ---
 
@@ -24,8 +33,8 @@ zaten istemci-agnostik tasarlandığı için Faz 2'ye geçiş ek mimari değişi
 | Backend | **NestJS (Node.js + TypeScript)** | Module/DI/guard yapısı; public API + admin + rol bazlı yetki için uygun; Fastify adapter ile performans |
 | Veritabanı | **PostgreSQL + PostGIS** | Coğrafi veri çekirdek varlık; ilçe sınırı + yakınlık sorguları DB seviyesinde |
 | Semantic index | **pgvector** (aynı Postgres) — **Faz 2, MVP'de kurulmaz** | Extension migration'a eklenir (şema hazır) ama embedding pipeline/LLM çağrısı MVP'de yok; maliyet + operasyon sadeliği (NFR-05) |
-| Mobil | **React Native** — **Faz 2, MVP'de yok** | Pilot Karar Sözleşmesi eşikleri karşılanınca devreye girer ([prd.md §5](prd.md)); `apps/mobile` iskeleti bile MVP'de kurulmaz |
-| Web | **Next.js (SSR/SSG) + PWA** (manifest + service worker) | MVP'nin **tek istemcisi** — hem SEO/organik keşif kanalı hem ana kullanıcı deneyimi (FR-MW-03) |
+| Mobil | **React Native (Expo)** — MVP'nin ana tüketici deneyimi ([ADR 005](adr/005-native-mobile-app-for-mvp.md), 2026-09-07) | Mağaza görünürlüğü/güveni gerekçesiyle web/PWA'dan pivotlandı; API zaten istemci-agnostik, ek mimari değişikliği gerektirmedi |
+| Web | **Next.js (SSR/SSG) + PWA** (manifest + service worker) | ADR 005 sonrası **SEO/organik keşif kanalı** — mobille aynı API/şemaları paylaşır (FR-MW-03) |
 | Admin panel | **Next.js (ayrı app, CSR yeterli)** | İç ekip aracı; SEO gereksiz |
 | Auth | **Supabase Auth** | E-posta + Google/Apple hazır; Postgres stack'le uyumlu; hızlı MVP |
 | API stili | **REST + OpenAPI** | Cache dostu, SSR uyumlu; OpenAPI'den istemci tipleri üretilir |
@@ -34,13 +43,13 @@ zaten istemci-agnostik tasarlandığı için Faz 2'ye geçiş ek mimari değişi
 ## 2. Sistem Diyagramı
 
 ```
-              ┌────────────┐  ┌────────────┐
-              │ Next.js Web│  │ Next.js    │
-   (Faz 2)    │ (SSR/SSG+  │  │ Admin      │
-┌───────────┐ │  PWA)      │  │            │
-│ RN Mobile │ └──────┬─────┘  └──────┬─────┘
-│ MVP'de yok│        │               │
-└───────────┘        └───────────────┼───────────────┘
+┌───────────┐ ┌────────────┐  ┌────────────┐
+│ RN Mobile │ │ Next.js Web│  │ Next.js    │
+│ (MVP ana  │ │ (SSR/SSG+  │  │ Admin      │
+│  deneyim) │ │  PWA, SEO) │  │            │
+└─────┬─────┘ └──────┬─────┘  └──────┬─────┘
+      │              │               │
+      └──────────────┴───────────────┼───────────────┘
                                      ▼
               ┌─────────────────┐        ┌──────────────┐
               │  NestJS API      │◄──────►│ Supabase Auth│
@@ -66,9 +75,9 @@ zaten istemci-agnostik tasarlandığı için Faz 2'ye geçiş ek mimari değişi
 gurmego/
 ├─ apps/
 │  ├─ api/        # NestJS
-│  ├─ web/        # Next.js tüketici web + PWA — MVP'nin tek istemcisi
+│  ├─ web/        # Next.js tüketici web + PWA — SEO/organik keşif kanalı (ADR 005 sonrası)
 │  ├─ admin/      # Next.js kürasyon paneli
-│  └─ mobile/     # React Native (Expo) — Faz 2, MVP iskeletinde KURULMAZ
+│  └─ mobile/     # React Native (Expo) — MVP'nin ana tüketici deneyimi (ADR 005)
 ├─ packages/
 │  ├─ shared/     # ortak tipler, zod şemaları, sabitler
 │  └─ api-client/ # OpenAPI'den üretilen tip güvenli istemci
@@ -162,7 +171,7 @@ de AI kapalıyken yapısal arama tam çalışır invariant'ı (FR-AI-03) korunac
 ## 7. Auth & Yetkilendirme
 
 - **Supabase Auth:** e-posta + Google/Apple. JWT'yi NestJS guard doğrular (JWKS).
-- **Roller:** `anonymous` (keşif/arama/detay — AK-02 varsayılanı, "bilgi yanlış" bildirimi de kimlik gerektirmez), `user` (favori; öneri/düzeltme/yorum Faz 2'de eklenir), `approved_rater` (Faz 2 — Gurme Puanı, AK-01 kararına göre atama), `curator` (admin panel), `admin`.
+- **Roller:** `anonymous` (keşif/arama/detay — AK-02 varsayılanı, "bilgi yanlış" bildirimi de kimlik gerektirmez), `user` (favori; yeni mekan önerisi/düzeltme MVP'de shipped — PR #36/#38; yorum Faz 2'de eklenir), `approved_rater` (Faz 2 — Gurme Puanı, AK-01 kararına göre atama), `curator` (admin panel), `admin`.
 - Rol → yetki eşlemesi DB'de tutulur; AK-01/AK-02 kararları **konfigürasyon değişikliğiyle** uygulanır, kod/şema değişikliği gerektirmez.
 - Konum gizliliği (NFR-04): kullanıcı koordinatı loglanmaz, yalnızca sorgu parametresi olarak kullanılır, kalıcı saklanmaz.
 
