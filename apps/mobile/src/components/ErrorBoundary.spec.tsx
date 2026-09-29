@@ -1,5 +1,9 @@
 import { Text } from "react-native";
 import { render, screen, fireEvent } from "@testing-library/react-native";
+
+const mockCaptureException = jest.fn();
+jest.mock("@sentry/react-native", () => ({ captureException: (...args: unknown[]) => mockCaptureException(...args) }));
+
 import ErrorBoundary from "./ErrorBoundary";
 
 function Bomb(): React.ReactElement {
@@ -12,6 +16,7 @@ describe("ErrorBoundary", () => {
   let consoleErrorSpy: jest.SpyInstance;
   beforeEach(() => {
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockCaptureException.mockReset();
   });
   afterEach(() => {
     consoleErrorSpy.mockRestore();
@@ -34,6 +39,15 @@ describe("ErrorBoundary", () => {
     );
     expect(screen.getByText("Bir şeyler ters gitti")).toBeTruthy();
     expect(screen.queryByText("hayatta")).toBeNull();
+  });
+
+  it("reports the caught error to Sentry", async () => {
+    await render(
+      <ErrorBoundary>
+        <Bomb />
+      </ErrorBoundary>,
+    );
+    expect(mockCaptureException).toHaveBeenCalledWith(expect.any(Error), expect.anything());
   });
 
   it("lets the user retry, re-rendering children fresh after a tap", async () => {

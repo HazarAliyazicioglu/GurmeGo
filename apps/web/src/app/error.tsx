@@ -1,10 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
+
 // §2.6 audit finding: no error.tsx existed -- an unhandled render/data error in any page (or its
 // server component) crashed to Next.js's generic unbranded error screen instead of a recoverable,
 // on-brand one. `reset()` re-renders the segment without a full page reload (Next.js App Router
 // convention for this file).
-export default function Error({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  // No-op without NEXT_PUBLIC_SENTRY_DSN (src/lib/sentry.ts) -- safe to call unconditionally.
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
   return (
     <main>
       <h1>Bir şeyler ters gitti</h1>

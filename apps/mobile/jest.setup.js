@@ -13,6 +13,17 @@ process.env.EXPO_PUBLIC_SITE_URL = process.env.EXPO_PUBLIC_SITE_URL || "https://
 // package's own `jest/mock.js` only sets a `default` export, which breaks every OTHER consumer's
 // named-export interop (e.g. @react-navigation's SafeAreaProviderCompat) -- spread the real
 // module's named exports instead and only override what actually needs jest-specific behavior.
+// @sentry/react-native's real package ships ESM in a nested dependency (@sentry/core) that Jest's
+// default transformIgnorePatterns (which excludes all of node_modules) can't parse -- any file
+// that imports it transitively (e.g. App.tsx -> ErrorBoundary.tsx) fails with "Unexpected token
+// 'export'" unless the module is mocked. Tests that assert on a specific call (sentry.spec.ts,
+// ErrorBoundary.spec.tsx) declare their own more specific jest.mock() for this module, which
+// overrides this default within that file.
+jest.mock("@sentry/react-native", () => ({
+  init: jest.fn(),
+  captureException: jest.fn(),
+}));
+
 jest.mock("react-native-safe-area-context", () => {
   const actual = jest.requireActual("react-native-safe-area-context");
   return {
