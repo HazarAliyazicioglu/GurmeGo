@@ -1,5 +1,6 @@
 import { Component, ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
+import * as Sentry from "@sentry/react-native";
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -14,9 +15,9 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
-    // Sentry integration is Faz 2 (docs/infrastructure.md); until then, not swallowing the crash
-    // silently is the bar -- it still reaches the device log.
     console.error("ErrorBoundary caught a render error:", error, info.componentStack);
+    // No-op without EXPO_PUBLIC_SENTRY_DSN (src/lib/sentry.ts) -- safe to call unconditionally.
+    Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
   }
 
   private retry = () => {
