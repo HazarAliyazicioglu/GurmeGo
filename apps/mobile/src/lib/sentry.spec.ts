@@ -32,6 +32,33 @@ describe("scrubEvent", () => {
     const event = { message: "boom" } as any;
     expect(scrubEvent(event)).toEqual(event);
   });
+
+  // cross-model-review (2026-09-29) MAJOR: DiscoveryScreen.tsx's keyset pagination cursor
+  // (apps/api's encodeCursor) carries the previous page's distance-from-user in meters as a
+  // `?cursor=` query param on the next getVenues() call -- Sentry's default fetch/XHR breadcrumb
+  // integration records the full request URL, so an unscrubbed breadcrumb history leaks the
+  // user's distance to specific venues.
+  it("strips the query string and hash from breadcrumb URLs", () => {
+    const event = {
+      breadcrumbs: [
+        { type: "http", data: { url: "http://localhost:3001/v1/venues?cursor=eyJsYXN0RGlzdGFuY2VNIjo0MjB9" } },
+        { type: "navigation", data: { url: "/favoriler" } },
+      ],
+    } as any;
+
+    const result = scrubEvent(event);
+
+    expect(result.breadcrumbs?.[0].data?.url).toBe("http://localhost:3001/v1/venues");
+    expect(result.breadcrumbs?.[1].data?.url).toBe("/favoriler");
+  });
+
+  it("strips the query string and hash from event.request.url", () => {
+    const event = { request: { url: "http://localhost:3001/v1/venues?cursor=secret#fragment" } } as any;
+
+    const result = scrubEvent(event);
+
+    expect(result.request?.url).toBe("http://localhost:3001/v1/venues");
+  });
 });
 
 describe("initSentry", () => {
@@ -58,12 +85,21 @@ describe("initSentry", () => {
 
   it("calls Sentry.init with the DSN when EXPO_PUBLIC_SENTRY_DSN is set", () => {
     process.env.EXPO_PUBLIC_SENTRY_DSN = "https://examplePublicKey@o0.ingest.sentry.io/0";
-    const { initSentry } = require("./sentry");
+    // jest.resetModules() (beforeEach) means this require() is a fresh module instance -- its
+    // scrubEvent is a different function object than the one imported at file scope above, so
+    // the beforeSend assertion below must compare against THIS instance's scrubEvent.
+    const { initSentry, scrubEvent: freshScrubEvent } = require("./sentry");
 
     initSentry();
 
     expect(mockInit).toHaveBeenCalledWith(
-      expect.objectContaining({ dsn: "https://examplePublicKey@o0.ingest.sentry.io/0" }),
+      expect.objectContaining({
+        dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
+        // cross-model-review (2026-09-29) MAJOR: objectContaining alone doesn't fail if
+        // beforeSend were dropped from the real call -- assert it's wired to the actual scrub
+        // function, not just that init() was called with a DSN.
+        beforeSend: freshScrubEvent,
+      }),
     );
   });
 });

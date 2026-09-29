@@ -30,6 +30,41 @@ describe("scrubEvent", () => {
     const event = { message: "boom" } as any;
     expect(scrubEvent(event)).toEqual(event);
   });
+
+  // cross-model-review (2026-09-29) BLOCKER: supabase.ts's implicit auth flow (no `flowType`
+  // override) puts recovery/magic-link tokens in the page URL hash (/sifre-yenile#access_token=
+  // ...&refresh_token=...) -- Sentry's browser SDK attaches the current page URL to every event
+  // via event.request.url regardless of what triggered the capture, so header scrubbing alone
+  // left live session tokens exposed the moment a real DSN was set.
+  it("strips the query string and hash from event.request.url", () => {
+    const event = {
+      request: { url: "https://gurmego.com/sifre-yenile#access_token=secret&refresh_token=also-secret" },
+    } as any;
+
+    const result = scrubEvent(event);
+
+    expect(result.request?.url).toBe("https://gurmego.com/sifre-yenile");
+  });
+
+  // cross-model-review (2026-09-29) MAJOR: the venues list's keyset pagination cursor
+  // (apps/api/src/venues/venues.repository.ts's encodeCursor) carries the previous page's
+  // distance-from-user in meters, and both web and mobile send it back as a `?cursor=` query
+  // param on the next page's request -- Sentry's default fetch/XHR breadcrumb integration
+  // records the full request URL (including query string), so an unscrubbed breadcrumb history
+  // leaks the user's distance to specific venues, which header scrubbing never touched.
+  it("strips the query string and hash from breadcrumb URLs", () => {
+    const event = {
+      breadcrumbs: [
+        { type: "http", data: { url: "https://gurmego.com/v1/venues?cursor=eyJsYXN0RGlzdGFuY2VNIjo0MjB9" } },
+        { type: "navigation", data: { url: "/favoriler" } },
+      ],
+    } as any;
+
+    const result = scrubEvent(event);
+
+    expect(result.breadcrumbs?.[0].data?.url).toBe("https://gurmego.com/v1/venues");
+    expect(result.breadcrumbs?.[1].data?.url).toBe("/favoriler");
+  });
 });
 
 describe("initSentry", () => {
@@ -60,7 +95,10 @@ describe("initSentry", () => {
       NEXT_PUBLIC_SENTRY_DSN: "https://examplePublicKey@o0.ingest.sentry.io/0",
       NODE_ENV: "production",
     };
-    const { initSentry } = await import("./sentry");
+    // vi.resetModules() (beforeEach) means this dynamic import is a fresh module instance --
+    // its scrubEvent is a different function object than the one imported at file scope above,
+    // so the beforeSend assertion below must compare against THIS instance's scrubEvent.
+    const { initSentry, scrubEvent: freshScrubEvent } = await import("./sentry");
 
     initSentry();
 
@@ -68,6 +106,10 @@ describe("initSentry", () => {
       expect.objectContaining({
         dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
         environment: "production",
+        // cross-model-review (2026-09-29) MAJOR: objectContaining alone doesn't fail if
+        // beforeSend were dropped from the real call -- assert it's wired to the actual scrub
+        // function, not just that init() was called with a DSN.
+        beforeSend: freshScrubEvent,
       }),
     );
   });
