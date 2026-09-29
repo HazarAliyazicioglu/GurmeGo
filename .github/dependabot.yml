@@ -16,6 +16,26 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # PR #63 (2026-09-29): the minor-and-patch group bumped react-native 0.86.3 -> 0.87.1 and
+    # react 19.2.3 -> 19.3.0, which broke apps/mobile's tests (`Cannot find module
+    # '@react-native/assets-registry/registry'`) -- Expo SDK 57 pins react-native/react tightly to
+    # exact versions (`npx expo install --check` in apps/mobile confirmed 0.86.3/19.2.3 are what
+    # SDK 57 actually expects), so an ungrouped semver bump breaks the SDK's internal version
+    # matrix. These packages are exclusive to apps/mobile (grep confirmed no other package.json
+    # references them) -- ignoring them here is safe and doesn't block react/react-dom updates for
+    # apps/web or apps/admin, which aren't Expo-managed. When Expo SDK 58 ships, bump these
+    # deliberately via `npx expo install --fix` in apps/mobile, not via Dependabot.
+    ignore:
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-maps"
+      - dependency-name: "react-native-safe-area-context"
+      - dependency-name: "react-native-screens"
+      - dependency-name: "expo"
+      - dependency-name: "expo-location"
+      - dependency-name: "expo-secure-store"
+      - dependency-name: "expo-splash-screen"
+      - dependency-name: "expo-status-bar"
+      - dependency-name: "jest-expo"
 
   - package-ecosystem: "github-actions"
     directory: "/"
