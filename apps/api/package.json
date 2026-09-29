@@ -16,7 +16,7 @@
     "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^13.1.1",
     "@fastify/multipart": "^10.1.2",
-    "@fastify/static": "^10.1.4",
+    "@fastify/static": "^10.1.5",
     "@gurmego/shared": "workspace:*",
     "@nestjs/common": "^12.1.0",
     "@nestjs/core": "^12.1.0",
