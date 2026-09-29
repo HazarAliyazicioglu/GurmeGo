@@ -51,9 +51,21 @@ const JWKS = createRemoteJWKSet(new URL(requireEnv("SUPABASE_JWKS_URL")));
 // happens to expose.
 const ALLOWED_ALGORITHMS = ["RS256", "ES256"];
 
-// No real Supabase project exists yet (Plan 4 provisions one) — until SUPABASE_JWT_ISSUER /
-// SUPABASE_JWT_AUDIENCE are set, skip those specific checks so local dev/tests keep working.
-// Once the real project exists, set both env vars and this guard starts enforcing them.
+// Security audit (2026-09-28), corrected after cross-model review: JWKS is already pinned to
+// THIS Supabase project (SUPABASE_JWKS_URL), so a token from a different project already fails
+// signature verification regardless of issuer/audience -- skipping these checks is NOT a
+// cross-tenant bypass. The real gap: it silently skipped claim validation that should always run
+// once a real project exists (this fallback predates one), so a misconfigured/rotated JWKS
+// endpoint or an unexpected audience could slip through unnoticed. Fail fast at module load in
+// production so that gap can't go unnoticed; dev/test/CI don't set these and stay permissive,
+// matching the RATE_LIMIT_* precedent in main.ts. Only checks NODE_ENV === "production" -- the
+// only value this app's Dockerfile ever sets (ENV NODE_ENV=production); there is no separate
+// staging tier to account for.
+if (process.env.NODE_ENV === "production") {
+  requireEnv("SUPABASE_JWT_ISSUER");
+  requireEnv("SUPABASE_JWT_AUDIENCE");
+}
+
 function buildVerifyOptions(): JWTVerifyOptions {
   const options: JWTVerifyOptions = { algorithms: ALLOWED_ALGORITHMS };
   if (process.env.SUPABASE_JWT_ISSUER) {

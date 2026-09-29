@@ -250,4 +250,44 @@ describe("JwtAuthGuard", () => {
     delete process.env.SUPABASE_JWKS_URL;
     await expect(import("./jwt-auth.guard")).rejects.toThrow(/SUPABASE_JWKS_URL is required/);
   });
+
+  // Security audit (2026-09-28): silently skipping issuer/audience whenever the env vars are
+  // unset was meant for pre-launch dev (no real Supabase project existed yet). Now that a real
+  // project is live, an unset var in production would make any Supabase-signed JWT from ANY
+  // Supabase project -- not just this one -- pass verification. Fail fast in production; keep
+  // dev/test permissive so local work and CI (which don't set these) are unaffected.
+  it("throws at module load when SUPABASE_JWT_ISSUER is missing in production", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.SUPABASE_JWT_AUDIENCE = "authenticated";
+    await expect(import("./jwt-auth.guard")).rejects.toThrow(/SUPABASE_JWT_ISSUER is required/);
+  });
+
+  it("throws at module load when SUPABASE_JWT_AUDIENCE is missing in production", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.SUPABASE_JWT_ISSUER = "https://proj.supabase.co/auth/v1";
+    await expect(import("./jwt-auth.guard")).rejects.toThrow(/SUPABASE_JWT_AUDIENCE is required/);
+  });
+
+  it("does not require issuer/audience outside production", async () => {
+    process.env.NODE_ENV = "test";
+    await expect(import("./jwt-auth.guard")).resolves.toBeDefined();
+  });
+
+  it("imports successfully in production when both are set, and still passes them to jwtVerify", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.SUPABASE_JWT_ISSUER = "https://proj.supabase.co/auth/v1";
+    process.env.SUPABASE_JWT_AUDIENCE = "authenticated";
+    jwtVerifyMock.mockResolvedValue({ payload: { sub: "u1", email: "u1@example.com" } });
+    const { JwtAuthGuard } = await import("./jwt-auth.guard");
+    const guard = new JwtAuthGuard(makePrismaMock() as any);
+    const req: any = { headers: { authorization: "Bearer sometoken" } };
+
+    await guard.canActivate(makeContext(req));
+
+    expect(jwtVerifyMock).toHaveBeenCalledWith("sometoken", "JWKS_KEYSET", {
+      algorithms: ["RS256", "ES256"],
+      issuer: "https://proj.supabase.co/auth/v1",
+      audience: "authenticated",
+    });
+  });
 });
