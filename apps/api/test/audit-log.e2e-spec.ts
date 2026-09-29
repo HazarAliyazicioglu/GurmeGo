@@ -66,7 +66,7 @@ describe("AuditLog (real Postgres)", () => {
 
   it("does not tie the record to a User row (no FK): an actor id with no user row is accepted and survives", async () => {
     const targetId = uniqueTarget();
-    await prisma.$transaction((tx) => service.record(tx, { actorId: "00000000-0000-0000-0000-00000000dead", action: "QUEUE_REJECTED", targetType: "ContributionQueue", targetId }));
+    await prisma.$transaction((tx) => service.record(tx, { actorId: "00000000-0000-4000-a000-00000000dead", action: "QUEUE_REJECTED", targetType: "ContributionQueue", targetId }));
     expect(await prisma.auditLog.count({ where: { targetId } })).toBe(1);
   });
 });

@@ -15,9 +15,9 @@ import { getQueue, approveQueueItem, rejectQueueItem, importCsv, getDataQualityR
 import { ApiHttpError } from "@gurmego/api-client";
 
 const VALID_ITEM = {
-  id: "11111111-1111-1111-1111-111111111111",
+  id: "11111111-1111-4111-a111-111111111111",
   type: "REPORT",
-  venueId: "22222222-2222-2222-2222-222222222222",
+  venueId: "22222222-2222-4222-a222-222222222222",
   payload: { reason: "Fiyat yanlış" },
   submittedBy: null,
   status: "PENDING",

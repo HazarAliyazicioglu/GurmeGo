@@ -13,7 +13,7 @@ const VERSION_ID = "d290f1ee-6c54-4b01-90e6-d701748f0852";
 const VALID_CREATE_PAYLOAD = {
   name: "A",
   slug: "a",
-  districtId: "11111111-1111-1111-1111-111111111111",
+  districtId: "11111111-1111-4111-a111-111111111111",
   category: "cafe",
   priceRange: "MODERATE",
   signatureItems: [],

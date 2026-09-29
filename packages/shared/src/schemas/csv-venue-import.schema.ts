@@ -31,13 +31,16 @@ export const CsvVenueImportRowSchema = z.object({
   // `z.coerce.boolean()` is exactly `Boolean(input)` — since any non-empty string is truthy, the CSV
   // text "false" would coerce to `true`. Explicit enum + transform avoids that footgun.
   franchiseFlag: z
-    .enum(["true", "false"], { errorMap: () => ({ message: "franchiseFlag 'true' veya 'false' olmalı" }) })
+    .enum(["true", "false"], { error: () => "franchiseFlag 'true' veya 'false' olmalı" })
     .transform((v) => v === "true"),
   // `z.coerce.number()` on an empty string coerces to `0` (`Number("") === 0`), which is a
   // legitimately-in-range latitude/longitude — a blank cell would silently become real (bogus)
   // coordinates instead of failing validation. Require a non-blank string before coercing.
-  lat: z.string().trim().min(1, "lat zorunlu").pipe(z.coerce.number().min(VENUE_LAT_RANGE[0]).max(VENUE_LAT_RANGE[1])),
-  lng: z.string().trim().min(1, "lng zorunlu").pipe(z.coerce.number().min(VENUE_LNG_RANGE[0]).max(VENUE_LNG_RANGE[1])),
+  // zod v4: z.coerce.number()'s declared input type is `unknown`, which .pipe() no longer accepts
+  // as a target for a `string`-output schema (zod v3 allowed it) -- `.transform(Number)` then
+  // `.pipe(z.number()...)` (a plain, non-coercing number schema) sidesteps that entirely.
+  lat: z.string().trim().min(1, "lat zorunlu").transform(Number).pipe(z.number().min(VENUE_LAT_RANGE[0]).max(VENUE_LAT_RANGE[1])),
+  lng: z.string().trim().min(1, "lng zorunlu").transform(Number).pipe(z.number().min(VENUE_LNG_RANGE[0]).max(VENUE_LNG_RANGE[1])),
   openingHours: z.string().transform((s, ctx) => {
     let parsed: unknown;
     try {
