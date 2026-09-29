@@ -5,6 +5,34 @@ değiştirildi, neden. En yeni en üstte.
 
 ---
 
+## 2026-09-29 (11. tur)
+### web-mobil-sentry — PR #65 (`d57a30f`)
+- docs/infrastructure.md §5'in planladığı Sentry, API'den sonra (#60) web (`@sentry/nextjs`) ve
+  mobil (`@sentry/react-native`) tarafında da kuruldu — gerçek `SENTRY_DSN` yoksa no-op.
+- Cross-model review 1 BLOCKER buldu: Supabase'in implicit auth flow'u (`/sifre-yenile`) oturum
+  token'larını URL hash'ine koyuyor, Sentry'nin otomatik `event.request.url` yakalaması bunu
+  sızdırabilirdi — `scrubEvent` artık header'ların yanı sıra URL query/hash'i ve breadcrumb
+  URL'lerini de temizliyor (ikinci bulgu: pagination cursor'daki mesafe bilgisi breadcrumb'larda).
+  Ayrıca mobilde `index.ts`'in init sırası hatası (statik import gerçek sırayı bozuyordu) düzeltildi.
+- Neden: NFR-04 (konum hiçbir kanala yazılmaz) + genel hata izleme boşluğu.
+
+### bagimlilik-temizligi — PR #66, #67, #68, #70-72, #74-77
+- Dependabot'un `react-native`/`react` bump'ı Expo SDK 57'nin sabitlediği versiyonların dışına
+  çıkıp mobil test suite'ini kırmıştı (`@react-native/assets-registry` çözülemiyordu) → versiyonlar
+  `expo install --fix` ile SDK'nın gerçek beklediğine geri çekildi, `dependabot.yml`'e bu paketler
+  için kalıcı `ignore` eklendi (#66).
+- zod 3→4: `errorMap`→`error` API değişikliği, `.pipe(z.coerce.number())` artık geçersiz (
+  `.transform(Number).pipe(z.number())`'a çevrildi), üç test fixture'ında RFC 9562/4122'ye
+  uymayan sahte UUID'ler (gerçek Postgres UUID'leri hiç bu şekilde olmaz) düzeltildi (#67).
+- jose 5→6: saf ESM'e geçmiş, ts-jest parse edemiyordu — `jest.config.js`'e (zaten `@nestjs/*`
+  için var olan desene) `jose@` eklendi, babel-jest ESM'i CJS'e çeviriyor (#77).
+- Kalan 7 major dev-dependency bump'ı (babel, jest, testing-library, openapi-typescript) CI yeşil
+  olduğu için doğrudan merge edildi.
+- **Bilinçli ertelenen: #73 (vitest 1.6.1→5.0.2, 4 major atlıyor)** — `global` tip hatası + muhtemel
+  config/coverage API kırılmaları, kendi ayrı turunu hak ediyor.
+
+---
+
 ## 2026-09-21
 ### kritik-guvenlik-yukseltmesi (web+admin+API) — PR #1, #2
 - Web+admin Next.js 14 → 16.3.5 (Turbopack), React 18 → 19.3, react-leaflet 4 → 5; API NestJS 10 → 11.2.5, Fastify 4 → 5.11.3 (exact pin), swagger 11, multipart 10.
