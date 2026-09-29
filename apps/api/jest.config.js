@@ -25,7 +25,11 @@ module.exports = {
   // usual `node_modules/(?!@nestjs/)` pattern matches (and ignores) the OUTER `.pnpm` segment
   // before ever reaching the inner one, so pnpm needs the pnpm-encoded (`@nestjs+`) package name
   // matched directly against the `.pnpm/` segment instead.
-  transformIgnorePatterns: ['node_modules/\\.pnpm/(?!(@nestjs\\+|@fastify\\+multipart@))'],
+  // `jose@` added here for the same reason as `@nestjs+`/`@fastify+multipart@`: jose 6.x dropped
+  // its CJS build (pure ESM only) -- Node's native require(esm) interop lets the COMPILED app
+  // boot fine, but ts-jest's CJS-only module system can't parse the bare `import`/`export` in
+  // jwt-auth.guard.ts's `import ... from "jose"` without babel-jest stripping it to CJS first.
+  transformIgnorePatterns: ['node_modules/\\.pnpm/(?!(@nestjs\\+|@fastify\\+multipart@|jose@))'],
   collectCoverageFrom: ['src/**/*.(t|j)s'],
   coverageDirectory: '../../../coverage/apps/api',
   testEnvironment: 'node',
