@@ -75,6 +75,19 @@ Backlog'dan düşürüldü: #18/#24 artık "bloklu" değil, ikisi de kapalı ve 
 başka PR'larla zaten güncellendi. Haftalık kontrol rutini bir sonraki çalışmada bu ikisini
 artık aramasın — gerçek konu artık yukarıdaki KRİTİK BULGU.
 
+### 2026-10-12 tekrar kontrol
+GitHub API ile doğrulandı: PR #18 ve #24 hâlâ `state: closed`, `merged: false` — 2026-10-05'ten
+beri değişiklik yok, elle dokunulmadı. `npm view` ile daha yeni patch sürümleri çıktığı görüldü
+(`@fastify/helmet@13.1.2`, `@fastify/compress@9.2.1`, `@fastify/multipart@10.1.3`, `zod@4.6.6`)
+ama bunlar kapalı #18/#24'ü etkilemiyor — `apps/api/package.json`'daki caret range'ler (`^13.1.1`,
+`^9.2.0`, `^10.1.2`, `^4.6.5`) zaten bu yeni patch'leri kapsıyor, yeni bir dependabot PR'ı açılırsa
+o ayrı ele alınır. Aksiyon yok.
+
+Not: Bu haftalık rutinin saklı prompt'u hâlâ #18/#24'ü eski (artık geçersiz) bloklanma
+gerekçeleriyle kontrol ediyor — 2026-10-05 notu zaten "bir sonraki çalışmada bu ikisini artık
+aramasın" demişti. Rutin tanımını (trig_01EmTq2Gm49KADsXUcLM6zGC) güncellemek veya kapatmak
+kullanıcı kararı; dokunmadım.
+
 ## Yakın kararlar
 - ADR 006 (audit log, consent için kullanılmamalı) · ADR 005 (native mobile).
 
