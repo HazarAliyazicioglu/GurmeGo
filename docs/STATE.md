@@ -88,6 +88,19 @@ gerekçeleriyle kontrol ediyor — 2026-10-05 notu zaten "bir sonraki çalışma
 aramasın" demişti. Rutin tanımını (trig_01EmTq2Gm49KADsXUcLM6zGC) güncellemek veya kapatmak
 kullanıcı kararı; dokunmadım.
 
+### 2026-10-19 tekrar kontrol
+GitHub API ile doğrulandı: PR #18 ve #24 hâlâ `state: closed`, `merged: false` —
+2026-10-12'den beri değişiklik yok, elle dokunulmadı (PR #18: `mergeable_state: dirty`,
+branch `dependabot/npm_and_yarn/minor-and-patch-e09db72b12`; PR #24: branch
+`dependabot/npm_and_yarn/zod-4.6.5`, ikisi de `master`'a karşı). `npm view` ile daha da
+yeni patch sürümleri çıktığı görüldü — `@fastify/helmet@13.2.0`, `@fastify/compress@9.2.2`,
+`@fastify/multipart@10.1.4`, `zod@4.6.7` (hepsi 2026-10-18'de yayınlanmış, hemen hemen eşzamanlı)
+— ama bunlar da kapalı #18/#24'ü etkilemiyor: `apps/api/package.json`'daki caret range'ler
+(`^13.1.1`, `^9.2.0`, `^10.1.2`, `^4.6.5`) zaten bu yeni patch'leri kapsıyor. Zod'un
+`CHANGELOG`/release notes'unda (npm registry üzerinden, 4.6.6→4.6.7) `.partial()`+`.default()`
+enjeksiyon davranışına dair bir fix/not yok — KRİTİK BULGU hâlâ geçerli kabul edildi, dokunulmadı.
+Aksiyon yok; rutin tanımı hâlâ güncellenmedi (kullanıcı kararı, yukarıdaki not geçerli).
+
 ## Yakın kararlar
 - ADR 006 (audit log, consent için kullanılmamalı) · ADR 005 (native mobile).
 
