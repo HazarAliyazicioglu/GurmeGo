@@ -101,6 +101,17 @@ yeni patch sürümleri çıktığı görüldü — `@fastify/helmet@13.2.0`, `@f
 enjeksiyon davranışına dair bir fix/not yok — KRİTİK BULGU hâlâ geçerli kabul edildi, dokunulmadı.
 Aksiyon yok; rutin tanımı hâlâ güncellenmedi (kullanıcı kararı, yukarıdaki not geçerli).
 
+### 2026-10-26 tekrar kontrol
+GitHub API ile doğrulandı: PR #18 ve #24 hâlâ `state: closed`, `merged: false` —
+2026-10-19'dan beri değişiklik yok (her ikisinin `updated_at`'i hâlâ 2026-09-29), elle
+dokunulmadı. `npm view` ile sürümler tekrar kontrol edildi: `@fastify/helmet@13.2.0` (değişmedi),
+`@fastify/compress@9.2.2` (değişmedi), `@fastify/multipart@10.1.6` (10.1.4'ten yeni patch),
+`zod@4.6.7` (değişmedi). Yeni multipart patch'i de `apps/api/package.json`'daki caret range'in
+(`^10.1.2`) kapsamında, working tree zaten temiz — çalışma dizininde değişiklik yapılmadı.
+KRİTİK BULGU (zod `.partial()`+`.default()` enjeksiyonu) hâlâ geçerli kabul edildi, zod'un
+4.6.6→4.6.7 release notlarında ilgili bir fix yok. Aksiyon yok; rutin tanımı hâlâ güncellenmedi
+(kullanıcı kararı, 2026-10-05 notu geçerliliğini sürdürüyor).
+
 ## Yakın kararlar
 - ADR 006 (audit log, consent için kullanılmamalı) · ADR 005 (native mobile).
 
