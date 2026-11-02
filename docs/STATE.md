@@ -112,6 +112,21 @@ KRİTİK BULGU (zod `.partial()`+`.default()` enjeksiyonu) hâlâ geçerli kabul
 4.6.6→4.6.7 release notlarında ilgili bir fix yok. Aksiyon yok; rutin tanımı hâlâ güncellenmedi
 (kullanıcı kararı, 2026-10-05 notu geçerliliğini sürdürüyor).
 
+### 2026-11-02 tekrar kontrol
+GitHub API ile doğrulandı: PR #18 ve #24 hâlâ `state: closed`, `merged: false` —
+2026-10-26'dan beri değişiklik yok (her ikisinin `updated_at`'i hâlâ 2026-09-29), elle
+dokunulmadı (PR #18 `mergeable_state: dirty`, branch `dependabot/npm_and_yarn/minor-and-patch-e09db72b12`;
+PR #24 branch `dependabot/npm_and_yarn/zod-4.6.5`). `npm view` ile sürümler tekrar kontrol edildi:
+`@fastify/helmet@13.2.0` (değişmedi), `@fastify/compress@9.3.0` (9.2.2'den yeni minor — bu ilk
+kez minor bump, patch değil), `@fastify/multipart@10.1.6` (değişmedi), `zod@4.6.7` (değişmedi).
+compress'in yeni minor'u da `apps/api/package.json`'daki caret range'in (`^9.2.0`) kapsamında
+(aynı major, semver caret minor artışına izin veriyor) — mevcut kurulu sürümler (helmet ^13.1.1,
+compress ^9.2.0, multipart ^10.1.2, zod ^4.6.5) hâlâ fastify 5.12.5 ile sorunsuz, master zaten
+yeşil, çalışma dizini temiz kaldı. KRİTİK BULGU (zod `.partial()`+`.default()` enjeksiyonu) hâlâ
+geçerli kabul edildi — npm registry üzerinden erişilebilen sürüm numarası dışında zod'un
+4.6.6→4.6.7 değişikliklerine dair ayrıntı yok, bir fix/not görülmedi. Aksiyon yok; rutin tanımı
+hâlâ güncellenmedi (kullanıcı kararı, 2026-10-05 notu geçerliliğini sürdürüyor).
+
 ## Yakın kararlar
 - ADR 006 (audit log, consent için kullanılmamalı) · ADR 005 (native mobile).
 
