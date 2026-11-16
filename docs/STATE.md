@@ -140,6 +140,19 @@ zaten temiz kaldı — çalışma dizininde değişiklik yapılmadı. KRİTİK B
 kaldığından yeni bir release notu/fix kontrolü de yapılmadı. Aksiyon yok; rutin tanımı hâlâ
 güncellenmedi (kullanıcı kararı, 2026-10-05 notu geçerliliğini sürdürüyor).
 
+### 2026-11-16 tekrar kontrol
+GitHub API ile doğrulandı: PR #18 ve #24 hâlâ `state: closed`, `merged: false` —
+2026-11-09'dan beri değişiklik yok (her ikisinin `updated_at`'i hâlâ 2026-09-29), elle
+dokunulmadı (PR #18 `mergeable_state: dirty`, branch `dependabot/npm_and_yarn/minor-and-patch-e09db72b12`;
+PR #24 branch `dependabot/npm_and_yarn/zod-4.6.5`). `npm view` ile sürümler tekrar kontrol edildi:
+`@fastify/helmet@13.2.0` (değişmedi), `@fastify/compress@9.3.0` (değişmedi),
+`@fastify/multipart@10.1.8` (değişmedi), `zod@4.6.7` (değişmedi). Hepsi
+`apps/api/package.json`'daki caret range'lerin (`^13.1.1`, `^9.2.0`, `^10.1.2`, `^4.6.5`)
+kapsamında, working tree zaten temiz kaldı — çalışma dizininde değişiklik yapılmadı. KRİTİK
+BULGU (zod `.partial()`+`.default()` enjeksiyonu) hâlâ geçerli kabul edildi — zod sürümü
+4.6.7'de sabit kaldığından yeni bir release notu/fix kontrolü de yapılmadı. Aksiyon yok; rutin
+tanımı hâlâ güncellenmedi (kullanıcı kararı, 2026-10-05 notu geçerliliğini sürdürüyor).
+
 ## Yakın kararlar
 - ADR 006 (audit log, consent için kullanılmamalı) · ADR 005 (native mobile).
 
